@@ -1,0 +1,1 @@
+perl -w scripts/buildRotamers.pl rotlibs/SimpleOpt1-5/ALL.bbdep.rotamers.lib rotlibs/chi_definition rotlib.bin
