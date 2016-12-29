@@ -1,8 +1,0 @@
-* SimpleOpt1-5.zip -- Dunbrack 2010 library 
-
-Shapovalov, M.S., and Dunbrack, R.L., Jr. (2011). A smoothed backbone-dependent rotamer library for proteins derived from adaptive kernel density 
-estimates and regressions. Structure, 19, 844-858.
-
-Downloaded from http://dunbrack.fccc.edu/bbdep2010/license/tempToDownload_82930/Fan_Zheng_310067823/ on Dec 20, 2016. Specifically, this is the 
-"Simple Mode" with the 5%-stepdown (default), which includes 22 residue types (18 standard amino acids + trans PRO + cis PRO + non-disulfide-bonded 
-CYS and disulfide-bonded CYS). The uncompressed version was placed into SimpleOpt1-5.
