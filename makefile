@@ -1,3 +1,4 @@
 all:
-	g++ -g -c mstlib.cpp
-	g++ -g mstlib.o test.cpp -o test
+	g++ -g -c msttypes.cpp
+	g++ -g msttypes.o test.cpp -o test
+	ar rs libmst.a msttypes.o

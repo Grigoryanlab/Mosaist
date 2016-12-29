@@ -1,4 +1,6 @@
-#include "mstlib.h"
+#include "msttypes.h"
+
+using namespace MST;
 
 int main(int argc, char** argv) {
   if (argc < 3) {
@@ -6,6 +8,24 @@ int main(int argc, char** argv) {
   }
   string pdbFile(argv[1]);
   string outBase(argv[2]);
+
+  // quick read and write
+  printf("quick read/write test...\n");
   Structure S(pdbFile);
   S.writePDB(outBase + ".out.pdb");
+
+  // memory test
+  int n = 1000;
+  printf("reading %d Structure objects into memory...\n", n);
+  vector<Structure> many(n);
+  for (int i = 0; i < n; i++) {
+    many[i].readPDB(pdbFile);
+  }
+  printf("writing %d Structure objects to file...\n", n);
+  for (int i = 0; i < n; i++) {
+    many[i].writePDB(outBase + ".out.pdb");
+  }
+  printf("deleting %d Structure objects from memory...\n", n);
+  many.clear();
+  printf("TEST DONE\n");
 }
