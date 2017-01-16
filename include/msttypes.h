@@ -48,6 +48,7 @@ class Structure {
     vector<Atom*> getAtoms();
     vector<Residue*> getResidues();
 
+    /* ----- functions that grow/shrink structure ----- */
     /* returns false if the chain name collides with existing chain names and no suitable single-letter
      * chain name was found as replacement OR if renaiming was not allowed. This could still mean that
      * a multi-character name is picked that is unique, but that's not technically correct for output,
@@ -62,11 +63,23 @@ class Structure {
     void addAtom(Atom& A) { addAtom(&A); }
     void addAtoms(vector<Atom*> atoms) { addAtoms(&atoms); }
     void addAtoms(vector<Atom*>* atoms);
+    /* ----- functions that grow/shrink structure ----- */
+
+    // creation and destruction of various optional maps
+    void mapResidueOrder();
+    void unmapResidueOrder();
 
   protected:
     void incrementNumAtoms(int delta = 1) { numAtoms += delta; }
     void incrementNumResidues(int delta = 1) { numResidues += delta; }
     void deletePointers();
+    /* separate functions for initializing, destroying, and copying all extra map pointers to NULL. Written in
+     * anticipation of the fact that we will want to add other optional maps in the future, which will
+     * also need to be initialized to NULL by default. This way, only these functions will need to be changed
+     * instead of all constructors and destructors. */
+    void initExtraMaps();
+    void destroyExtraMaps();
+    void copyExtraMaps(Structure& S);
 
   private:
     vector<Chain*> chains;
@@ -76,6 +89,20 @@ class Structure {
     // if more than one chain use the same ID or segment ID, these maps will only store the last one added.
     map<string, Chain*> chainsByID;
     map<string, Chain*> chainsBySegID;
+
+    // these maps will not be filled by default, so store pointers (NULL when not filled)
+    map<Residue*, int>* residueIndexInChain;
+    map<Residue*, map<string, Atom*> >* residueAtomsByName;
+
+    // these maps are "hidden" in that they are used internally for speed up, so access to them is private
+    map<Residue*, int>* residueOrderMap() { return residueIndexInChain; }
+    map<Residue*, map<string, Atom*> >* atomNameMap() { return residueAtomsByName; }
+
+    // these functions will be responsible for updating the maps, when the structure chages
+    void updateExtraMapsResidueAdd(Residue* res);
+    void updateExtraMapsResidueRemove(Residue* res);
+    void updateExtraMapsChainAdd(Chain* chain) {}
+    void updateExtraMapsChainRemove(Chain* chain) {}
 };
 
 class Chain {
@@ -95,10 +122,10 @@ class Chain {
     Residue& getResidue(int i) { return (*this)[i]; }
     vector<Residue*> getResidues() { return residues; }
     vector<Atom*> getAtoms();
-    Structure& getStructure() { return *parent; }
     string getID() { return cid; }
     string getSegID() { return sid; }
     Structure* getParent() { return parent; }
+    Structure* getStructure() { return getParent(); }
 
     /* convenience functoins, not efficient (linear search). If you need to do this a lot,
      * call getResidues() and construct your own data structure (e.g., a map<>) for fast lookups. */
@@ -107,7 +134,10 @@ class Chain {
     
     void setID(string _cid) { cid = _cid; }
     void setSegID(string _sid) { sid = _sid; }
+
+    /* ----- functions that grow/shrink structure ----- */
     void appendResidue(Residue* R);
+    /* ----- functions that grow/shrink structure ----- */
 
   protected:
     void setParent(Structure* p) { parent = p; } // will not itself update residue/atom counts in parent
@@ -144,10 +174,13 @@ class Residue {
     Atom* findAtom(string _name, bool strict = true); // returns NULL if not found and if strict is false
     bool atomExists(string _name) { return (findAtom(_name, false) != NULL); } // mostly for interchangeability with MSL, better to use findAtom and check for NULL
     Chain* getParent() { return parent; }
+    Structure* getStructure() { return (parent == NULL) ? NULL : parent->getParent(); }
 
     void setName(const char* _name) { resname = (string) _name; }
     void setName(string _name) { resname = _name; }
     char setIcode(char _icode) { icode = _icode; }
+
+    /* ----- functions that grow/shrink structure ----- */
     void appendAtom(Atom* A);
     void deleteAtoms();
     void deleteAtom(int ind);
@@ -163,6 +196,15 @@ class Residue {
      * will be: any old ones that survived, in their initial order, followed by any
      * newly added atoms, in the specified order. */
     void replaceAtoms(vector<Atom*>& newAtoms, vector<int>* oldAtoms = NULL);
+    /* ----- functions that grow/shrink structure ----- */
+
+    Residue* previousResidue();
+    Residue* nextResidue();
+    Residue* iPlusDelta(int off);
+    real getPhi();
+    real getshi();
+
+    static badDihedral = 999.0; // this value signals a dihedral angle that could not be computed for some reason
 
     friend ostream & operator<<(ostream &_os, Residue& _res) {
       if (_res.getParent() != NULL) {
@@ -209,6 +251,9 @@ class Atom {
     bool isNamed(string& _name) { return isNamed(_name.c_str()); }
     int numAlternatives() { return (alternatives == NULL) ? 0 : alternatives->size(); }
     Residue* getParent() { return parent; }
+    Residue* getResidue() { return parent; }
+    Chain* getChain() { return (parent == NULL) ? NULL : parent->getParent(); }
+    Structure* getStructure() { Chain* chain = getChain(); return (chain == NULL) ? NULL : chain->getParent(); }
 
     void setName(const char* _name);
     void setName(string _name);
@@ -324,43 +369,6 @@ class AtomPointerVector : public vector<Atom*> {
         _os << _atoms[i]->pdbLine() << endl;
       }
     }
-};
-
-/* This class creates a bunch of maps and lookup tables for a given structure.
- * These are very convenient when one wants to quickly find atoms and residues,
- * iteratre through atoms or residues, find next/previous residues, etc. */
-class StructureMap {
-  public:
-    StructureMap();
-    StructureMap(Structure& S) : StructureMap(&S) { }
-    StructureMap(Structure* S) { setStructure(S); }
-
-    void setStructure(Structure& _S);
-    Structure& getStructure() { return *S; }
-    
-    real getPhi(Residue* res, bool strict = true);
-    real getshi(Residue* res, bool strict = true);
-
-    void mutate(Residue* res, string newAA, vector<Atom*>* oldAtoms = NULL, vector<Atom*>* newAtoms = NULL);
-
-    static badDihedral = 999.0; // this value signals a dihedral angle that could not be computed for some reason
-
-  private:
-    Structure* S;
-    
-    // maps of chains, residues, and atoms by various string identifiers
-    map<string, Chain*> chainsByID;
-    map<string, Chain*> chainsBySegID;
-    map<Residue*, map<string, Atom*> > residueAtomsByName;
-
-    // indices of atoms and residues (into the above vectors)
-    map<Residue*, int> residueIndexInChain;
-    map<Atom*, int> atomIndexInResidue;
-
-    // for each chain, map of residues hashed by residue number
-    // (e.g., for quick looking of a given residue number, when
-    // the numbering is not consequitive)
-    vector<map<int, Residue*> > residuesInChainByResnum;
 };
 
 }
