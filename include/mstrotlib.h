@@ -17,10 +17,14 @@ class RotamerLibrary {
      * maps for the given amino acid. */
     int getBackboneBin(string aa, real phi, real psi);
 
-    /* places the specified rotamer into the given Residue. NOTE: the original residue,
-     * along with its atoms are destroyed, so if you want to be able to go back to
-     * the wild type, first make a copy of the residue before placing the rotamer. */
+    /* places the specified rotamer into the given Residue. NOTE: the original residue
+     * is modified, with some of its atoms potentially destroyed (as needed), so if you 
+     * want to be able to go back to the wild type, first make a copy of the residue 
+     * before placing the rotamer. */
     bool placeRotamer(Residue& res, string aa, int rotIndex, bool strict = true);
+
+    /* decides whether the atom is a backbone atom basded on the name */
+    bool isBackboneAtom(string atomName);
 
   protected:
     /* given an array of angles, stored in ascending order (i.e., in the counter-clockwise

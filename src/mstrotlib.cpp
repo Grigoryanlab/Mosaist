@@ -2,14 +2,16 @@
 
 using namespace MST;
 
-bool RotamerLibrary::placeRotamer(Residue& res, StructureMap& sMap, string aa, int rotIndex, bool strict) {
-  double phi = sMap.getPhi(&res, strict);
-  double psi = sMap.getPsi(&res, strict);
-  if (phi == StructureMap::badDihedral) {
+bool RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool strict) {
+  double phi = res.getPhi();
+  double psi = res.getPsi();
+  if (phi == Residue::badDihedral) {
+    // SHOULD REALLY ASSUME THE DEFAULT BIN!!!!!!!!!!!!!!!!!!!
     if (strict) MstUtils::error("could not compute PHI for", "RotamerLibrary::placeRotamer");
     return false;
   }
-  if (psi == StructureMap::badDihedral) {
+  if (psi == Residue::badDihedral) {
+    // SHOULD REALLY ASSUME THE DEFAULT BIN!!!!!!!!!!!!!!!!!!!
     if (strict) MstUtils::error("could not compute PSI for", "RotamerLibrary::placeRotamer");
     return false;
   }
@@ -25,9 +27,9 @@ bool RotamerLibrary::placeRotamer(Residue& res, StructureMap& sMap, string aa, i
   // position for which the rotamer library stores side-chain coordinates, to the actual
   // backbone position in the given residue. That's the transformation we will need to apply
   // to go from rotamer-library coordinates to the final placed coordinates.
-  CartesianPoint CA = CartesianPoint(sMap.findAtom(&res, "CA"));
-  CartesianPoint C = CartesianPoint(sMap.findAtom(&res, "C"));
-  CartesianPoint N = CartesianPoint(sMap.findAtom(&res, "N"));
+  CartesianPoint CA = CartesianPoint(res.findAtom(&res, "CA"));
+  CartesianPoint C = CartesianPoint(res.findAtom(&res, "C"));
+  CartesianPoint N = CartesianPoint(res.findAtom(&res, "N"));
   CartesianPoint X = C - CA;          // X-axis of the residue frame defined to be along CA -> C
   CartesianPoint Z = X.cross(N - CA); // since N-CA is defined to be in the XY plane, (CA -> C) x (CA -> N) will be a vector along Z
   CartesianPoint Y = Z.cross(X);      // finally, Z x X is Y
@@ -50,13 +52,12 @@ bool RotamerLibrary::placeRotamer(Residue& res, StructureMap& sMap, string aa, i
   vector<Atom*> oldAtoms;
   for (int i = 0; i < res.atomSize(); i++) {
     Atom& a = res[i];
-    if (!a.isBackbone() || ((aa.compare("PRO") == 0) && a.isNamed("H"))) {
+    if (!isBackbone(a.getName()) || ((aa.compare("PRO") == 0) && a.isNamed("H"))) {
       oldAtoms.push_back(&a);
     }
   }
   res->replaceAtoms(newAtoms, &oldAtoms);
   res->setName(aa);
-  sMap.updateResidue(res);
 }
 
 int RotamerLibrary::getBackboneBin(string aa, real phi, real psi) {

@@ -65,21 +65,10 @@ class Structure {
     void addAtoms(vector<Atom*>* atoms);
     /* ----- functions that grow/shrink structure ----- */
 
-    // creation and destruction of various optional maps
-    void mapResidueOrder();
-    void unmapResidueOrder();
-
   protected:
     void incrementNumAtoms(int delta = 1) { numAtoms += delta; }
     void incrementNumResidues(int delta = 1) { numResidues += delta; }
     void deletePointers();
-    /* separate functions for initializing, destroying, and copying all extra map pointers to NULL. Written in
-     * anticipation of the fact that we will want to add other optional maps in the future, which will
-     * also need to be initialized to NULL by default. This way, only these functions will need to be changed
-     * instead of all constructors and destructors. */
-    void initExtraMaps();
-    void destroyExtraMaps();
-    void copyExtraMaps(Structure& S);
 
   private:
     vector<Chain*> chains;
@@ -89,20 +78,6 @@ class Structure {
     // if more than one chain use the same ID or segment ID, these maps will only store the last one added.
     map<string, Chain*> chainsByID;
     map<string, Chain*> chainsBySegID;
-
-    // these maps will not be filled by default, so store pointers (NULL when not filled)
-    map<Residue*, int>* residueIndexInChain;
-    map<Residue*, map<string, Atom*> >* residueAtomsByName;
-
-    // these maps are "hidden" in that they are used internally for speed up, so access to them is private
-    map<Residue*, int>* residueOrderMap() { return residueIndexInChain; }
-    map<Residue*, map<string, Atom*> >* atomNameMap() { return residueAtomsByName; }
-
-    // these functions will be responsible for updating the maps, when the structure chages
-    void updateExtraMapsResidueAdd(Residue* res);
-    void updateExtraMapsResidueRemove(Residue* res);
-    void updateExtraMapsChainAdd(Chain* chain) {}
-    void updateExtraMapsChainRemove(Chain* chain) {}
 };
 
 class Chain {
@@ -126,6 +101,7 @@ class Chain {
     string getSegID() { return sid; }
     Structure* getParent() { return parent; }
     Structure* getStructure() { return getParent(); }
+    int getResidueIndex(Residue* res);
 
     /* convenience functoins, not efficient (linear search). If you need to do this a lot,
      * call getResidues() and construct your own data structure (e.g., a map<>) for fast lookups. */
@@ -145,6 +121,7 @@ class Chain {
 
   private:
     vector<Residue*> residues;
+    map<Residue*, int> residueIndexInChain; // to enable quick look-ups of up/down-stream residues
     Structure* parent;
     int numAtoms;
     string cid, sid;

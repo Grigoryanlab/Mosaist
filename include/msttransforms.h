@@ -5,22 +5,22 @@
 
 namespace MST {
 
-class Frame3D { // TODO
+class Frame { // TODO
   public:
-    Frame3D(); // same as the laboratory frame
-    Frame3D(CartesianPoint& _O, CartesianPoint& _X, CartesianPoint& _Y, CartesianPoint& _Z);
-    Frame3D(real _ox, real _oy, real _oz, real _xx, real _xy, real _xz, real _yx, real _yy, real _yz, real _zx, real _zy, real _zz);
-    Frame3D(Frame3D& other);
+    Frame(); // same as the laboratory frame
+    Frame(CartesianPoint& _O, CartesianPoint& _X, CartesianPoint& _Y, CartesianPoint& _Z);
+    Frame(real _ox, real _oy, real _oz, real _xx, real _xy, real _xz, real _yx, real _yy, real _yz, real _zx, real _zy, real _zz);
+    Frame(Frame& other);
 
   private:
     real O[3];             // coordinates of the origin in the laboratory frame
     real X[3], Y[3], Z[3]; // vectors corresponding to the X, Y, and Z axes in the laboratory frame
 };
 
-class Transform3D { // TODO
+class Transform { // TODO
   public:
-    Transform3D();                   // defaults to the identity transform
-    Transform3D(Transform3D& other);
+    Transform();                   // defaults to the identity transform
+    Transform(Transform& other);
 
     real& operator()(int i, int j);  // for access and setting
     operator*                        // multiplication of transforms
@@ -35,28 +35,28 @@ class Transform3D { // TODO
 };
 
 
-class Transform3DFactory { // TODO
+class TransformFactory { // TODO
   public:
-    Transform3D rotateAroundX(real angle);
-    Transform3D rotateAroundY(real angle);
-    Transform3D rotateAroundZ(real angle);
+    Transform rotateAroundX(real angle);
+    Transform rotateAroundY(real angle);
+    Transform rotateAroundZ(real angle);
 
-    Transform3D rotateAroundOrigAxis(real angle, real u, real v, real w);
-    Transform3D rotateAroundOrigAxis(real angle, CartesianPoint& p);
+    Transform rotateAroundOrigAxis(real angle, real u, real v, real w);
+    Transform rotateAroundOrigAxis(real angle, CartesianPoint& p);
 
-    Transform3D translate(real x, real y, real z);
-    Transform3D translate(CartesianPoint& p);
+    Transform translate(real x, real y, real z);
+    Transform translate(CartesianPoint& p);
 
-    Transform3D alignVectorWithXAxis(real x, real y, real z);
-    Transform3D alignVectorWithXAxis(CartesianPoint& p);
+    Transform alignVectorWithXAxis(real x, real y, real z);
+    Transform alignVectorWithXAxis(CartesianPoint& p);
 
-    Transform3D alignVectorWithYAxis(real x, real y, real z);
-    Transform3D alignVectorWithYAxis(CartesianPoint& p);
+    Transform alignVectorWithYAxis(real x, real y, real z);
+    Transform alignVectorWithYAxis(CartesianPoint& p);
 
-    Transform3D alignVectorWithZAxis(real x, real y, real z);
-    Transform3D alignVectorWithZAxis(CartesianPoint& p);
+    Transform alignVectorWithZAxis(real x, real y, real z);
+    Transform alignVectorWithZAxis(CartesianPoint& p);
 
-    Transform3D switchFrames(Frame3D& from, Frame3D& to);
+    Transform switchFrames(Frame& from, Frame& to);
 
 }
 

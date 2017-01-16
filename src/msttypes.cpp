@@ -5,13 +5,11 @@ using namespace MST;
 /* --------- Structure --------- */
 Structure::Structure() {
   numResidues = numAtoms = 0;
-  initExtraMaps();
 }
 
 Structure::Structure(string pdbFile, string options) {
   sourceFile = pdbFile;
   numResidues = numAtoms = 0;
-  initExtraMaps();
   readPDB(pdbFile, options);
 }
 
@@ -25,7 +23,6 @@ Structure::Structure(Structure& S) {
     chainsByID[S[i].getID()] = chains.back();
     chainsBySegID[S[i].getSegID()] = chains.back();
   }
-  copyExtraMaps(S);
 }
 
 /* The assumption is that if a Structure is deleted, all
@@ -34,7 +31,6 @@ Structure::Structure(Structure& S) {
  * should generate copies as needed via copy constructors. */
 Structure::~Structure() {
   deletePointers();
-  destroyExtraMaps();
 }
 
 void Structure::deletePointers() {
@@ -292,7 +288,6 @@ bool Structure::appendChain(Chain* C, bool allowRename) {
   C->setParent(this);
   numAtoms += C->atomSize();
   numResidues += C->residueSize();
-  updateExtraMapsChainAdd(C);
   return cidUnique;
 }
 
@@ -352,80 +347,6 @@ void Structure::addAtoms(vector<Atom*>* atoms) {
   for (int i = 0; i < atoms->size(); i++) addAtom((*atoms)[i]);
 }
 
-void Structure::initExtraMaps() {
-  residueIndexInChain = NULL;
-  residueAtomsByName = NULL;
-}
-
-void Structure::destroyExtraMaps() {
-  unmapResidueOrder();
-  unmapAtomNames();
-}
-
-void Structure::copyExtraMaps(Structure& S) {
-  if (S.residueOrderMap() != NULL) mapResidueOrder();
-  if (S.atomNameMap() != NULL) mapAtomNames();
-}
-
-void Structure::mapResidueOrder() {
-  unmapResidueOrder();
-  residueIndexInChain = new map<Residue*, int>();
-  for (int ci = 0; ci < chainSize(); i++) {
-    Chain& chain = this->getChain(ci);
-    for (int ri = 0; ri < chain.residueSize(); ri++) {
-      (*residueIndexInChain)[&(chain[ri])] = ri;
-    }
-  }
-}
-
-void Structure::unmapResidueOrder() {
-  if (residueIndexInChain != NULL) delete residueIndexInChain;
-  residueIndexInChain = NULL;
-}
-
-void Structure::mapAtomNames() {
-  unmapAtomNames();
-  residueAtomsByName = new map<Residue*, map<string, Atom*> >();
-  for (int ci = 0; ci < chainSize(); i++) {
-    Chain& chain = this->getChain(ci);
-    for (int ri = 0; ri < chain.residueSize(); ri++) {
-      Residue& res = chain.getResidue(ri);
-      for (int ai = 0; ai < res.atomSize(); ai++) {
-        Atom& a = res.getAtom(ai);
-        residueAtomsByName[&res][a.getName()] = &a;
-      }
-    }
-  }
-}
-
-void Structure::unmapAtomNames() {
-  if (residueAtomsByName != NULL) delete residueAtomsByName;
-  residueAtomsByName = NULL;
-}
-
-void Structure::updateExtraMapsAtomAdd(Atom* atom) {
-  if (residueAtomsByName != NULL) {
-    Residue* res = newAtom->getResidue();
-    if (res != NULL) residueAtomsByName[res][atom->getName()] = atom;
-  }
-}
-
-void Structure::updateExtraMapsAtomRemove(Atom* atom) {
-  if (residueAtomsByName != NULL) {
-    Residue* res = newAtom->getResidue();
-    if (res != NULL) residueAtomsByName[res].erase(atom->getName());
-  }
-}
-
-void Structure::updateExtraMapsResidueAdd(Residue* res) {
-  if (residueIndexInChain != NULL) residueIndexInChain.erase(res);
-  if (residueAtomsByName != NULL) residueAtomsByName.erase(res);
-}
-
-void Structure::updateExtraMapsResidueRemove(Residue* res) {
-  if (residueIndexInChain != NULL) residueIndexInChain.erase(res);
-  if (residueAtomsByName != NULL) residueAtomsByName.erase(res);
-}
 
 /* --------- Chain --------- */
 Chain::Chain() {
@@ -465,6 +386,12 @@ vector<Atom*> Chain::getAtoms() {
   return vec;
 }
 
+int Chain::getResidueIndex(Residue* res) {
+  if (residueIndexInChain.find(res) == NULL)
+    MstUtils::error("passed residue does not appear in chain's index map", "Chain::residueIndexInChain");
+  return residueIndexInChain[res];
+}
+
 void Chain::incrementNumAtoms(int delta) {
   numAtoms += delta;
   if (parent != NULL) {
@@ -479,8 +406,7 @@ void Chain::appendResidue(Residue* R) {
   }
   residues.push_back(R);
   R->setParent(this);
-  Structure* S = getStructure();
-  if (S != NULL) updateExtraMapsResidueAdd();
+  residueIndexInChain[R] = residies.size() - 1;
 }
 
 Residue* Chain::findResidue(string resname, int resnum) {
@@ -541,7 +467,6 @@ void Residue::deleteAtom(int i) {
   if ((i < 0) || (i >= atoms.size())) {
     MstUtils::error("index out of range of atom vector in residue", "Residue::deleteAtom");
   }
-  Structure* S = getStructure(); if (S != NULL) S->updateExtraMapsAtomRemove(atoms[i]);
   atoms.erase(atoms.begin() + i);
   if (parent != NULL) {
     parent->incrementNumAtoms(-1);
@@ -554,7 +479,6 @@ void Residue::deleteAtoms() {
   }
   Structure* S = getStructure();
   for (int i = 0; i < atoms.size(); i++) {
-    if (S != NULL) S->updateExtraMapsAtomRemove(atoms[i]);
     delete atoms[i];
   }
   atoms.resize(0);
@@ -574,7 +498,6 @@ void Residue::replaceAtoms(vector<Atom*>& newAtoms, vector<int>* toRemove) {
     if ((ai < 0) || (ai >= atoms.size())) {
       MstUtils::error("index out of range of atom vector in residue", "Residue::replaceAtoms");
     }
-    if (S != NULL) S->updateExtraMapsAtomRemove(atoms[ai]);
     delete atoms[ai];
     atoms[ai] = NULL
   }
@@ -593,36 +516,18 @@ void Residue::replaceAtoms(vector<Atom*>& newAtoms, vector<int>* toRemove) {
   for (int i = 0; i < newAtoms.size(); i++) {
     atoms[k] = newAtoms[i];
     atoms[k]->setParent(this);
-    if (S != NULL) S->updateExtraMapsAtomAdd(atoms[k]);
     k++;
   }
 }
 
 Residue* Residue::iPlusDelta(int off) {
-  Structure* S = this->getStructure();
-  if ((S != NULL) && (S->residueOrderMap() != NULL)) {
-    map<Residue*, int>* residueIndexInChain = S->residueOrderMap();
-    if (residueIndexInChain.find(this) == residueIndexInChain.end()) {
-      MstUtils::error("Residue " + MstUtils::toString(*this) + " pointed to by " + this + " does not appear in the residue index map of its parent!", "Residue::nextResidue");
-    }
-    int i = residueIndexInChain[this];
-    Chain& chain = getChain();
-    if ((i + off >= chain.residueSize()) || (i + off < 0)) return NULL;
-    return chain.getResidue(i + off);    
-  } else {
-    Chain& chain = getChain();
-    if (chain == NULL) {
-      MstUtils::error("Residue " + MstUtils::toString(*this) + " is disembodied!", "Residue::iPlusDelta");
-    }
-    // find the index of the current residue in the chain by scanning
-    for (int i = 0; i < chain.residueSize(); i++) {
-      if (this == chain.getResidue(i)) {
-        if ((i + off >= chain.residueSize()) || (i + off < 0)) return NULL;
-        return chain.getResidue(i + off);    
-      }
-    }
-    MstUtils::error("Residue " + MstUtils::toString(*this) + " does not appear to be in the chain it points back to, something went wrong!", "Residue::iPlusDelta");
+  Chain* chain = this->getChain();
+  if (chain == NULL) {
+    MstUtils::error("Residue " + MstUtils::toString(*this) + " is disembodied!", "Residue::iPlusDelta");
   }
+  int i = chain->getResidueIndex(this);
+  if ((i + off >= chain->residueSize()) || (i + off < 0)) return NULL;
+  return chain->getResidue(i + off);    
 }
 
 Residue* Residue::nextResidue() {
