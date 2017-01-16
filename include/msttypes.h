@@ -72,8 +72,8 @@ class Structure {
     vector<Chain*> chains;
     string sourceFile;
     int numResidues, numAtoms;
-    // NOTE: thse two maps are maintained for convenience and will not guarantee no collisions. That is,
-    // If more than one chain use the same ID or segment ID, these maps will only store the last one added.
+    // NOTE: thse two maps are maintained for convenience and will not guarantee the lack of collisions. That is,
+    // if more than one chain use the same ID or segment ID, these maps will only store the last one added.
     map<string, Chain*> chainsByID;
     map<string, Chain*> chainsBySegID;
 };
@@ -98,19 +98,19 @@ class Chain {
     Structure& getStructure() { return *parent; }
     string getID() { return cid; }
     string getSegID() { return sid; }
+    Structure* getParent() { return parent; }
 
     /* convenience functoins, not efficient (linear search). If you need to do this a lot,
      * call getResidues() and construct your own data structure (e.g., a map<>) for fast lookups. */
     Residue* findResidue(string resname, int resnum);
     Residue* findResidue(string resname, int resnum, char icode);
-
+    
     void setID(string _cid) { cid = _cid; }
     void setSegID(string _sid) { sid = _sid; }
     void appendResidue(Residue* R);
 
   protected:
     void setParent(Structure* p) { parent = p; } // will not itself update residue/atom counts in parent
-    Structure* getParent() { return parent; }
     void incrementNumAtoms(int delta = 1);
 
   private:
@@ -143,11 +143,26 @@ class Residue {
     bool isNamed(const char* _name) { return (strcmp(resname.c_str(), _name) == 0); }
     Atom* findAtom(string _name, bool strict = true); // returns NULL if not found and if strict is false
     bool atomExists(string _name) { return (findAtom(_name, false) != NULL); } // mostly for interchangeability with MSL, better to use findAtom and check for NULL
+    Chain* getParent() { return parent; }
 
     void setName(const char* _name) { resname = (string) _name; }
     void setName(string _name) { resname = _name; }
     char setIcode(char _icode) { icode = _icode; }
     void appendAtom(Atom* A);
+    void deleteAtoms();
+    void deleteAtom(int ind);
+
+    /* replaces the residue's atom vector with the given vector of atoms. By default,
+     * all old atoms are deleted (i.e., removed from the residue's atom vector and
+     * destructed). However, if the second argument is passed, will only delete the
+     * atoms that were at the specified indices in the old atom array. Note that
+     * this function is flexible enough to do things like erase a set of one or more
+     * atoms, insert a set of one or more atoms, both, replace the entire
+     * set of atoms with a new set, destroying the old ones, or even simply change
+     * the permutation of the existing atoms. The order of atoms in the new vector
+     * will be: any old ones that survived, in their initial order, followed by any
+     * newly added atoms, in the specified order. */
+    void replaceAtoms(vector<Atom*>& newAtoms, vector<int>* oldAtoms = NULL);
 
     friend ostream & operator<<(ostream &_os, Residue& _res) {
       if (_res.getParent() != NULL) {
@@ -158,7 +173,6 @@ class Residue {
 
   protected:
     void setParent(Chain* _parent) { parent = _parent; } // will not itself update residue/atom counts in parents
-    Chain* getParent() { return parent; }
 
   private:
     vector<Atom*> atoms;
@@ -194,6 +208,7 @@ class Atom {
     bool isNamed(const char* _name) { return (strcmp(name, _name) == 0); }
     bool isNamed(string& _name) { return isNamed(_name.c_str()); }
     int numAlternatives() { return (alternatives == NULL) ? 0 : alternatives->size(); }
+    Residue* getParent() { return parent; }
 
     void setName(const char* _name);
     void setName(string _name);
@@ -223,7 +238,6 @@ class Atom {
 
   protected:
     void setParent(Residue* _parent) { parent = _parent; } // will not itself update residue/atom counts in parents
-    Residue* getParent() { return parent; }
 
   private:
     real x, y, z, occ, B;
@@ -246,7 +260,7 @@ class Atom {
 };
 
 /* The following several classes look and feel like MSL classes, BUT (importantly) their
- * use is absolutely optional, and none of the basic MST datastructures use this. On
+ * use is absolutely optional, and none of the basic MST datastructures use them. On
  * the other hand, they can be created from those basic types for a similar use as
  * in MSL when needed (and only when needed). For example, CartesianPoint knows how
  * to construct itself from atom, both via a constructor and assignment operator.
@@ -312,9 +326,46 @@ class AtomPointerVector : public vector<Atom*> {
     }
 };
 
+/* This class creates a bunch of maps and lookup tables for a given structure.
+ * These are very convenient when one wants to quickly find atoms and residues,
+ * iteratre through atoms or residues, find next/previous residues, etc. */
+class StructureMap {
+  public:
+    StructureMap();
+    StructureMap(Structure& S) : StructureMap(&S) { }
+    StructureMap(Structure* S) { setStructure(S); }
+
+    void setStructure(Structure& _S);
+    Structure& getStructure() { return *S; }
+    
+    real getPhi(Residue* res, bool strict = true);
+    real getshi(Residue* res, bool strict = true);
+
+    void mutate(Residue* res, string newAA, vector<Atom*>* oldAtoms = NULL, vector<Atom*>* newAtoms = NULL);
+
+    static badDihedral = 999.0; // this value signals a dihedral angle that could not be computed for some reason
+
+  private:
+    Structure* S;
+    
+    // maps of chains, residues, and atoms by various string identifiers
+    map<string, Chain*> chainsByID;
+    map<string, Chain*> chainsBySegID;
+    map<Residue*, map<string, Atom*> > residueAtomsByName;
+
+    // indices of atoms and residues (into the above vectors)
+    map<Residue*, int> residueIndexInChain;
+    map<Atom*, int> atomIndexInResidue;
+
+    // for each chain, map of residues hashed by residue number
+    // (e.g., for quick looking of a given residue number, when
+    // the numbering is not consequitive)
+    vector<map<int, Residue*> > residuesInChainByResnum;
+};
+
 }
 
-/* The utilities class, with a bunch of useful static functions, is defined outside of the MST namespace because:
+/* Utilities class, with a bunch of useful static functions, is defined outside of the MST namespace because:
  * 1) it really represents a different beast, not an MST type
  * 2) some of its functions (like assert) are likely to clash with function names in other project
  */
@@ -331,6 +382,7 @@ class MstUtils {
     static char* copyStringC(const char* str);
     static int toInt(string num, bool strict = true);
     static MST::real toReal(string num, bool strict = true);
+    static MST::real mod(MST::real num, MST::real den);
 
     template <class T>
     static string toString(T& obj);

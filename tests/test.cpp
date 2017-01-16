@@ -3,6 +3,23 @@
 using namespace MST;
 
 int main(int argc, char** argv) {
+
+  double angle;
+  double base = 360.0;
+  angle = -12.5; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
+  angle = 12.5; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
+  angle = -180.3; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
+  angle = 180.3; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
+  angle = -365.2; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
+  angle = 365.2; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
+
+  angle = -12.5; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
+  angle = 12.5; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
+  angle = -180.3; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
+  angle = 180.3; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
+  angle = -365.2; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
+  angle = 365.2; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
+
   if (argc < 3) {
     MstUtils::error("Usage: ./test [PDB file] [output file base]", "main");
   }

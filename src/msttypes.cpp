@@ -56,7 +56,7 @@ void Structure::readPDB(string pdbFile, string options) {
   Residue* residue = NULL;
 
   // various parsing options (the wonders of dealing with the good-old PDB format)
-  bool ter = true;                   // flag to indicate that chain terminus was reach. Initialize to true so as to create a new chain upon reading the first atom.
+  bool ter = true;                   // flag to indicate that chain terminus was reached. Initialize to true so as to create a new chain upon reading the first atom.
   bool usesegid = false;             // use segment IDs to name chains instead of chain IDs? (useful when the latter are absent OR when too many chains, so need multi-letter names)
   bool skipHetero = false;           // skip hetero-atoms?
   bool charmmFormat = false;         // the PDB file was written by CHARMM (slightly different format)
@@ -138,8 +138,7 @@ void Structure::readPDB(string pdbFile, string options) {
     // if necessary, make a new residue
     bool reallyNewAtom = true; // is this a truely new atom, as opposed to an alternative position?
     if ((resnum != lastresnum) || (resname.compare(lastresname)) || (iCodesAsSepResidues && (icode.compare(lasticode))))  {
-      residue = new Residue(resname, resnum);
-      residue->setIcode(icode[0]);
+      residue = new Residue(resname, resnum, icode[0]);
       chain->appendResidue(residue);
     } else if (alt.compare(" ")) {
       // if this is not a new residue AND the alternative location flag is specified,
@@ -170,7 +169,7 @@ void Structure::writePDB(string pdbFile, string options) {
   fstream ofs; MstUtils::openFile(ofs, pdbFile, fstream::out, "Structure::writePDB");
   options = MstUtils::uc(options);
 
-///  my $chainstr = shift; // ??????????????????
+///  my $chainstr = shift; // probably want to implement this eventually. Or maybe some more generic selection mechanism based on regular expressions applied onto full atom strings.
 
   // various formating options (the wonders of dealing with the good-old PDB format)
   bool charmmFormat = false;         // the PDB file is intended for use in CHARMM or some other MM package
@@ -456,6 +455,61 @@ void Residue::appendAtom(Atom* A) {
   }
 }
 
+void Residue::deleteAtom(int i) {
+  if ((i < 0) || (i >= atoms.size())) {
+    MstUtils::error("index out of range of atom vector in residue", "Residue::deleteAtom");
+  }
+  atoms.erase(atoms.begin() + i);
+  if (parent != NULL) {
+    parent->incrementNumAtoms(-1);
+  }
+}
+
+void Residue::deleteAtoms() {
+  if (parent != NULL) {
+    parent->incrementNumAtoms(-atoms.size());
+  }
+  for (int i = 0; i < atoms.size(); i++) {
+    delete atoms[i];
+  }
+  atoms.resize(0);
+}
+
+void Residue::replaceAtoms(vector<Atom*>& newAtoms, vector<int>* toRemove) {
+  bool delAll = (toRemove == NULL);
+  int N = delAll ? atoms.size() : toRemove->size();
+  if (parent != NULL) {
+    parent->incrementNumAtoms(newAtoms.size() - N);
+  }
+
+  // delete those atoms needing deletion
+  for (int i = 0; i < N; i++) {
+    int ai = delAll ? i : toRemove->[i];
+    if ((ai < 0) || (ai >= atoms.size())) {
+      MstUtils::error("index out of range of atom vector in residue", "Residue::replaceAtoms");
+    }
+    delete atoms[ai];
+    atoms[ai] = NULL
+  }
+
+  // create a new atom vector without them
+  vector<Atom*> oldAtoms = atoms;
+  atoms.resize(atoms.size() - toRemove->size());
+  int k = 0;
+  for (int i = 0; i < oldAtoms.size(); i++) {
+    if (oldAtoms[i] == NULL) continue;
+    atoms[k] = oldAtoms[i];
+    k++;
+  }
+
+  // and now append the new atoms
+  for (int i = 0; i < newAtoms.size(); i++) {
+    atoms[k] = newAtoms[i];
+    atoms[k]->setParent(this);
+    k++;
+  }
+}
+
 Atom* Residue::findAtom(string _name, bool strict) {
   for (int i = 0; i < atoms.size(); i++) {
     if (atoms[i]->isNamed(_name)) return atoms[i];
@@ -734,6 +788,118 @@ real CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoin
   return dihedralRadians(*_p1, *_p2, *_p3, *_p4)*180/M_PI;
 }
 
+/* --------- StructureMap --------- */
+void StructureMap::setStructure(Structure& _S) {
+  // first reset all prior maps and vectors
+  chainsByID.clear();
+  chainsBySegID.clear();
+  residueAtomsByName.clear();
+  residueIndexInChain.clear();
+  atomIndexInResidue.clear();
+  residuesInChainByResnum.clear();
+
+  // set the structure
+  S = _S;
+
+  // finally, fill up all containers
+  residuesInChainByResnum.resize(S->chainSize());
+  for (int ci = 0; ci < S->chainSize(); ci++) {
+    Chain& chain = S->getChain(ci);
+    chainsByID[chain.getID()] = &C;
+    chainsBySegID[chain.getSegID()] = &C;
+    for (int ri = 0; ri < chain.residueSize(); ri++) {
+      Residue& residue = chain[ri];
+      residueIndexInChain[&residue] = ri;
+      residuesInChainByResnum[ci][residue.getNum()] = &residue;
+      residueAtomByName[&residue] = map<string, Atom*>();
+      for (int ai = 0; ai < residue.atomSize(); ai++) {
+        Atom& atom = residue[ai];
+        atomIndexInResidue[&atom] = ai;
+        residueAtomByName[&residue][atom.getName()] = &atom;
+      }
+    }
+  }
+}
+
+// C- N  CA  C 
+real StructureMap::getPhi(Residue* res, bool strict) {
+  MstUtils::assert(residueIndexInChain.find(res) != residueIndexInChain.end(), "no record of residue index found for the passed residue", "StructureMap::getPhi");
+  MstUtils::assert(residueAtomByName.find(res) != residueAtomByName.end(), "no record of atom name map found for the passed residue", "StructureMap::getPhi");
+
+  Chain* chain = residue->getParent();
+  int i = residueIndexInChain[res];
+
+  // if this is the first residue in the chain, then there is no phi
+  if (i == 0) {
+    if (strict) MstUtils::error("cannot compute PHI angle for the first residue in chain", "StructureMap::getPhi");
+    return badDihedral;
+  }
+
+  Residue* res1 = &(chain[i-1]); // previous residue
+  map<string, Atom*> aMap = residueAtomByName[res];
+  map<string, Atom*> aMap1 = residueAtomByName[res1];
+  if ((aMap1.find("C") == aMap1.end()) || (aMap.find("N") == aMap.end()) || (aMap.find("CA") == aMap.end()) || (aMap.find("C") == aMap.end())) {
+    if (strict) MstUtils::error("not all necessary backbone atoms found in residue '" + MstUtils::toString(*res) + "'", "StructureMap::getPhi");
+    return badDihedral;
+  }
+  CartesianPoint A(aMap1["C"]);
+  CartesianPoint B(aMap["N"]);
+  CartesianPoint C(aMap["CA"]);
+  CartesianPoint D(aMap["C"]);
+  return CartesianGeometry::dihedral(A, B, C, D);
+}
+
+// N  CA  C  N+
+real StructureMap::getPsi(Residue* res, bool strict) {
+  MstUtils::assert(residueIndexInChain.find(res) != residueIndexInChain.end(), "no record of residue index found for the passed residue", "StructureMap::getPsi");
+  MstUtils::assert(residueAtomByName.find(res) != residueAtomByName.end(), "no record of atom name map found for the passed residue", "StructureMap::getPsi");
+
+  Chain* chain = residue->getParent();
+  int i = residueIndexInChain[res];
+
+  // if this is the last residue in the chain, then there is no psi
+  if (i == chain->residueSize() - 1) {
+    if (strict) MstUtils::error("cannot compute PSI angle for the first residue in chain", "StructureMap::getPsi");
+    return badDihedral;
+  }
+
+  Residue* res1 = &(chain[i+1]); // next residue
+  map<string, Atom*> aMap = residueAtomByName[res];
+  map<string, Atom*> aMap1 = residueAtomByName[res1];
+  if ((aMap1.find("N") == aMap1.end()) || (aMap.find("CA") == aMap.end()) || (aMap.find("C") == aMap.end()) || (aMap.find("N") == aMap.end())) {
+    if (strict) MstUtils::error("not all necessary backbone atoms found in residue '" + MstUtils::toString(*res) + "'", "StructureMap::getPsi");
+    return badDihedral;
+  }
+  CartesianPoint A(aMap["N"]);
+  CartesianPoint B(aMap["CA"]);
+  CartesianPoint C(aMap["C"]);
+  CartesianPoint D(aMap1["N"]);
+  return CartesianGeometry::dihedral(A, B, C, D);
+}
+
+void StructureMap::updateResudue(Residue* res) {
+  if (residueAtomsByName.find(res) == residueAtomsByName.end()) {
+    MstUtils::error("residue " + MstUtils::toString(res) + " not found in StructureMap", "StructureMap::updateResidue");
+  }
+  map<string, Atom*>& atomsByName = residueAtomsByName[res];
+
+  // delete old atoms (presumably the old side-chain, but the good news we don't need at this level)
+  if (oldAtoms != NULL) {
+    for (int i = 0; i < oldAtoms->size(); i++) {
+      Atom* oldAtom = oldAtoms[i];
+      atomsByName.erase(oldAtom->getName());
+      atomIndexInResidue.erase(oldAtom);
+    }
+  }
+  if (newAtoms != NULL) {
+    for (int i = 0; i < newAtoms->size(); i++) {
+      Atom* newAtom = newAtoms[i];
+      atomsByName[newAtom->getName()] = newAtom;
+      atomIndexInResidue[newAtom] = ??;
+    }
+  }
+}
+
 /* --------- MstUtils --------- */
 void MstUtils::openFile (fstream& fs, string filename, ios_base::openmode mode, string from) {
   fs.open(filename.c_str(), mode);
@@ -832,4 +998,8 @@ MST::real MstUtils::toReal(string num, bool strict) {
   double ret;
   if ((sscanf(num.c_str(), "%lf", &ret) == 0) && strict) MstUtils::error("failed to convert '" + num + "' to real", "MstUtils::toReal");
   return (real) ret;
+}
+
+MST::real MstUtils::mod(MST::real num, MST::real den) {
+  return num - ((MST::real) floor((double) num / (double) den)) * den;
 }
