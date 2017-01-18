@@ -387,7 +387,7 @@ vector<Atom*> Chain::getAtoms() {
 }
 
 int Chain::getResidueIndex(Residue* res) {
-  if (residueIndexInChain.find(res) == NULL)
+  if (residueIndexInChain.find(res) == residueIndexInChain.end())
     MstUtils::error("passed residue does not appear in chain's index map", "Chain::residueIndexInChain");
   return residueIndexInChain[res];
 }
@@ -406,7 +406,7 @@ void Chain::appendResidue(Residue* R) {
   }
   residues.push_back(R);
   R->setParent(this);
-  residueIndexInChain[R] = residies.size() - 1;
+  residueIndexInChain[R] = residues.size() - 1;
 }
 
 Residue* Chain::findResidue(string resname, int resnum) {
@@ -426,6 +426,9 @@ Residue* Chain::findResidue(string resname, int resnum, char icode) {
 }
 
 /* --------- Residue --------- */
+
+const real Residue::badDihedral = 999.0;
+
 Residue::Residue() {
   resname = "UNK";
   resnum = 1;
@@ -494,12 +497,12 @@ void Residue::replaceAtoms(vector<Atom*>& newAtoms, vector<int>* toRemove) {
 
   // delete those atoms needing deletion
   for (int i = 0; i < N; i++) {
-    int ai = delAll ? i : toRemove->[i];
+    int ai = delAll ? i : (*toRemove)[i];
     if ((ai < 0) || (ai >= atoms.size())) {
       MstUtils::error("index out of range of atom vector in residue", "Residue::replaceAtoms");
     }
     delete atoms[ai];
-    atoms[ai] = NULL
+    atoms[ai] = NULL;
   }
 
   // create a new atom vector without them
@@ -527,7 +530,7 @@ Residue* Residue::iPlusDelta(int off) {
   }
   int i = chain->getResidueIndex(this);
   if ((i + off >= chain->residueSize()) || (i + off < 0)) return NULL;
-  return chain->getResidue(i + off);    
+  return &(chain->getResidue(i + off));    
 }
 
 Residue* Residue::nextResidue() {
@@ -554,7 +557,7 @@ real Residue::getPhi() {
 }
 
 // N  CA  C  N+
-real Residue::getPsi(Residue* res, bool strict) {
+real Residue::getPsi() {
   Residue* res1 = nextResidue();
   if (res1 == NULL) return badDihedral;
   Atom* A = findAtom("N", false);

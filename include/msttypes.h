@@ -141,7 +141,7 @@ class Residue {
     int atomSize() { return atoms.size(); }
     vector<Atom*> getAtoms() { return atoms; }
     Atom& operator[](int i) { return *(atoms[i]); }
-    Chain& getChain() { return *parent; }
+    Chain* getChain() { return parent; }
     string getChainID(bool strict = true);
     string getName() { return resname; }
     int getNum() { return resnum; }
@@ -179,9 +179,9 @@ class Residue {
     Residue* nextResidue();
     Residue* iPlusDelta(int off);
     real getPhi();
-    real getshi();
+    real getPsi();
 
-    static badDihedral = 999.0; // this value signals a dihedral angle that could not be computed for some reason
+    static const real badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
     friend ostream & operator<<(ostream &_os, Residue& _res) {
       if (_res.getParent() != NULL) {
@@ -212,7 +212,6 @@ class Atom {
     Atom(int _index, string _name, real _x, real _y, real _z, real _B, real _occ, bool _het, char _alt = ' ', Residue* _parent = NULL);
     ~Atom();
 
-    Residue& getResidue() { return *parent; }
     real getX() const { return x; }
     real getY() const{ return y; }
     real getZ() const{ return z; }
@@ -298,6 +297,7 @@ class CartesianPoint : public vector<real> {
     CartesianPoint(size_t sz, real val) : vector<real>(sz, val) { }
     CartesianPoint(const CartesianPoint& other) : vector<real>(other) { }
     CartesianPoint(const vector<real>& other) : vector<real>(other) { }
+    CartesianPoint(real x, real y, real z) : vector<real>(3, 0) { (*this)[0] = x; (*this)[1] = y; (*this)[2] = z; }
 
     CartesianPoint(const Atom& A);
     CartesianPoint(const Atom* A) : CartesianPoint(*A) {}
@@ -370,13 +370,15 @@ class MstUtils {
     static MST::real mod(MST::real num, MST::real den);
 
     template <class T>
-    static string toString(T& obj);
+    static string toString(T obj) { return toString(&obj); }
+    template <class T>
+    static string toString(T* obj);
 };
 
 template <class T>
-string MstUtils::toString(T& obj) {
+string MstUtils::toString(T* obj) {
   stringstream ss;
-  ss << obj;
+  ss << *obj;
   return ss.str();
 }
 
