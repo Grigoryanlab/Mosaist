@@ -52,9 +52,15 @@ class Transform {
 
     CartesianPoint applyToCopy(CartesianPoint& p);
     void apply(CartesianPoint& p);
-    void apply(Atom& a);
+    void apply(Atom& a) { apply(&a); }
     void apply(Atom* a);
     void apply(real& x, real& y, real& z);
+    void apply(Residue& res) { apply(&res); }
+    void apply(Residue* res);
+    void apply(Chain& chain) { apply(&chain); }
+    void apply(Chain* chain);
+    void apply(Structure& S) { apply(&S); }
+    void apply(Structure* S);
 
     friend ostream & operator<<(ostream &_os, Transform& _T) {
       for (int i = 0; i < 4; i++) {
@@ -72,40 +78,40 @@ class Transform {
 
 class TransformFactory {
   public:
-    Transform translate(real x, real y, real z);
-    Transform translate(CartesianPoint& p);
+    static Transform translate(real x, real y, real z);
+    static Transform translate(CartesianPoint& p);
 
     // rotations based on angle in degrees
-    Transform rotateAroundX(real angle);
-    Transform rotateAroundY(real angle);
-    Transform rotateAroundZ(real angle);
+    static Transform rotateAroundX(real angle);
+    static Transform rotateAroundY(real angle);
+    static Transform rotateAroundZ(real angle);
 
     // rotations based on cosine and sine values (sometimes, it is convenient not to compute the angle itself)
-    Transform rotateAroundX(real s, real c);
-    Transform rotateAroundY(real s, real c);
-    Transform rotateAroundZ(real s, real c);
+    static Transform rotateAroundX(real s, real c);
+    static Transform rotateAroundY(real s, real c);
+    static Transform rotateAroundZ(real s, real c);
 
     // rotate around an arbitrary axis passing through the origin
-    Transform rotateAroundAxis(real u, real v, real w, real a);
-    Transform rotateAroundAxis(CartesianPoint& p, real a);
+    static Transform rotateAroundAxis(real u, real v, real w, real a);
+    static Transform rotateAroundAxis(CartesianPoint& p, real a);
 
     // rotate around an arbitrary line passing through two given points
-    Transform rotateAroundLine(real p1, real p2, real p3, real q1, real q2, real q3, real a);
-    Transform rotateAroundLine(CartesianPoint& p, CartesianPoint& q, real a);
+    static Transform rotateAroundLine(real p1, real p2, real p3, real q1, real q2, real q3, real a);
+    static Transform rotateAroundLine(CartesianPoint& p, CartesianPoint& q, real a);
 
     // transformation matrices for aligning arbitrary axes with laboratory frame axes
-    Transform alignVectorWithXAxis(real u, real v, real w);
-    Transform alignVectorWithXAxis(CartesianPoint& p);
+    static Transform alignVectorWithXAxis(real u, real v, real w);
+    static Transform alignVectorWithXAxis(CartesianPoint& p);
 
-    Transform alignVectorWithYAxis(real u, real v, real w);
-    Transform alignVectorWithYAxis(CartesianPoint& p);
+    static Transform alignVectorWithYAxis(real u, real v, real w);
+    static Transform alignVectorWithYAxis(CartesianPoint& p);
 
-    Transform alignVectorWithZAxis(real u, real v, real w);
-    Transform alignVectorWithZAxis(CartesianPoint& p);
+    static Transform alignVectorWithZAxis(real u, real v, real w);
+    static Transform alignVectorWithZAxis(CartesianPoint& p);
 
     // this transformation, when applied to points with coordinates in the from Frame
     // will produce coordinates of corresponding the same points but in the to Frame
-    Transform switchFrames(Frame& from, Frame& to);
+    static Transform switchFrames(Frame& from, Frame& to);
 
     static const real degreesToRadians;
     static const real radiansToDegrees;

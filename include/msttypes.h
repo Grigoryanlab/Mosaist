@@ -178,8 +178,8 @@ class Residue {
     Residue* previousResidue();
     Residue* nextResidue();
     Residue* iPlusDelta(int off);
-    real getPhi();
-    real getPsi();
+    real getPhi(bool strict = true);
+    real getPsi(bool strict = true);
 
     static const real badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
@@ -188,6 +188,7 @@ class Residue {
         _os << _res.getParent()->getID();
       }
       _os << _res.getNum() << " " << _res.getName();
+      return _os;
     }
 
   protected:
@@ -215,7 +216,7 @@ class Atom {
     real getX() const { return x; }
     real getY() const{ return y; }
     real getZ() const{ return z; }
-    vector<real> getCoor() { vector<real> coor; coor.push_back(x); coor.push_back(y); coor.push_back(z); }
+    vector<real> getCoor() { vector<real> coor; coor.push_back(x); coor.push_back(y); coor.push_back(z); return coor; }
     real getB() { return B; }
     real getOcc() { return occ; }
     string getName() { return string(name); }

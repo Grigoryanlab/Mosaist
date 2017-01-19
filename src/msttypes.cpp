@@ -542,7 +542,7 @@ Residue* Residue::previousResidue() {
 }
 
 // C- N  CA  C 
-real Residue::getPhi() {
+real Residue::getPhi(bool strict) {
   Residue* res1 = previousResidue();
   if (res1 == NULL) return badDihedral;
   Atom* A = res1->findAtom("C", false);
@@ -550,14 +550,15 @@ real Residue::getPhi() {
   Atom* C = findAtom("CA", false);
   Atom* D = findAtom("C", false);
   if ((A == NULL) || (B == NULL) || (C == NULL) || (D == NULL)) {
-    MstUtils::error("not all backbone atoms present to compute PHI for residue " + MstUtils::toString(*this));
+    if (strict) MstUtils::error("not all backbone atoms present to compute PHI for residue " + MstUtils::toString(*this));
+    return badDihedral;
   }
 
   return CartesianGeometry::dihedral(*A, *B, *C, *D);
 }
 
 // N  CA  C  N+
-real Residue::getPsi() {
+real Residue::getPsi(bool strict) {
   Residue* res1 = nextResidue();
   if (res1 == NULL) return badDihedral;
   Atom* A = findAtom("N", false);
@@ -565,8 +566,11 @@ real Residue::getPsi() {
   Atom* C = findAtom("C", false);
   Atom* D = res1->findAtom("N", false);
   if ((A == NULL) || (B == NULL) || (C == NULL) || (D == NULL)) {
-    MstUtils::error("not all backbone atoms present to compute PHI for residue " + MstUtils::toString(*this));
+    if (strict) MstUtils::error("not all backbone atoms present to compute PSI for residue " + MstUtils::toString(*this));
+    return badDihedral;
   }
+
+  return CartesianGeometry::dihedral(*A, *B, *C, *D);
 }
 
 Atom* Residue::findAtom(string _name, bool strict) {

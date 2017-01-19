@@ -171,12 +171,6 @@ void Transform::apply(CartesianPoint& p) {
   p = (*this) * p;
 }
 
-void Transform::apply(Atom& a) {
-  CartesianPoint point(a);
-  point = (*this) * point;
-  a.setCoor(point);
-}
-
 void Transform::apply(Atom* a) {
   CartesianPoint point(*a);
   point = (*this) * point;
@@ -187,6 +181,33 @@ void Transform::apply(real& x, real& y, real& z) {
   CartesianPoint point(x, y, z);
   point = (*this) * point;
   x = point[0]; y = point[1]; z = point[2];
+}
+
+void Transform::apply(Residue* res) {
+  for (int i = 0; i < res->atomSize(); i++) {
+    apply((*res)[i]);
+  }
+}
+
+void Transform::apply(Chain* chain) {
+  for (int j = 0; j < chain->residueSize(); j++) {
+    Residue& res = (*chain)[j];
+    for (int i = 0; i < res.atomSize(); i++) {
+      apply(res[i]);
+    }
+  }
+}
+
+void Transform::apply(Structure* S) {
+  for (int k = 0; k < S->chainSize(); k++) {
+    Chain& chain = (*S)[k];
+    for (int j = 0; j < chain.residueSize(); j++) {
+      Residue& res = chain[j];
+      for (int i = 0; i < res.atomSize(); i++) {
+        apply(res[i]);
+      }
+    }
+  }
 }
 
 

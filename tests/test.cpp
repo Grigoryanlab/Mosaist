@@ -4,22 +4,6 @@ using namespace MST;
 
 int main(int argc, char** argv) {
 
-  double angle;
-  double base = 360.0;
-  angle = -12.5; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
-  angle = 12.5; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
-  angle = -180.3; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
-  angle = 180.3; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
-  angle = -365.2; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
-  angle = 365.2; printf("fmod(%f, %f) = %f\n", angle, base, fmod(angle, base));
-
-  angle = -12.5; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
-  angle = 12.5; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
-  angle = -180.3; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
-  angle = 180.3; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
-  angle = -365.2; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
-  angle = 365.2; printf("mod(%f, %f) = %f\n", angle, base, MstUtils::mod(angle, base));
-
   if (argc < 3) {
     MstUtils::error("Usage: ./test [PDB file] [output file base]", "main");
   }
@@ -31,7 +15,7 @@ int main(int argc, char** argv) {
   Structure S(pdbFile);
   S.writePDB(outBase + ".out.pdb");
 
-  // memory test
+  // memory test (sort of)
   int n = 1000;
   printf("reading %d Structure objects into memory...\n", n);
   vector<Structure> many(n);
@@ -45,4 +29,13 @@ int main(int argc, char** argv) {
   printf("deleting %d Structure objects from memory...\n", n);
   many.clear();
   printf("TEST DONE\n");
+
+  // phi/psi test
+  for (int i = 0; i < S.chainSize(); i++) {
+    Chain& chain = S[i];
+    for (int j = 0; j < chain.residueSize(); j++) {
+      Residue& res = chain[j];
+      cout << res << ", phi = " << res.getPhi(false) << ", psi = " << res.getPsi(false) << endl;
+    }
+  }
 }
