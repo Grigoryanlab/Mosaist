@@ -855,7 +855,7 @@ real CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoin
 void MstUtils::openFile (fstream& fs, string filename, ios_base::openmode mode, string from) {
   fs.open(filename.c_str(), mode);
   if (!fs.is_open()) {
-    if (!from.empty()) from =+ " -> ";
+    if (!from.empty()) from += " -> ";
     MstUtils::error("could not open file " + filename, from + "MstUtils::openFile");
   }
 }
@@ -954,3 +954,14 @@ MST::real MstUtils::toReal(string num, bool strict) {
 MST::real MstUtils::mod(MST::real num, MST::real den) {
   return num - ((MST::real) floor((double) num / (double) den)) * den;
 }
+
+string MstUtils::readNullTerminatedString(fstream& ifs) {
+  string str;
+  char c;
+  while (ifs.get(c)) {
+    if (c == '\0') break;
+    str += c;
+  }
+  return str;
+}
+

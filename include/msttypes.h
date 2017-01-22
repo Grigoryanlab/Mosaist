@@ -141,6 +141,7 @@ class Residue {
     int atomSize() { return atoms.size(); }
     vector<Atom*> getAtoms() { return atoms; }
     Atom& operator[](int i) { return *(atoms[i]); }
+    Atom& getAtom(int i) { return *(atoms[i]); }
     Chain* getChain() { return parent; }
     string getChainID(bool strict = true);
     string getName() { return resname; }
@@ -369,6 +370,15 @@ class MstUtils {
     static int toInt(string num, bool strict = true);
     static MST::real toReal(string num, bool strict = true);
     static MST::real mod(MST::real num, MST::real den);
+    static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); } 
+
+    static string readNullTerminatedString(fstream& ifs);
+
+    // returns a random number in the range [lower, upper]
+    static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
+
+    // returns a random number in the range [0, upper) (convenient for generating random array subscripts)
+    static int randInt(int upper) { return randInt(0, upper - 1); }
 
     template <class T>
     static string toString(T obj) { return toString(&obj); }

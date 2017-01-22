@@ -2,12 +2,14 @@
 #define _MSTLIB_H
 
 #include "msttypes.h"
+#include "msttransforms.h"
+#include <algorithm> // needed for sort
 
 namespace MST {
 
 class RotamerLibrary {
   public:
-    RotamerLibrary();
+    RotamerLibrary() {}
     RotamerLibrary(string rotLibFile);
     ~RotamerLibrary();
   
@@ -26,6 +28,9 @@ class RotamerLibrary {
     /* decides whether the atom is a backbone atom basded on the name */
     bool isBackboneAtom(string atomName);
 
+    int numberOfRotamers(string aa, real phi = Residue::badDihedral, real psi = Residue::badDihedral);
+    vector<string> availableAminoAcids() { return keys(rotamers); }
+
   protected:
     /* given an array of angles, stored in ascending order (i.e., in the counter-clockwise
      * direction), find the array index with the angle closest to the given angle */
@@ -36,21 +41,43 @@ class RotamerLibrary {
     // indicated by a positive difference). The order of subtraction is a - b.
     real angleDiff(real a, real b);
 
+    // map a given angle, in degrees to the "standard" range of [-180, 180)
+    real angleToStandardRange(real angle);
+    
+    // return a vector of keys given a map
+    template<class T1, class T2>
+    vector<T1> keys(map<T1, T2>& mymap, bool sorted = false) {
+      vector<T1> vec;
+      for (typename map<T1, T2>::iterator it = mymap.begin(); it != mymap.end(); ++it) {
+        vec.push_back(it->first);
+      }
+      if (sorted) {
+        sort(vec.begin(), vec.end());
+      }
+      return vec;
+    }
+
   private:
     /* the map is keyed by amino-acid name, the vector goes over phi/psi bins, and
      * the inner Residue object stores atom information and coordinates for all
      * rotamers of the amino acid in the backbone bin. The first rotamer is stored
      * in the main coordinates of the Residue's constituent atoms, and the remaining
-     * rotamers, if any, in the alternative coordinates.
-     */
+     * rotamers, if any, in the alternative coordinates. */
     map<string, vector<Residue*> > rotamers;
 
     /* here the structure is similar, except rather than storing a Residue object with
      * all the rotamers, here we store a vector<vector<real> > that defines the chi
-     * angles of each rotamer. The outer vector is over rotamers and the inner one over
-     * chi angles (e.g., chi1 through chi4). So, :
-     * chi[i]["ARG"][13][2] -- is the chi3 value for the 14th rotamer of ARG in phi/psi bin i. */
-    map<string, vector<vector<vector<real> > > chi;
+     * angles of each rotamer. The outer vector is over rotamers and the inner over chi
+     * angles (e.g., chi1 through chi4). So,
+     * chi["ARG"][i][13][2].first is the chi3 value for the 14th rotamer of ARG in phi/psi bin i
+     * and
+     * chi["ARG"][i][13][2].second -- is the standard deviation around this value (sigma). */
+    map<string, vector<vector<vector<pair<real, real> > > > > chi;
+
+    /* definitions of chi angles (via atom names). The key is the amino acid name, the
+     * outer vector is over chi angles and the inner vector is over atoms comprising each
+     * chi angle. E.g., chidef["ASP"][1][0] is the first atom of chi2 for ASP. */
+    map<string, vector<vector<string> > > chidef;
 
     /* phi/psi bins are required to be on a grid, but the grid lines do not need to be
      * unifirm, do not need to be the same between phi and psi, and can vary between
