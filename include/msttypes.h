@@ -51,6 +51,7 @@ class Structure {
     Chain& operator[](int i) const { return *(chains[i]); }
     vector<Atom*> getAtoms();
     vector<Residue*> getResidues();
+    void setName(string _name) { name = _name; }
 
     /* ----- functions that grow/shrink structure ----- */
     /* returns false if the chain name collides with existing chain names and no suitable single-letter
@@ -60,6 +61,7 @@ class Structure {
      * well to be the same multi-character name. So, although in the output chain names will repeat,
      * segment names will still be unique. If it fails to find an even multi-character name, errors. */
     bool appendChain(Chain* C, bool allowRename = true);
+    Chain* appendChain(string cid, bool allowRename = true);
 
     /* makes a copy of the atom, then decides where it is supposed to go and inserts it
      * into the Structure, creating a new Chain and/or Residue as needed. */
@@ -76,7 +78,7 @@ class Structure {
 
   private:
     vector<Chain*> chains;
-    string sourceFile;
+    string name;
     int numResidues, numAtoms;
     // NOTE: thse two maps are maintained for convenience and will not guarantee the lack of collisions. That is,
     // if more than one chain use the same ID or segment ID, these maps will only store the last one added.
@@ -117,6 +119,9 @@ class Chain {
 
     /* ----- functions that grow/shrink structure ----- */
     void appendResidue(Residue* R);
+    void insertResidue(Residue* R, int index); // insert the Residue in such a way that it ends up being at index i
+    Residue* insertResidueCopy(Residue* R, int index = -1); // same, but copies the residue first
+    Residue* insertResidueCopy(Residue& R, int index = -1); // same, but copies the residue first
     /* ----- functions that grow/shrink structure ----- */
 
   protected:

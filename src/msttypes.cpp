@@ -8,13 +8,13 @@ Structure::Structure() {
 }
 
 Structure::Structure(string pdbFile, string options) {
-  sourceFile = pdbFile;
+  name = pdbFile;
   numResidues = numAtoms = 0;
   readPDB(pdbFile, options);
 }
 
 Structure::Structure(Structure& S) {
-  sourceFile = S.sourceFile;
+  name = S.name;
   numResidues = S.numResidues;
   numAtoms = S.numAtoms;
   for (int i = 0; i < S.chainSize(); i++) {
@@ -42,12 +42,12 @@ void Structure::reset() {
   chains.resize(0);
   chainsByID.clear();
   chainsBySegID.clear();
-  sourceFile = "";
+  name = "";
   numResidues = numAtoms = 0;
 }
 
 void Structure::readPDB(string pdbFile, string options) {
-  sourceFile = pdbFile;
+  name = pdbFile;
   int lastresnum = -999999;
   string lastresname = "";
   string lasticode = "";
@@ -293,6 +293,11 @@ bool Structure::appendChain(Chain* C, bool allowRename) {
   return cidUnique;
 }
 
+Chain* Structure::appendChain(string cid, bool allowRename) {
+  Chain* newChain = new Chain(cid, cid);
+  this->appendChain(newChain, allowRename);
+}
+
 vector<Atom*> Structure::getAtoms() {
   vector<Atom*> vec;
   
@@ -409,6 +414,32 @@ void Chain::appendResidue(Residue* R) {
   residues.push_back(R);
   R->setParent(this);
   residueIndexInChain[R] = residues.size() - 1;
+}
+
+void Chain::insertResidue(Residue* R, int index) {
+  if ((index < 0) || (index >= residues.size()))
+    MstUtils::error("residue index '" + MstUtils::toString(index) + "' out of range", "Chain::insertResidue(Residue*, int)");
+  incrementNumAtoms(R->atomSize());
+  if (parent != NULL) {
+    parent->incrementNumResidues();
+  }
+  residues.insert(residues.begin() + index, R);
+  R->setParent(this);
+  residueIndexInChain[R] = index;
+  for (int i = index + 1; i < residues.size(); i++) {
+    residueIndexInChain[residues[i]]++;
+  }
+}
+Residue* Chain::insertResidueCopy(Residue* R, int index) {
+  Residue* newRes = new Residue(*R);
+  if (index == -1) this->appendResidue(newRes);
+  else this->insertResidue(newRes, index);
+}
+
+Residue* Chain::insertResidueCopy(Residue& R, int index) {
+  Residue* newRes = new Residue(R);
+  if (index == -1) this->appendResidue(newRes);
+  else this->insertResidue(newRes, index);
 }
 
 Residue* Chain::findResidue(string resname, int resnum) {
