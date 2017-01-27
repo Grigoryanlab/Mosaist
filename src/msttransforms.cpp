@@ -14,17 +14,21 @@ Frame::Frame() {
 Frame::Frame(CartesianPoint& _O, CartesianPoint& _X, CartesianPoint& _Y, CartesianPoint& _Z) {
   MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3), 
       "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)"); 
+  real xn = _X.norm(); real yn = _Y.norm(); real zn = _Z.norm();
   O[0] = _O[0]; O[1] = _O[1]; O[2] = _O[2];
-  X[0] = _X[0]; X[1] = _X[1]; X[2] = _X[2];
-  Y[0] = _Y[0]; Y[1] = _Y[1]; Y[2] = _Y[2];
-  Z[0] = _Z[0]; Z[1] = _Z[1]; Z[2] = _Z[2];
+  X[0] = _X[0]/xn; X[1] = _X[1]/xn; X[2] = _X[2]/xn;
+  Y[0] = _Y[0]/yn; Y[1] = _Y[1]/yn; Y[2] = _Y[2]/yn;
+  Z[0] = _Z[0]/zn; Z[1] = _Z[1]/zn; Z[2] = _Z[2]/zn;
 }
 
 Frame::Frame(real _ox, real _oy, real _oz, real _xx, real _xy, real _xz, real _yx, real _yy, real _yz, real _zx, real _zy, real _zz) {
+  real xn = sqrt(_xx*_xx + _xy*_xy + _xz*_xz);
+  real yn = sqrt(_yx*_yx + _yy*_yy + _yz*_yz);
+  real zn = sqrt(_zx*_zx + _zy*_zy + _zz*_zz);
   O[0] = _ox; O[1] = _oy; O[2] = _oz;
-  X[0] = _xx; X[1] = _xy; X[2] = _xz;
-  Y[0] = _yx; Y[1] = _yy; Y[2] = _yz;
-  Z[0] = _zx; Z[1] = _zy; Z[2] = _zz;
+  X[0] = _xx/xn; X[1] = _xy/xn; X[2] = _xz/xn;
+  Y[0] = _yx/yn; Y[1] = _yy/yn; Y[2] = _yz/yn;
+  Z[0] = _zx/zn; Z[1] = _zy/zn; Z[2] = _zz/zn;
 }
 
 Frame::Frame(Frame& other) {
@@ -64,10 +68,19 @@ Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, fillO
     CartesianPoint* P = points[i];
     for (int j = 0; j < 3; j++) {
       if (order == fillOrder::byColumn) {
-        (*this)(i, j) = (*P)[j];
-      } else {
         (*this)(j, i) = (*P)[j];
+      } else {
+        (*this)(i, j) = (*P)[j];
       }
+    }
+  }
+  // now fill out the last row and column
+  for (int i = 0; i < 4; i++) {
+    if (i == 3) {
+      (*this)(i, 3) = 1;
+    } else {
+      (*this)(i, 3) = 0;
+      (*this)(3, i) = 0;
     }
   }
 }
@@ -93,6 +106,28 @@ Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, Carte
   }
 }
 
+Transform::Transform(vector<real> trans) {
+  Transform(); // called default constructor to make the identity matrix
+  if (trans.size() != 3) MstUtils::error("expected a 3D vector!", "Transform::Transform(vector<real>)");
+  for (int i = 0; i < 3; i++) {
+    (*this)(i, 3) = trans[i];
+  }
+}
+
+Transform::Transform(vector<vector<real> > rot) {
+  if (rot.size() != 3) MstUtils::error("expected a 3x3 matrix!", "Transform::Transform(vector<vector<real> >)");
+  Transform(CartesianPoint(rot[0]), CartesianPoint(rot[1]), CartesianPoint(rot[2]), byRow);
+}
+
+Transform::Transform(vector<vector<real> > rot, vector<real> trans) {
+  if (rot.size() != 3) MstUtils::error("expected a 3x3 matrix!", "Transform::Transform(vector<vector<real> >, vector<real>)");
+  if (trans.size() != 3) MstUtils::error("expected a 3D vector!", "Transform::Transform(vector<vector<real> >, vector<real>)");
+  Transform(CartesianPoint(rot[0]), CartesianPoint(rot[1]), CartesianPoint(rot[2]), byRow);
+  for (int i = 0; i < 3; i++) {
+    (*this)(i, 3) = trans[i];
+  }
+}
+
 real& Transform::operator()(int i, int j) {
   if ((i < 0) || (j < 0) || (i > 3) || (j > 3)) MstUtils::error("element " + MstUtils::toString(i) + " x " + MstUtils::toString(j) + " out of range", "Transform::perator()");
   return M[i][j];
@@ -110,7 +145,7 @@ const Transform Transform::operator*(const Transform& rhs) const {
     for (int j = 0; j < 4; j++) {
       T(i, j) = 0;
       for (int k = 0; k < 4; k++) {
-        T(i, j) += (*this)(i, k) * rhs(j, k);
+        T(i, j) += (*this)(i, k) * rhs(k, j);
       }
     }
   }
@@ -161,6 +196,8 @@ Transform Transform::inverse() {
   Ti(3, 1) =  (T(0,0)*T(2,1)*T(3,2) - T(0,0)*T(2,2)*T(3,1) - T(0,1)*T(2,0)*T(3,2) + T(0,1)*T(2,2)*T(3,0) + T(0,2)*T(2,0)*T(3,1) - T(0,2)*T(2,1)*T(3,0))/det;
   Ti(3, 2) = -(T(0,0)*T(1,1)*T(3,2) - T(0,0)*T(1,2)*T(3,1) - T(0,1)*T(1,0)*T(3,2) + T(0,1)*T(1,2)*T(3,0) + T(0,2)*T(1,0)*T(3,1) - T(0,2)*T(1,1)*T(3,0))/det;
   Ti(3, 3) =  (T(0,0)*T(1,1)*T(2,2) - T(0,0)*T(1,2)*T(2,1) - T(0,1)*T(1,0)*T(2,2) + T(0,1)*T(1,2)*T(2,0) + T(0,2)*T(1,0)*T(2,1) - T(0,2)*T(1,1)*T(2,0))/det;
+
+  return Ti;
 }
 
 CartesianPoint Transform::applyToCopy(CartesianPoint& p) {
@@ -359,7 +396,7 @@ Transform TransformFactory::switchFrames(Frame& _from, Frame& _to) {
   // 3. translate from the origin of _from to the origin of _to
   Transform T1(_from.getX(), _from.getY(), _from.getZ(), Transform::byColumn);
   Transform T2(_to.getX(), _to.getY(), _to.getZ(), Transform::byColumn);
-  CartesianPoint ori = _to.getO() - _from.getO();
+  CartesianPoint ori = _from.getO() - _to.getO();
 
-  return T1 * (T2.inverse()) * translate(ori);
+  return translate(ori) * (T2.inverse()) * T1;
 }

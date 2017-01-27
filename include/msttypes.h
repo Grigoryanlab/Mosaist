@@ -11,6 +11,10 @@
 #include <vector>
 #include <map>
 #include <math.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 using namespace std;
 
 namespace MST {
@@ -217,6 +221,7 @@ class Atom {
     real getX() const { return x; }
     real getY() const{ return y; }
     real getZ() const{ return z; }
+    real operator[](int i) const;
     vector<real> getCoor() { vector<real> coor; coor.push_back(x); coor.push_back(y); coor.push_back(z); return coor; }
     real getB() { return B; }
     real getOcc() { return occ; }
@@ -311,6 +316,7 @@ class CartesianPoint : public vector<real> {
     const CartesianPoint operator-(const CartesianPoint &other) const;
     const CartesianPoint operator*(const real& s) const;
     const CartesianPoint operator/(const real& s) const;
+    const CartesianPoint operator-() const;
     CartesianPoint& operator=(const Atom& A);
     const double operator*(const CartesianPoint& other) const { return this->dot(other); }
 
@@ -323,6 +329,19 @@ class CartesianPoint : public vector<real> {
     real getX() const { return (*this)[0]; }
     real getY() const { return (*this)[1]; }
     real getZ() const { return (*this)[2]; }
+
+    real distance(CartesianPoint& another);
+    real distance(CartesianPoint* another) { return distance(*another); }
+    real distance2(CartesianPoint& another);
+    real distance2(CartesianPoint* another) { return distance2(*another); }
+
+    friend ostream & operator<<(ostream &_os, CartesianPoint& _p) {
+      for (int i = 0; i < _p.size(); i++) {
+        _os << _p[i];
+        if (i != _p.size() - 1) _os << " ";
+      }
+      return _os;
+    }
 };
 
 class CartesianGeometry {
@@ -350,6 +369,89 @@ class AtomPointerVector : public vector<Atom*> {
     }
 };
 
+class RMSDCalculator {
+ public:  
+    RMSDCalculator() {}
+    ~RMSDCalculator() {}
+
+    // getters
+    real lastRMSD() { return _rmsd; }
+    vector<real> lastTranslation();
+    vector<vector<real> > lastRotation();
+
+    // calculate optimal superposition and the resulting RMSD, applying transformation to given atoms
+    bool align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<Atom*>& _moveable);
+
+    // quickly calculate RMSD upon optimal superposition without generating the rotation matrix
+    real bestRMSD(vector<Atom*> &_align, vector<Atom*> &_ref, bool* _suc = NULL, bool setTransRot = false);
+
+    // in-place RMSD (no transformations)
+    static real rmsd(vector<Atom*>& A, vector<Atom*>& B);
+    static real rmsd(Structure& A, Structure& B);
+
+ protected:
+    // implemetation of Kabsch algoritm for optimal superposition
+    bool Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode);
+
+ private:
+    real _rmsd;
+    real t[3];    // translation vector
+    real u[3][3]; // rotation matrix
+
+};
+
+class ProximitySearch {
+  public:
+    ProximitySearch(real _xlo, real _ylo, real _zlo, real _xhi, real _yhi, real _zhi, int _N = 20);
+    ProximitySearch(AtomPointerVector& _atoms, int _N, bool _addAtoms = true, vector<int>* tags = NULL, real pad = 0);
+    ProximitySearch(AtomPointerVector& _atoms, real _characteristicDistance, bool _addAtoms = true, vector<int>* tags = NULL, real pad = 0);
+    ~ProximitySearch();
+
+    real getXLow() { return xlo; }
+    real getYLow() { return ylo; }
+    real getZLow() { return zlo; }
+    real getXHigh() { return xhi; }
+    real getYHigh() { return yhi; }
+    real getZHigh() { return zhi; }
+    int pointSize() { return pointList.size(); }
+    CartesianPoint& getPoint(int i) { return *(pointList[i]); }
+    int getPointTag(int i) { return pointTags[i]; }
+
+    void reinitBuckets(int _N);
+    void addPoint(CartesianPoint _p, int tag);
+    bool isPointWithinGrid(CartesianPoint _p);
+    void pointBucket(CartesianPoint* p, int* i, int* j, int* k) { pointBucket(p->getX(), p->getY(), p->getZ(), i, j, k); }
+    void pointBucket(CartesianPoint p, int* i, int* j, int* k) { pointBucket(p.getX(), p.getY(), p.getZ(), i, j, k); }
+    void pointBucket(real px, real py, real pz, int* i, int* j, int* k);
+    void limitIndex(int *ind);
+    real gridSpacingX() { return (xhi - xlo)/N; }
+    real gridSpacingY() { return (yhi - ylo)/N; }
+    real gridSpacingZ() { return (zhi - zlo)/N; }
+    static void calculateExtent(AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi);
+    static void calculateExtent(Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi);
+
+    bool pointsWithin(CartesianPoint c, real dmin, real dmax, vector<int>* list = NULL, bool byTag = false);
+
+  protected:
+    void setBinWidths();
+    void calculateExtent(AtomPointerVector& _atoms) { ProximitySearch::calculateExtent(_atoms, xlo, ylo, zlo, xhi, yhi, zhi); }
+
+  private:
+    int N; // dimension of bucket list is N x N x N
+
+    real xlo, ylo, zlo, xhi, yhi, zhi, xbw, ybw, zbw; // extents of coordinates
+
+    /* Each bucket is a vector of point indices (zero-initiated). These
+     * indices are into two vectors: a vector of 3D points (CartesianPoint
+     * pointers) and a vector of point tags. In this way, it is easy to go
+     * from a bucket into points as well as from a point index into its point
+     * or tag. One can also go from a point to its bucket location, by doing
+     * a simple computations on the coordinates of the point via poitBucket(). */
+    vector<vector<vector<vector<int> > > > buckets;
+    vector<CartesianPoint*> pointList;
+    vector<int> pointTags;
+};
+
 }
 
 /* Utilities class, with a bunch of useful static functions, is defined outside of the MST namespace because:
@@ -359,6 +461,8 @@ class AtomPointerVector : public vector<Atom*> {
 class MstUtils {
   public:
     static void openFile (fstream& fs, string filename, ios_base::openmode mode, string from = "");
+    static void fileToArray(string _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
+    static vector<string> fileToArray(string _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
     static FILE* openFileC (const char* filename, const char* mode, string from = "");
     static string trim(string str);
     static void warn(string message, string from = "");
@@ -371,12 +475,14 @@ class MstUtils {
     static MST::real toReal(string num, bool strict = true);
     static MST::real mod(MST::real num, MST::real den);
     static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); } 
+    static string pathBase(string fn); // gets the base name of the path (removes the extension)
+    static bool fileExists(const char *filename);
+    static bool isDir(const char *filename);
 
     static string readNullTerminatedString(fstream& ifs);
 
     // returns a random number in the range [lower, upper]
     static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
-
     // returns a random number in the range [0, upper) (convenient for generating random array subscripts)
     static int randInt(int upper) { return randInt(0, upper - 1); }
 
@@ -384,6 +490,10 @@ class MstUtils {
     static string toString(T obj) { return toString(&obj); }
     template <class T>
     static string toString(T* obj);
+    template <class T>
+    static vector<int> sortIndices(vector<T>& vec, bool descending = false);
+    template <class T1, class T2>
+    static vector<T1> keys(map<T1, T2>& _map);
 };
 
 template <class T>
@@ -391,6 +501,28 @@ string MstUtils::toString(T* obj) {
   stringstream ss;
   ss << *obj;
   return ss.str();
+}
+
+template <class T>
+vector<int> MstUtils::sortIndices(vector<T>& vec, bool descending) {
+  vector<int> sortedIndices(vec.size(), 0);
+  for (int i = 0; i < vec.size(); i++) sortedIndices[i] = i;
+  if (descending) {
+    sort(sortedIndices.begin(), sortedIndices.end(), [&vec](size_t i1, size_t i2) {return vec[i2] < vec[i1];});
+  } else {
+    sort(sortedIndices.begin(), sortedIndices.end(), [&vec](size_t i1, size_t i2) {return vec[i1] < vec[i2];});
+  }
+  return sortedIndices;
+}
+
+template <class T1, class T2>
+vector<T1> MstUtils::keys(map<T1, T2>& _map) {
+  vector<T1> K(_map.size());
+  int k = 0;
+  for (typename map<T1, T2>::iterator it = _map.begin(); it != _map.end(); ++it) {
+    K[k] = it->first;
+  }
+  return K;
 }
 
 #endif

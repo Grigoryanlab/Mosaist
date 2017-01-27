@@ -17,18 +17,23 @@ class RotamerLibrary {
 
     /* returns the index of the bin into which the given phi/psi value combination
      * maps for the given amino acid. */
-    int getBackboneBin(string aa, real phi, real psi);
+    int getBackboneBin(string aa, real phi, real psi, bool assumeDefault = true);
+
+    /* finds the phi/psi values corresponding to the given bin index for the given amino acid */
+    pair<real, real> getBinPhiPsi(string aa, int bi);
 
     /* places the specified rotamer into the given Residue. NOTE: the original residue
      * is modified, with some of its atoms potentially destroyed (as needed), so if you 
      * want to be able to go back to the wild type, first make a copy of the residue 
      * before placing the rotamer. */
-    bool placeRotamer(Residue& res, string aa, int rotIndex, bool strict = true);
+    void placeRotamer(Residue& res, string aa, int rotIndex, bool strict = true);
 
     /* decides whether the atom is a backbone atom basded on the name */
-    bool isBackboneAtom(string atomName);
+    static bool isBackboneAtom(string atomName);
+    static bool isBackboneAtom(Atom& atom) { return isBackboneAtom(atom.getName()); }
 
     int numberOfRotamers(string aa, real phi = Residue::badDihedral, real psi = Residue::badDihedral);
+    real rotamerProbability(string aa, int ri, real phi = Residue::badDihedral, real psi = Residue::badDihedral);
     vector<string> availableAminoAcids() { return keys(rotamers); }
 
   protected:
@@ -64,6 +69,18 @@ class RotamerLibrary {
      * in the main coordinates of the Residue's constituent atoms, and the remaining
      * rotamers, if any, in the alternative coordinates. */
     map<string, vector<Residue*> > rotamers;
+
+    /* rotamer probabilities. As above, the map is keyed by amino acid, the outer vector
+     * goes over phi/psi bins and the inner vector over rotamers. */
+    map<string, vector<vector<real> > > prob;
+
+    /* for a given amino acid, binFreq[aa] stores the frequencies of each phi/psi bin. These
+     * are stored as reals, so they can be either counts (i.e., number of occurrences) as with 
+     * Dunbrack's rotamer library or true frequencies (i.e., probabilities). */
+    map<string, vector<real> > binFreq;
+
+    /* the default phi/psi bin for each amino acid; assumed in the absence of a valid phi/psi pair. */
+    map<string, int> defaultBin;
 
     /* here the structure is similar, except rather than storing a Residue object with
      * all the rotamers, here we store a vector<vector<real> > that defines the chi

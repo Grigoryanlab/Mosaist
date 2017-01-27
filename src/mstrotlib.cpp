@@ -33,6 +33,8 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     chidef[aa] = vector<vector<string> >(nc);
     chi[aa] = vector<vector<vector<pair<real, real> > > >(nb);
     rotamers[aa] = vector<Residue*>(nb, NULL);
+    prob[aa] = vector<vector<real> >(nb);
+    binFreq[aa] = vector<real>(nb);
 
     // read definitions of chi angles
     for (int i = 0; i < nc; i++) {
@@ -52,19 +54,21 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     // read phi/psi angles for each bin, record unique ones.
     map<real, bool> uniquePhi, uniquePsi;
     map<pair<real, real>, bool> uniqueBins;
-    vector<pair<real, real> > bins;
+    vector<vector<real> > bins(nb);
     for (int i = 0; i < nb; i++) {
+      bins[i] = vector<real>(3);
       pair<real, real> bin;
       inp.read((char*) &val, sizeof(val));
       phi = angleToStandardRange((real) val);
       uniquePhi[phi] = true;
-      bin.first = phi;
+      bins[i][0] = phi;
       inp.read((char*) &val, sizeof(val));
       psi = angleToStandardRange((real) val);
       uniquePsi[psi] = true;
-      bin.second = psi;
-      bins.push_back(bin);
-      uniqueBins[bin] = true;
+      bins[i][1] = psi;
+      uniqueBins[pair<real, real>(phi, psi)] = true;
+      inp.read((char*) &val, sizeof(val));
+      bins[i][2] = (real) val;
     }
 
     // make sure the phi/psi bins are defined on a grid and bins are not repeated
@@ -79,15 +83,30 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     binPhiCenters[aa] = keys(uniquePhi, true);
     binPsiCenters[aa] = keys(uniquePsi, true);
     vector<int> binIndex(nb);
-    for (int i = 0; i < nb; i++) binIndex[i] = getBackboneBin(aa, bins[i].first, bins[i].second);    
+    for (int i = 0; i < nb; i++) {
+      binIndex[i] = getBackboneBin(aa, bins[i][0], bins[i][1]);    
+      binFreq[aa][binIndex[i]] = bins[i][2];
+    }
+
+    // make the default phi/psi bin for each amino acid be the most frequent one
+    int defaultBinIndex = 0;
+    for (int i = 0; i < nb; i++) {
+      if (binFreq[aa][i] > binFreq[aa][defaultBinIndex]) defaultBinIndex = i;
+    }
+    defaultBin[aa] = defaultBinIndex;
 
     // read rotamers in each phi/psi bin
     for (int ii = 0; ii < nb; ii++) {
       int i = binIndex[ii];
       inp.read((char*) &nr, sizeof(nr));  // number of rotamers in this bin
       chi[aa][i].resize(nr);
+      prob[aa][i].resize(nr);
       rot = new Residue(*res);
       for (int j = 0; j < nr; j++) {
+        // read rotamer probability
+        inp.read((char*) &val, sizeof(val));
+        prob[aa][i][j] = (real) val;
+
         // read chi and chi sigma values for the rotamer
         chi[aa][i][j].resize(nc);
         for (int k = 0; k < nc; k++) {
@@ -121,7 +140,13 @@ real RotamerLibrary::angleToStandardRange(real angle) {
 
 int RotamerLibrary::numberOfRotamers(string aa, real phi, real psi) {
   int bi = getBackboneBin(aa, phi, psi);
-  return rotamers[aa][bi]->getAtom(0).numAlternatives();
+  if (rotamers[aa][bi]->atomSize() == 0) return 1; // for GLY
+  return rotamers[aa][bi]->getAtom(0).numAlternatives() + 1;
+}
+
+real RotamerLibrary::rotamerProbability(string aa, int ri, real phi, real psi) {
+  int bi = getBackboneBin(aa, phi, psi);
+  return prob[aa][bi][ri];
 }
 
 //vector<string> RotamerLibrary::availableAminoAcids() {
@@ -132,21 +157,10 @@ int RotamerLibrary::numberOfRotamers(string aa, real phi, real psi) {
 //  return aas;
 //}
 
-bool RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool strict) {
+void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool strict) {
   double phi = res.getPhi();
   double psi = res.getPsi();
-  if (phi == Residue::badDihedral) {
-    // SHOULD REALLY ASSUME THE DEFAULT BIN!!!!!!!!!!!!!!!!!!!
-    if (strict) MstUtils::error("could not compute PHI for", "RotamerLibrary::placeRotamer");
-    return false;
-  }
-  if (psi == Residue::badDihedral) {
-    // SHOULD REALLY ASSUME THE DEFAULT BIN!!!!!!!!!!!!!!!!!!!
-    if (strict) MstUtils::error("could not compute PSI for", "RotamerLibrary::placeRotamer");
-    return false;
-  }
-
-  int binInd = getBackboneBin(aa, phi, psi);
+  int binInd = getBackboneBin(aa, phi, psi, !strict);
   if (rotamers.find(aa) == rotamers.end()) MstUtils::error("rotamer library does not contain amino acid '" + aa + "'", "RotamerLibrary::placeRotamer");
   if (rotamers[aa].size() <= binInd) {
     MstUtils::error("rotamer library has " + MstUtils::toString(rotamers[aa].size()) + " backbone bins for amino acid '" + aa + "', but bin number " + MstUtils::toString(binInd+1) + " was requested", "RotamerLibrary::placeRotamer");
@@ -160,8 +174,8 @@ bool RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool st
   CartesianPoint CA = CartesianPoint(res.findAtom("CA"));
   CartesianPoint C = CartesianPoint(res.findAtom("C"));
   CartesianPoint N = CartesianPoint(res.findAtom("N"));
-  CartesianPoint X = C - CA;          // X-axis of the residue frame defined to be along CA -> C
-  CartesianPoint Z = X.cross(N - CA); // since N-CA is defined to be in the XY plane, (CA -> C) x (CA -> N) will be a vector along Z
+  CartesianPoint X = CA - N;          // X-axis of the residue frame defined to be along N -> CA
+  CartesianPoint Z = X.cross(C - CA); // since CA-C is defined to be in the XY plane, (N -> CA) x (CA -> C) will be a vector along Z
   CartesianPoint Y = Z.cross(X);      // finally, Z x X is Y
   Frame R(CA, X, Y, Z);               // residue frame
   Frame L;                            // Frame class defaults to the laboratory frame
@@ -221,9 +235,18 @@ bool RotamerLibrary::isBackboneAtom(string atomName) {
   }
 }
 
-int RotamerLibrary::getBackboneBin(string aa, real phi, real psi) {
-  MstUtils::assert(binPhiCenters.find(aa) != binPhiCenters.end(), "no PHI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
-  MstUtils::assert(binPsiCenters.find(aa) != binPsiCenters.end(), "no PSI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
+int RotamerLibrary::getBackboneBin(string aa, real phi, real psi, bool assumeDefault) {
+  if (binPhiCenters.find(aa) == binPhiCenters.end()) MstUtils::error("no PHI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
+  if (binPsiCenters.find(aa) == binPsiCenters.end()) MstUtils::error("no PSI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
+
+  if ((phi == Residue::badDihedral) || (psi == Residue::badDihedral)) {
+    if (assumeDefault) {
+      // if no valid phi/psi pair provided, find the most frequent bin for the given amino acid
+      return defaultBin[aa];
+    } else {
+      MstUtils::error("could not find backbone bin for amino acid '" + aa + "', because provided phi/psi pair is invalid: " + MstUtils::toString(phi) + "/" + MstUtils::toString(psi), "RotamerLibrary::getBackboneBin");
+    }
+  }
 
   int phiInd = findClosestAngle(binPhiCenters[aa], phi);
   int psiInd = findClosestAngle(binPsiCenters[aa], psi);
@@ -232,59 +255,29 @@ int RotamerLibrary::getBackboneBin(string aa, real phi, real psi) {
   return phiInd * binPsiCenters[aa].size() + psiInd;
 }
 
+pair<real, real> RotamerLibrary::getBinPhiPsi(string aa, int bi) {
+  if (binPhiCenters.find(aa) == binPhiCenters.end()) MstUtils::error("no PHI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
+  if (binPsiCenters.find(aa) == binPsiCenters.end()) MstUtils::error("no PSI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
+  if (bi >= binPhiCenters[aa].size() * binPsiCenters[aa].size()) MstUtils::error("bin index " + MstUtils::toString(bi) + " out of range", "RotamerLibrary::getBackboneBin");
+
+  int phiInd = bi / binPsiCenters[aa].size();
+  int psiInd = bi % binPsiCenters[aa].size();
+  return pair<real, real>(binPhiCenters[aa][phiInd], binPsiCenters[aa][psiInd]);
+}
+
 int RotamerLibrary::findClosestAngle(vector<real>& array, real value) {
   MstUtils::assert(array.size() != 0, "empty vector passed", "RotamerLibrary::findClosestAngle");
-
-  // binary search on a circle. First determine where the angle maps with
-  // respect to the first (smallest) and last (largest) angles in the array,
-  // and treat some special cases.
-  int L = 0; int U = array.size() - 1;
-  double dL = angleDiff(value, array[L]);
-  double dU = angleDiff(value, array[U]);
-  if (dL == 0) {
-    return L
-  } else if (dU == 0) {
-    return U;
-  } else if ((dL < 0) && (dU > 0)) {
-    // this means the angle maps "before" the smallest angle and "after" the
-    // largest angle, meaning that it is sandwiched between the two, so pick
-    // the closest one. E.g., the first angle is 10, the last one is -10 (aka
-    // 350), and the angle is 5.
-    if (abs(dL) < abs(dU)) return L;
-    else return U;
-  } else if ((dL > 0) && (dU > 0) && (dL > dU)) {
-    // this means that the entire set of agles in the array comes after
-    // the query angle, so return the lower limit
-    return L;
-  } else if ((dL < 0) && (dU < 0) && (dL > dU)) {
-    // this means that the entire set of agles in the array comes before
-    // the query angle, so return the upper limit
-    return U;
-  }
-
-  // if we have reached here, that means the array has angles both before
-  // and after the query angle, so need to find a part of angles to
-  // sandwich the query, and then narrow the sandwich
-  while (L != U) {
-    // treat consequitive upper/lower indices as a special case so that
-    // index arithmetic below simple (no special cases to worry about)
-    if (U == L + 1) {
-      if (abs(angleDiff(value, array[L])) < abs(angleDiff(value, array[U]))) return L;
-      else return U;
-    }
-
-    int C = (L + U)/2; // try the mid point next (integer division; floor)
-    double d = angleDiff(value, array[C]); // value - angle[C]
-
-    if (d < 0) {
-      U = C;
-    } else if (d > 0) {
-      L = C;
-    } else {
-      return C;
+  int minInd = 0;
+  real minDist = fabs(angleDiff(value, array[0]));
+  real dist;
+  for (int i = 1; i < array.size(); i++) {
+    dist = fabs(angleDiff(value, array[i]));
+    if (minDist > dist) {
+      minDist = dist;
+      minInd = i;
     }
   }
-  return L;
+  return minInd;
 }
 
 real RotamerLibrary::angleDiff(real a, real b) {

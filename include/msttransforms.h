@@ -23,10 +23,10 @@ class Frame {
     real getO(int i) { return O[i]; }
 
     friend ostream & operator<<(ostream &_os, Frame& _F) {
-      _os << "O: " << _F.O[0]  << _F.O[1] << _F.O[2] << _F.O[3] << endl; 
-      _os << "X: " << _F.X[0]  << _F.X[1] << _F.X[2] << _F.X[3] << endl; 
-      _os << "Y: " << _F.Y[0]  << _F.Y[1] << _F.Y[2] << _F.Y[3] << endl; 
-      _os << "Z: " << _F.Z[0]  << _F.Z[1] << _F.Z[2] << _F.Z[3] << endl; 
+      _os << "O: " << _F.O[0] << " " << _F.O[1] << " " << _F.O[2] << endl; 
+      _os << "X: " << _F.X[0] << " " << _F.X[1] << " " << _F.X[2] << endl; 
+      _os << "Y: " << _F.Y[0] << " " << _F.Y[1] << " " << _F.Y[2] << endl; 
+      _os << "Z: " << _F.Z[0] << " " << _F.Z[1] << " " << _F.Z[2] << endl; 
       return _os;
     }
 
@@ -42,6 +42,9 @@ class Transform {
     Transform(const Transform& other);
     Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, fillOrder order);
     Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, CartesianPoint D, fillOrder order);
+    Transform(vector<real> trans);
+    Transform(vector<vector<real> > rot);
+    Transform(vector<vector<real> > rot, vector<real> trans);
 
     real& operator()(int i, int j);             // for access and setting
     real operator()(int i, int j) const;        // for access only

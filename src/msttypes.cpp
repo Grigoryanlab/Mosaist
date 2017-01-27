@@ -64,6 +64,7 @@ void Structure::readPDB(string pdbFile, string options) {
   bool fixIleCD1 = true;             // rename CD1 in ILE to CD (as is standard in MM packages)
   bool iCodesAsSepResidues = false;  // consequtive residues that differ only in their insertion code will be treated as separate residues
   bool uniqChainIDs = true;          // make sure chain IDs are unique, even if they are not unique in the read file
+  bool ignoreTER = false;            // if true, will not pay attention to TER lines in deciding when chains end/begin
 
   // user-specified custom parsing options
   options = MstUtils::uc(options);
@@ -74,6 +75,7 @@ void Structure::readPDB(string pdbFile, string options) {
   if (options.find("ALLOW DUPLICATE CIDS") != string::npos) uniqChainIDs = false;
   if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
   if (options.find("ICODES AS RESIDUES") != string::npos) iCodesAsSepResidues = true;
+  if (options.find("IGNORE-TER") != string::npos) ignoreTER = true;
 
   // read line by line
   string line;
@@ -81,12 +83,12 @@ void Structure::readPDB(string pdbFile, string options) {
 
   while (getline(ifh, line)) {
     if (line.find("END") == 0) break;
-    if (line.find("TER") == 0) { ter = true; continue; }
+    if ((line.find("TER") == 0) && !ignoreTER) { ter = true; continue; }
     if ((skipHetero && (line.find("ATOM") != 0)) || (!skipHetero && (line.find("ATOM") != 0) && (line.find("HETATM") != 0))) continue;
 
     /* Now read atom record. Sometimes PDB lines are too short (if they do not contain some
      * of the last optional columns). We don't want to read past the end of the string! */
-    line += string(" ", 100);
+    line += string(100, ' ');
     int atominx = MstUtils::toInt(line.substr(6, 5));
     string atomname = MstUtils::trim(line.substr(12, 4));
     string alt = line.substr(16, 1);
@@ -188,7 +190,7 @@ void Structure::writePDB(string pdbFile, string options) {
   if (options.find("CHARMM22") != string::npos) charmm22Format = true;
   if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
   if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
-  if (options.find("RENUMBER") != string::npos) renumber = false;
+  if (options.find("RENUMBER") != string::npos) renumber = true;
   if (options.find("NOEND") != string::npos) noend = true;
   if (options.find("NOTER") != string::npos) noter = true;
   if (charmm19Format && charmm22Format) MstUtils::error("CHARMM 19 and 22 formatting options cannot be specified together", "Structure::writePDB");
@@ -507,7 +509,7 @@ void Residue::replaceAtoms(vector<Atom*>& newAtoms, vector<int>* toRemove) {
 
   // create a new atom vector without them
   vector<Atom*> oldAtoms = atoms;
-  atoms.resize(atoms.size() - toRemove->size());
+  atoms.resize(atoms.size() - N + newAtoms.size());
   int k = 0;
   for (int i = 0; i < oldAtoms.size(); i++) {
     if (oldAtoms[i] == NULL) continue;
@@ -640,6 +642,19 @@ Atom::~Atom() {
   if (alternatives != NULL) delete alternatives;
 }
 
+real Atom::operator[](int i) const {
+  switch(i) {
+    case 0:
+      return x;
+    case 1:
+      return y;
+    case 2:
+      return z;
+    default:
+      MstUtils::error("invalid coordinate index " + MstUtils::toString(i), "Atom::operator[](int)");
+  }
+}
+
 void Atom::setName(const char* _name) {
   if (name != NULL) delete[] name;
   name = new char[strlen(_name)+1];
@@ -770,6 +785,10 @@ const CartesianPoint CartesianPoint::operator-(const CartesianPoint &other) cons
   return result;
 }
 
+const CartesianPoint CartesianPoint::operator-() const {
+  return CartesianPoint(this->size(), 0) - *this;
+}
+
 const CartesianPoint CartesianPoint::operator*(const real& s) const {
   CartesianPoint result = *this;
   result *= s;
@@ -813,6 +832,24 @@ real CartesianPoint::dot(CartesianPoint other) const {
   return d;
 }
 
+real CartesianPoint::distance(CartesianPoint& another) {
+  if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance(CartesianPoint&)");
+  real d = 0;
+  for (int i = 0; i < this->size(); i++) {
+    d += ((*this)[i] - another[i])*((*this)[i] - another[i]);
+  }
+  return d;
+}
+
+real CartesianPoint::distance2(CartesianPoint& another) {
+  if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance2(CartesianPoint&)");
+  real d = 0;
+  for (int i = 0; i < this->size(); i++) {
+    d += ((*this)[i] - another[i])*((*this)[i] - another[i]);
+  }
+  return sqrt(d);
+}
+
 /* --------- CartesianGeometry --------- */
 real CartesianGeometry::dihedralRadians(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4) {
   CartesianPoint AB = _p1 - _p2;
@@ -851,13 +888,594 @@ real CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoin
   return dihedralRadians(*_p1, *_p2, *_p3, *_p4)*180/M_PI;
 }
 
+
+/* --------- RMSDCalculator --------- */
+
+vector<real> RMSDCalculator::lastTranslation() {
+    vector<real> trans(3, 0.0);
+    for (int i = 0; i < 3; i++) trans[i] = t[i];
+    return trans;
+}
+
+vector<vector<real> > RMSDCalculator::lastRotation() {
+    vector<vector<real> > rot(3);
+    for (int i = 0; i < 3; i++) {
+        rot[i].resize(3, 0);
+        for (int j = 0; j < 3; j++ ) {
+            rot[i][j] = u[i][j];
+        }
+    }
+    return rot;
+}
+
+real RMSDCalculator::bestRMSD(vector<Atom*> &_align, vector<Atom*> &_ref, bool* _suc, bool setTransRot) {
+    _rmsd = 999999.0;
+    if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
+    else { if (_suc != NULL) *_suc = false; }
+    return _rmsd;
+}
+
+bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<Atom*>& _moveable) {
+    _rmsd = 999999.0;
+    bool suc = Kabsch(_align, _ref, 1);
+
+    if (suc) {
+        real x[3],x1[3];
+        for(int k=0; k<_moveable.size(); k++) {
+            x[0]=_moveable[k]->getX();
+            x[1]=_moveable[k]->getY();
+            x[2]=_moveable[k]->getZ();
+            x1[0] = t[0]+u[0][0]*x[0]+u[0][1]*x[1]+u[0][2]*x[2];
+            x1[1] = t[1]+u[1][0]*x[0]+u[1][1]*x[1]+u[1][2]*x[2];
+            x1[2] = t[2]+u[2][0]*x[0]+u[2][1]*x[1]+u[2][2]*x[2];
+            _moveable[k]->setCoor(x1[0],x1[1],x1[2]);
+        }
+    }
+    return suc;
+}
+
+
+/**************************************************************************
+  Implemetation of Kabsch algoritm for finding the best rotation matrix
+---------------------------------------------------------------------------
+  x    - x(i,m) are coordinates of atom m in set x            (input)
+  y    - y(i,m) are coordinates of atom m in set y            (input)
+  n    - n is number of atom pairs                            (input)
+  mode  - 0:calculate rmsd only                               (input)
+          1:calculate rmsd,u,t                                (takes longer)
+  rms   - sum of w*(ux+t-y)**2 over all atom pairs            (output)
+  u    - u(i,j) is   rotation  matrix for best superposition  (output)
+  t    - t(i)   is translation vector for best superposition  (output)
+**************************************************************************/
+bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode) {
+    int i, j, m, m1, l, k;
+    real e0, rms1, d, h, g;
+    real cth, sth, sqrth, p, det, sigma;  
+    real xc[3], yc[3];
+    real a[3][3], b[3][3], r[3][3], e[3], rr[6], ss[6];
+    real sqrt3=1.73205080756888, tol=0.01;
+    int ip[]={0, 1, 3, 1, 2, 4, 3, 4, 5};
+    int ip2312[]={1, 2, 0, 1};
+    
+    int a_failed=0, b_failed=0;
+    real epsilon=0.00000001;
+    
+    int n=_ref.size();
+    if(n != _align.size()) {
+        cout << "Two proteins have different length!" << endl;
+        return false;
+    }
+    
+    //initializtation
+    _rmsd=0;
+    rms1=0;
+    e0=0;
+    for (i=0; i<3; i++) {
+        xc[i]=0.0;
+        yc[i]=0.0;
+        t[i]=0.0;
+        for (j=0; j<3; j++) {
+            u[i][j]=0.0;
+            r[i][j]=0.0;
+            a[i][j]=0.0;
+            if (i==j) {
+                u[i][j]=1.0;
+                a[i][j]=1.0;
+            }
+        }
+    }
+    
+    if (n<1) {
+        cout << "Protein length is zero!" << endl;
+        return false;
+    } 
+
+    //compute centers for vector sets x, y
+    for(i=0; i<n; i++){
+        xc[0] += _align[i]->getX();
+        xc[1] += _align[i]->getY();
+        xc[2] += _align[i]->getZ();
+        
+        yc[0] += _ref[i]->getX();
+        yc[1] += _ref[i]->getY();
+        yc[2] += _ref[i]->getZ();
+    }
+    for(i=0; i<3; i++){
+        xc[i] = xc[i]/(real)n;
+        yc[i] = yc[i]/(real)n;        
+    }
+    
+    //compute e0 and matrix r
+    for (m=0; m<n; m++) {
+        e0 += (_align[m]->getX()-xc[0])*(_align[m]->getX()-xc[0]) \
+          +(_ref[m]->getX()-yc[0])*(_ref[m]->getX()-yc[0]);
+        e0 += (_align[m]->getY()-xc[1])*(_align[m]->getY()-xc[1]) \
+          +(_ref[m]->getY()-yc[1])*(_ref[m]->getY()-yc[1]);
+        e0 += (_align[m]->getZ()-xc[2])*(_align[m]->getZ()-xc[2]) \
+          +(_ref[m]->getZ()-yc[2])*(_ref[m]->getZ()-yc[2]);
+        r[0][0] += (_ref[m]->getX() - yc[0])*(_align[m]->getX() - xc[0]);
+        r[0][1] += (_ref[m]->getX() - yc[0])*(_align[m]->getY() - xc[1]);
+        r[0][2] += (_ref[m]->getX() - yc[0])*(_align[m]->getZ() - xc[2]);
+        r[1][0] += (_ref[m]->getY() - yc[1])*(_align[m]->getX() - xc[0]);
+        r[1][1] += (_ref[m]->getY() - yc[1])*(_align[m]->getY() - xc[1]);
+        r[1][2] += (_ref[m]->getY() - yc[1])*(_align[m]->getZ() - xc[2]);
+        r[2][0] += (_ref[m]->getZ() - yc[2])*(_align[m]->getX() - xc[0]);
+        r[2][1] += (_ref[m]->getZ() - yc[2])*(_align[m]->getY() - xc[1]);
+        r[2][2] += (_ref[m]->getZ() - yc[2])*(_align[m]->getZ() - xc[2]);
+    }
+    //compute determinat of matrix r
+    det = r[0][0] * ( r[1][1]*r[2][2] - r[1][2]*r[2][1] )       \
+    - r[0][1] * ( r[1][0]*r[2][2] - r[1][2]*r[2][0] )       \
+    + r[0][2] * ( r[1][0]*r[2][1] - r[1][1]*r[2][0] ); 
+    sigma=det;
+    
+    //compute tras(r)*r
+    m = 0;
+    for (j=0; j<3; j++) {
+        for (i=0; i<=j; i++) {            
+            rr[m]=r[0][i]*r[0][j]+r[1][i]*r[1][j]+r[2][i]*r[2][j];
+            m++;
+        }
+    }
+    
+    real spur=(rr[0]+rr[2]+rr[5]) / 3.0;
+    real cof = (((((rr[2]*rr[5] - rr[4]*rr[4]) + rr[0]*rr[5]) \
+          - rr[3]*rr[3]) + rr[0]*rr[2]) - rr[1]*rr[1]) / 3.0;
+    det = det*det; 
+    
+    for (i=0; i<3; i++){
+        e[i]=spur;
+    }
+    
+    if (spur>0) {
+        d = spur*spur;
+        h = d - cof;
+        g = (spur*cof - det)/2.0 - spur*h;
+
+        if (h>0) {
+            sqrth = sqrt(h);
+            d = h*h*h - g*g;
+            if(d<0.0) d=0.0;
+            d = atan2( sqrt(d), -g ) / 3.0;         
+            cth = sqrth * cos(d);
+            sth = sqrth*sqrt3*sin(d);
+            e[0]= (spur + cth) + cth;
+            e[1]= (spur - cth) + sth;            
+            e[2]= (spur - cth) - sth;
+
+            if (mode!=0) {//compute a                
+                for (l=0; l<3; l=l+2) {
+                    d = e[l];  
+                    ss[0] = (d-rr[2]) * (d-rr[5])  - rr[4]*rr[4];
+                    ss[1] = (d-rr[5]) * rr[1]      + rr[3]*rr[4];
+                    ss[2] = (d-rr[0]) * (d-rr[5])  - rr[3]*rr[3];
+                    ss[3] = (d-rr[2]) * rr[3]      + rr[1]*rr[4];
+                    ss[4] = (d-rr[0]) * rr[4]      + rr[1]*rr[3];                
+                    ss[5] = (d-rr[0]) * (d-rr[2])  - rr[1]*rr[1]; 
+
+                    if (fabs(ss[0])<=epsilon) ss[0]=0.0;
+                    if (fabs(ss[1])<=epsilon) ss[1]=0.0;
+                    if (fabs(ss[2])<=epsilon) ss[2]=0.0;
+                    if (fabs(ss[3])<=epsilon) ss[3]=0.0;
+                    if (fabs(ss[4])<=epsilon) ss[4]=0.0;
+                    if (fabs(ss[5])<=epsilon) ss[5]=0.0;
+
+                    if (fabs(ss[0]) >= fabs(ss[2])) {
+                        j=0;                    
+                        if( fabs(ss[0]) < fabs(ss[5])){
+                            j = 2;
+                        }
+                    } else if ( fabs(ss[2]) >= fabs(ss[5]) ){
+                        j = 1;
+                    } else {
+                        j = 2;
+                    }
+
+                    d = 0.0;
+                    j = 3 * j;
+                    for (i=0; i<3; i++) {
+                        k=ip[i+j];
+                        a[i][l] = ss[k];
+                        d = d + ss[k]*ss[k];                        
+                    } 
+
+
+                    //if( d > 0.0 ) d = 1.0 / sqrt(d);
+                    if (d > epsilon) d = 1.0 / sqrt(d);
+                    else d=0.0;
+                    for (i=0; i<3; i++) {
+                        a[i][l] = a[i][l] * d;
+                    }               
+                }//for l
+
+                d = a[0][0]*a[0][2] + a[1][0]*a[1][2] + a[2][0]*a[2][2];
+                if ((e[0] - e[1]) > (e[1] - e[2])) {
+                    m1=2;
+                    m=0;
+                } else {
+                    m1=0;
+                    m=2;                
+                }
+                p=0;
+                for(i=0; i<3; i++){
+                    a[i][m1] = a[i][m1] - d*a[i][m];
+                    p = p + a[i][m1]*a[i][m1];
+                }
+                if (p <= tol) {
+                    p = 1.0;
+                    for (i=0; i<3; i++) {
+                        if (p < fabs(a[i][m])){
+                            continue;
+                        }
+                        p = fabs( a[i][m] );
+                        j = i;                    
+                    }
+                    k = ip2312[j];
+                    l = ip2312[j+1];
+                    p = sqrt( a[k][m]*a[k][m] + a[l][m]*a[l][m] ); 
+                    if (p > tol) {
+                        a[j][m1] = 0.0;
+                        a[k][m1] = -a[l][m]/p;
+                        a[l][m1] =  a[k][m]/p;                                                       
+                    } else {//goto 40
+                        a_failed=1;
+                    }     
+                } else {//if p<=tol
+                    p = 1.0 / sqrt(p);
+                    for(i=0; i<3; i++){
+                        a[i][m1] = a[i][m1]*p;
+                    }                                  
+                }//else p<=tol  
+                if (a_failed!=1) {
+                    a[0][1] = a[1][2]*a[2][0] - a[1][0]*a[2][2];
+                    a[1][1] = a[2][2]*a[0][0] - a[2][0]*a[0][2];
+                    a[2][1] = a[0][2]*a[1][0] - a[0][0]*a[1][2];       
+                }                                   
+            }//if(mode!=0)       
+        }//h>0
+
+        //compute b anyway
+        if (mode!=0 && a_failed!=1) {//a is computed correctly
+            //compute b
+            for (l=0; l<2; l++) {
+                d=0.0;
+                for(i=0; i<3; i++){
+                    b[i][l] = r[i][0]*a[0][l] + r[i][1]*a[1][l] + r[i][2]*a[2][l];
+                    d = d + b[i][l]*b[i][l];
+                }
+                //if( d > 0 ) d = 1.0 / sqrt(d);
+                if (d > epsilon) d = 1.0 / sqrt(d);
+                else d=0.0;
+                for (i=0; i<3; i++) {
+                    b[i][l] = b[i][l]*d;
+                }                
+            }            
+            d = b[0][0]*b[0][1] + b[1][0]*b[1][1] + b[2][0]*b[2][1];
+            p=0.0;
+
+            for (i=0; i<3; i++) {
+                b[i][1] = b[i][1] - d*b[i][0];
+                p += b[i][1]*b[i][1];
+            }
+
+            if (p <= tol) {
+                p = 1.0;
+                for (i=0; i<3; i++) {
+                    if (p<fabs(b[i][0])) {
+                        continue;
+                    }
+                    p = fabs( b[i][0] );
+                    j=i;
+                }
+                k = ip2312[j];
+                l = ip2312[j+1];
+                p = sqrt( b[k][0]*b[k][0] + b[l][0]*b[l][0] ); 
+                if (p > tol) {
+                    b[j][1] = 0.0;
+                    b[k][1] = -b[l][0]/p;
+                    b[l][1] =  b[k][0]/p;        
+                } else {
+                    //goto 40
+                    b_failed=1;
+                }                
+            } else {//if( p <= tol )
+                p = 1.0 / sqrt(p);
+                for(i=0; i<3; i++){
+                    b[i][1]=b[i][1]*p;
+                }
+            }            
+            if (b_failed!=1){
+                b[0][2] = b[1][0]*b[2][1] - b[1][1]*b[2][0];
+                b[1][2] = b[2][0]*b[0][1] - b[2][1]*b[0][0];
+                b[2][2] = b[0][0]*b[1][1] - b[0][1]*b[1][0]; 
+                //compute u
+                for (i=0; i<3; i++){
+                    for(j=0; j<3; j++){
+                        u[i][j] = b[i][0]*a[j][0] + b[i][1]*a[j][1] \
+                                + b[i][2]*a[j][2];
+                    }
+                }
+            }
+
+            //compute t
+            for(i=0; i<3; i++){
+                t[i] = ((yc[i] - u[i][0]*xc[0]) - u[i][1]*xc[1])    \
+                        - u[i][2]*xc[2];
+            }            
+        }//if(mode!=0 && a_failed!=1)
+    } else {//spur>0, just compute t and errors
+        //compute t
+        for (i=0; i<3; i++) {
+            t[i] = ((yc[i] - u[i][0]*xc[0]) - u[i][1]*xc[1]) - u[i][2]*xc[2];
+        }
+    } //else spur>0 
+
+    //compute rmsd
+    for(i=0; i<3; i++){
+        if( e[i] < 0 ) e[i] = 0;
+        e[i] = sqrt( e[i] );           
+    }            
+    d = e[2];
+    if( sigma < 0.0 ){
+        d = - d;
+    }
+    d = (d + e[1]) + e[0];
+    rms1 = (e0 - d) - d; 
+    if( rms1 < 0.0 ) rms1 = 0.0;  
+
+    _rmsd=sqrt(rms1/(real)n);
+
+    return true;
+}
+
+real RMSDCalculator::rmsd(vector<Atom*>& A, vector<Atom*>& B) {
+  if (A.size() != B.size())
+    MstUtils::error("atom vectors of different length (" + MstUtils::toString(A.size()) + " and " + MstUtils::toString(B.size()) + ")", "RMSDCalculator::rmsd(vector<Atom*>&, vector<Atom*>&)");
+
+  real ret = 0;
+  for (int i = 0; i < A.size(); i++) {
+    ret += A[i]->distance2(B[i]);
+  }
+  return sqrt(ret/A.size());
+}
+
+real RMSDCalculator::rmsd(Structure& A, Structure& B) {
+  vector<Atom*> atomsA = A.getAtoms();
+  vector<Atom*> atomsB = B.getAtoms();
+  return rmsd(atomsA, atomsB);
+}
+
+
+/* --------- ProximitySearch --------- */
+
+ProximitySearch::ProximitySearch(real _xlo, real _ylo, real _zlo, real _xhi, real _yhi, real _zhi, int _N) {
+  xlo = _xlo; ylo = _ylo; zlo = _zlo;
+  xhi = _xhi; yhi = _yhi; zhi = _zhi;
+  reinitBuckets(_N);
+  setBinWidths();
+}
+
+ProximitySearch::ProximitySearch(AtomPointerVector& _atoms, int _N, bool _addAtoms, vector<int>* tags, real pad) {
+  calculateExtent(_atoms);
+  xlo -= pad; ylo -= pad; zlo -= pad;
+  xhi += pad; yhi += pad; zhi += pad;
+  reinitBuckets(_N);
+  setBinWidths();
+  if (_addAtoms) {
+    for (int i = 0; i < _atoms.size(); i++) {
+      addPoint(_atoms[i]->getCoor(), (tags == NULL) ? i : (*tags)[i]);
+    }
+  }
+}
+
+ProximitySearch::ProximitySearch(AtomPointerVector& _atoms, real _characteristicDistance, bool _addAtoms, vector<int>* tags, real pad) {
+  calculateExtent(_atoms);
+  if (xlo == xhi) { xlo -= _characteristicDistance/2; xhi += _characteristicDistance/2; }
+  if (ylo == yhi) { ylo -= _characteristicDistance/2; yhi += _characteristicDistance/2; }
+  if (zlo == zhi) { zlo -= _characteristicDistance/2; zhi += _characteristicDistance/2; }
+  xlo -= pad; ylo -= pad; zlo -= pad;
+  xhi += pad; yhi += pad; zhi += pad;
+  int _N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/_characteristicDistance));
+  reinitBuckets(_N);
+  setBinWidths();
+  if (_addAtoms) {
+    for (int i = 0; i < _atoms.size(); i++) {
+      addPoint(_atoms[i]->getCoor(), (tags == NULL) ? i : (*tags)[i]);
+    }
+  }
+}
+
+void ProximitySearch::setBinWidths() {
+  xbw = (xhi - xlo)/(N - 1);
+  ybw = (yhi - ylo)/(N - 1);
+  zbw = (zhi - zlo)/(N - 1);
+}
+
+ProximitySearch::~ProximitySearch() {
+  for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
+}
+
+void ProximitySearch::calculateExtent(Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
+  AtomPointerVector atoms = S.getAtoms();
+  calculateExtent(atoms, _xlo, _ylo, _zlo, _xhi, _yhi, _zhi);
+}
+
+void ProximitySearch::calculateExtent(AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
+  if (_atoms.size() == 0) { cout << "Error in nnclass::calculateExtent() -- empty atom vector passed!\n"; exit(-1); }
+  _xlo = _xhi = _atoms[0]->getX();
+  _ylo = _yhi = _atoms[0]->getY();
+  _zlo = _zhi = _atoms[0]->getZ();
+  for (int i = 0; i < _atoms.size(); i++) {
+    if (_xlo > _atoms[i]->getX()) _xlo = _atoms[i]->getX();
+    if (_ylo > _atoms[i]->getY()) _ylo = _atoms[i]->getY();
+    if (_zlo > _atoms[i]->getZ()) _zlo = _atoms[i]->getZ();
+    if (_xhi < _atoms[i]->getX()) _xhi = _atoms[i]->getX();
+    if (_yhi < _atoms[i]->getY()) _yhi = _atoms[i]->getY();
+    if (_zhi < _atoms[i]->getZ()) _zhi = _atoms[i]->getZ();
+  }
+}
+
+void ProximitySearch::reinitBuckets(int _N) {
+  N = _N;
+  buckets.resize(N);
+  for (int i = 0; i < N; i++) {
+    buckets[i].resize(N);
+    for (int j = 0; j < N; j++) {
+      buckets[i][j].resize(N);
+      for (int k = 0; k < N; k++) { buckets[i][j][k].resize(0); }
+    }
+  }
+  pointList.resize(0);
+  pointTags.resize(0);
+}
+
+void ProximitySearch::addPoint(CartesianPoint _p, int tag) {
+  int i, j, k;
+  pointBucket(&_p, &i, &j, &k);
+  if ((i < 0) || (j < 0) || (k < 0) || (i > N-1) || (j > N-1) || (k > N-1)) { cout << "Error: point " << _p << " out of range for ProximitySearch object!\n"; exit(-1); }
+  CartesianPoint* p = new CartesianPoint(_p);
+  buckets[i][j][k].push_back(pointList.size());
+  pointList.push_back(p);
+  pointTags.push_back(tag);
+}
+
+bool ProximitySearch::isPointWithinGrid(CartesianPoint _p) {
+  int i, j, k;
+  pointBucket(&_p, &i, &j, &k);
+  if ((i < 0) || (j < 0) || (k < 0) || (i > N-1) || (j > N-1) || (k > N-1)) return false;
+  return true;
+}
+
+void ProximitySearch::pointBucket(real px, real py, real pz, int* i, int* j, int* k) {
+  *i = (int) floor((px - xlo)/xbw + 0.5);
+  *j = (int) floor((py - ylo)/ybw + 0.5);
+  *k = (int) floor((pz - zlo)/zbw + 0.5);
+}
+
+void ProximitySearch::limitIndex(int *ind) {
+  if (*ind < 0) *ind = 0;
+  if (*ind > N-1) *ind = N-1;
+}
+
+bool ProximitySearch::pointsWithin(CartesianPoint c, real dmin, real dmax, vector<int>* list, bool byTag) {
+  real cx = c.getX(); real cy = c.getY(); real cz = c.getZ();
+  // first check if the point is outside of the bounding box of the point cloud by a sufficient amount
+  if ((cx < xlo - dmax) || (cy < ylo - dmax) || (cz < zlo - dmax) || (cx > xhi + dmax) || (cy > yhi + dmax) || (cz > zhi + dmax)) return false;
+
+  real d2, dmin2, dmax2;
+  int ci, cj, ck;
+  int imax1, jmax1, kmax1, imax2, jmax2, kmax2; // external box (no point in looking beyond it, points there are too far)
+  int imin1, jmin1, kmin1, imin2, jmin2, kmin2; // internal box (no point in looking within it, points there are too close)
+  pointBucket(cx, cy, cz, &ci, &cj, &ck);
+  pointBucket(cx - dmax, cy - dmax, cz - dmax, &imax1, &jmax1, &kmax1);
+  pointBucket(cx + dmax, cy + dmax, cz + dmax, &imax2, &jmax2, &kmax2);
+  if (dmin > 0) {
+    real sr3 = sqrt(3);
+    pointBucket(cx - dmin/sr3, cy - dmin/sr3, cz - dmin/sr3, &imin1, &jmin1, &kmin1);
+    pointBucket(cx + dmin/sr3, cy + dmin/sr3, cz + dmin/sr3, &imin2, &jmin2, &kmin2);
+    // need to trim the internal box to make sure it is fully contained within the sphere of radius dmin from the central point
+    if (imin1 != ci) imin1++;
+    if (jmin1 != cj) jmin1++;
+    if (kmin1 != ck) kmin1++;
+    if (imin2 != ci) imin2--;
+    if (jmin2 != cj) jmin2--;
+    if (kmin2 != ck) kmin2--;
+  } else {
+    imin1 = imin2 = ci;
+    jmin1 = jmin2 = cj;
+    kmin1 = kmin2 = ck;
+  }
+  limitIndex(&imin1); limitIndex(&imin2); limitIndex(&jmin1); limitIndex(&jmin2); limitIndex(&kmin1); limitIndex(&kmin2);
+  limitIndex(&imax1); limitIndex(&imax2); limitIndex(&jmax1); limitIndex(&jmax2); limitIndex(&kmax1); limitIndex(&kmax2);
+
+  // search only within the boxes where points of interest can be, in principle
+  if (list != NULL) list->clear();
+  bool found = false;
+  bool yesno = (list == NULL);
+  dmin2 = dmin*dmin; dmax2 = dmax*dmax;
+  for (int i = imax1; i <= imax2; i++) {
+    bool insi = (i >= imin1) && (i <= imin2);
+    vector<vector<vector<int> > >& Bi = buckets[i];
+    for (int j = jmax1; j <= jmax2; j++) {
+      bool ins = insi && (j >= jmin1) && (j <= jmin2);
+      vector<vector<int> >& Bij = Bi[j];
+      for (int k = kmax1; k <= kmax2; k++) {
+        vector<int>& Bijk = Bij[k];
+        // check all points in bucket i, j, k
+        for (int ii = 0; ii < Bijk.size(); ii++) {
+          int pi = Bijk[ii];
+          d2 = c.distance2(*(pointList[pi]));
+          if ((d2 >= dmin2) && (d2 <= dmax2)) {
+            if (yesno) return true;
+            list->push_back(byTag ? pointTags[Bijk[ii]] : Bijk[ii]);
+            found = true;
+          }
+        }
+        // skip the range from kmin1 to kmin2 (too close)
+        if (ins && (k == kmin1) && (kmin1 != kmin2)) k = kmin2 - 1;
+      }
+    }
+  }
+  return found;
+}
+
+
+
 /* --------- MstUtils --------- */
 void MstUtils::openFile (fstream& fs, string filename, ios_base::openmode mode, string from) {
   fs.open(filename.c_str(), mode);
   if (!fs.is_open()) {
     if (!from.empty()) from += " -> ";
-    MstUtils::error("could not open file " + filename, from + "MstUtils::openFile");
+    MstUtils::error("could not open file '" + filename + "'", from + "MstUtils::openFile");
   }
+}
+
+void MstUtils::fileToArray(string _filename, vector<string>& lines) {
+  fstream inp;
+  MstUtils::openFile(inp, _filename, ios_base::in, "MstUtils::fileToArray");
+  string line;
+  while (true) {
+    getline(inp, line);
+    if (inp.eof()) break; // if eof set upon trying to read the line, then it was not really a valid line, so we are done
+    lines.push_back(line);
+  }
+}
+
+string MstUtils::pathBase(string fn) {
+  if (fn.find_last_of(".") == string::npos) return fn;
+  else return fn.substr(0, fn.find_last_of("."));
+}
+
+bool MstUtils::fileExists(const char *filename) {
+  struct stat buffer ;
+  if (stat( filename, &buffer) == 0) return true;
+  return false;
+}
+
+bool MstUtils::isDir(const char *filename) {
+  struct stat buffer ;
+  if (stat( filename, &buffer) < 0) return false;
+  return (buffer.st_mode & S_IFDIR);
 }
 
 FILE* MstUtils::openFileC (const char* filename, const char* mode, string from) {
@@ -947,7 +1565,7 @@ int MstUtils::toInt(string num, bool strict) {
 
 MST::real MstUtils::toReal(string num, bool strict) {
   double ret;
-  if ((sscanf(num.c_str(), "%lf", &ret) == 0) && strict) MstUtils::error("failed to convert '" + num + "' to real", "MstUtils::toReal");
+  if ((sscanf(num.c_str(), "%lf", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to real", "MstUtils::toReal");
   return (real) ret;
 }
 
