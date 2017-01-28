@@ -371,6 +371,7 @@ class AtomPointerVector : public vector<Atom*> {
       for (int i = 0; i < _atoms.size(); i++) {
         _os << _atoms[i]->pdbLine() << endl;
       }
+      return _os;
     }
 };
 

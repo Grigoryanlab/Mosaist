@@ -1,4 +1,4 @@
-CPPFLAGS=-O3
+CPPFLAGS=-O3 -std=c++11
 
 all:
 	mkdir -p objs; cd objs; g++ $(CPPFLAGS) -I../include -c ../src/msttypes.cpp ../src/msttransforms.cpp ../src/mstrotlib.cpp ../src/mstmagic.cpp

@@ -296,6 +296,7 @@ bool Structure::appendChain(Chain* C, bool allowRename) {
 Chain* Structure::appendChain(string cid, bool allowRename) {
   Chain* newChain = new Chain(cid, cid);
   this->appendChain(newChain, allowRename);
+  return newChain;
 }
 
 vector<Atom*> Structure::getAtoms() {
@@ -434,12 +435,14 @@ Residue* Chain::insertResidueCopy(Residue* R, int index) {
   Residue* newRes = new Residue(*R);
   if (index == -1) this->appendResidue(newRes);
   else this->insertResidue(newRes, index);
+  return newRes;
 }
 
 Residue* Chain::insertResidueCopy(Residue& R, int index) {
   Residue* newRes = new Residue(R);
   if (index == -1) this->appendResidue(newRes);
   else this->insertResidue(newRes, index);
+  return newRes;
 }
 
 Residue* Chain::findResidue(string resname, int resnum) {
@@ -684,6 +687,7 @@ real Atom::operator[](int i) const {
     default:
       MstUtils::error("invalid coordinate index " + MstUtils::toString(i), "Atom::operator[](int)");
   }
+  return 0.0; // just to silence the warning from some compilres; in reality, this is never reached
 }
 
 void Atom::setName(const char* _name) {
@@ -834,6 +838,7 @@ const CartesianPoint CartesianPoint::operator/(const real& s) const {
 
 CartesianPoint& CartesianPoint::operator=(const Atom& A) {
   *this = CartesianPoint(A);
+  return *this;
 }
 
 real CartesianPoint::norm() const {
