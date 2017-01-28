@@ -93,7 +93,7 @@ vector<AtomPointerVector> TERMUtils::mostDesignableFragments(Structure& C, vecto
       }
       if (s < 0) L = ri + 1;
       else U = ri - 1;
-      regScores[i] += abs(1.0*(ri - source[2]))*inRegister.size()*1.0;
+      regScores[i] += fabs(1.0*(ri - source[2]))*inRegister.size()*1.0;
     }
     if (verb) cout << "promising point " << i << ", with " << close.size() << " close neighbors expanded to a region of " << U - L + 1 << " residues, score = " << regScores[i] << "..." << endl;
 

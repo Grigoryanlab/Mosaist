@@ -165,7 +165,7 @@ class Residue {
 
     void setName(const char* _name) { resname = (string) _name; }
     void setName(string _name) { resname = _name; }
-    char setIcode(char _icode) { icode = _icode; }
+    void setIcode(char _icode) { icode = _icode; }
 
     /* ----- functions that grow/shrink structure ----- */
     void appendAtom(Atom* A);
