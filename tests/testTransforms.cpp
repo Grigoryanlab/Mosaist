@@ -27,6 +27,15 @@ int main(int argc, char** argv) {
   string pdbFile(argv[1]);
   string outBase(argv[2]);
 
+  // test construction
+  vector<vector<real> > rot(3, vector<real>(3, 0));
+  rot[0][0] = 1;
+  rot[1][1] = 1;
+  rot[2][2] = 1;
+  vector<real> trans(3, 1.5);
+  Transform TT(rot, trans);
+  cout << "constructed:\n" << TT << endl;
+
   // read structure
   Structure S(pdbFile);
 
@@ -61,6 +70,6 @@ int main(int argc, char** argv) {
     }
     cout << endl;
   }
-  
+
   printf("TEST DONE\n");
 }

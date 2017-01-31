@@ -39,14 +39,6 @@ Frame::Frame(Frame& other) {
 }
 
 /* --------- Transform --------- */
-Transform::Transform() {
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      M[i][j] = (i == j) ? 1 : 0;
-    }
-  }
-}
-
 Transform::Transform(const Transform& other) {
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
@@ -55,17 +47,38 @@ Transform::Transform(const Transform& other) {
   }
 }
 
-Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, fillOrder order) {
-  Transform(); // called default constructor to make the identity matrix
+void Transform::fill(vector<real>& A, vector<real>& B, vector<real>& C, vector<real>& D, fillOrder order) {
+  if ((A.size() != 4) || (B.size() != 4) || (C.size() != 4) || (D.size() != 4)) {
+    MstUtils::error("expected 4D vectors!", "Transform::Transform(CartesianPoint, CartesianPoint, CartesianPoint, CartesianPoint, fillOrder)");
+  }
+  vector<real>* points[4];
+  points[0] = &A;
+  points[1] = &B;
+  points[2] = &C;
+  points[3] = &D;
+  for (int i = 0; i < 4; i++) {
+    vector<real>* P = points[i];
+    for (int j = 0; j < 4; j++) {
+      if (order == fillOrder::byColumn) {
+        (*this)(i, j) = (*P)[j];
+      } else {
+        (*this)(j, i) = (*P)[j];
+      }
+    }
+  }
+}
+
+void Transform::fill(vector<real>& A, vector<real>& B, vector<real>& C, fillOrder order) {
+  makeIdentity();
   if ((A.size() != 3) || (B.size() != 3) || (C.size() != 3)) {
     MstUtils::error("expected 3D vectors!", "Transform::Transform(CartesianPoint, CartesianPoint, CartesianPoint, fillOrder)");
   }
-  CartesianPoint* points[3];
+  vector<real>* points[3];
   points[0] = &A;
   points[1] = &B;
   points[2] = &C;
   for (int i = 0; i < 3; i++) {
-    CartesianPoint* P = points[i];
+    vector<real>* P = points[i];
     for (int j = 0; j < 3; j++) {
       if (order == fillOrder::byColumn) {
         (*this)(j, i) = (*P)[j];
@@ -85,29 +98,16 @@ Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, fillO
   }
 }
 
+Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, fillOrder order) {
+  fill(A, B, C, order);
+}
+
 Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, CartesianPoint D, fillOrder order) {
-  if ((A.size() != 4) || (B.size() != 4) || (C.size() != 4) || (D.size() != 4)) {
-    MstUtils::error("expected 4D vectors!", "Transform::Transform(CartesianPoint, CartesianPoint, CartesianPoint, CartesianPoint, fillOrder)");
-  }
-  CartesianPoint* points[4];
-  points[0] = &A;
-  points[1] = &B;
-  points[2] = &C;
-  points[3] = &D;
-  for (int i = 0; i < 4; i++) {
-    CartesianPoint* P = points[i];
-    for (int j = 0; j < 4; j++) {
-      if (order == fillOrder::byColumn) {
-        (*this)(i, j) = (*P)[j];
-      } else {
-        (*this)(j, i) = (*P)[j];
-      }
-    }
-  }
+  fill(A, B, C, D, order);
 }
 
 Transform::Transform(vector<real> trans) {
-  Transform(); // called default constructor to make the identity matrix
+  makeIdentity();
   if (trans.size() != 3) MstUtils::error("expected a 3D vector!", "Transform::Transform(vector<real>)");
   for (int i = 0; i < 3; i++) {
     (*this)(i, 3) = trans[i];
@@ -116,15 +116,23 @@ Transform::Transform(vector<real> trans) {
 
 Transform::Transform(vector<vector<real> > rot) {
   if (rot.size() != 3) MstUtils::error("expected a 3x3 matrix!", "Transform::Transform(vector<vector<real> >)");
-  Transform(CartesianPoint(rot[0]), CartesianPoint(rot[1]), CartesianPoint(rot[2]), byRow);
+  fill(rot[0], rot[1], rot[2], byRow);
 }
 
 Transform::Transform(vector<vector<real> > rot, vector<real> trans) {
   if (rot.size() != 3) MstUtils::error("expected a 3x3 matrix!", "Transform::Transform(vector<vector<real> >, vector<real>)");
   if (trans.size() != 3) MstUtils::error("expected a 3D vector!", "Transform::Transform(vector<vector<real> >, vector<real>)");
-  Transform(CartesianPoint(rot[0]), CartesianPoint(rot[1]), CartesianPoint(rot[2]), byRow);
+  fill(rot[0], rot[1], rot[2], byRow);
   for (int i = 0; i < 3; i++) {
     (*this)(i, 3) = trans[i];
+  }
+}
+
+void Transform::makeIdentity() {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      M[i][j] = (i == j) ? 1 : 0;
+    }
   }
 }
 

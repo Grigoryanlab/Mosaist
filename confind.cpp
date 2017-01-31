@@ -16,176 +16,14 @@ using namespace std;
 using namespace MST;
 
 // ---- Utility Functions
-bool isNameLegal(Position& p, vector<string>& legalNames);
-void proteinOnly(System& S, AtomPointerVector& A, vector<string>& legalNames, bool renumber = false);
+void proteinOnly(System& S, AtomPointerVector& A, vector<string>& legalNames);
 Atom* getCA(Position& p);
 template <class T> bool sortAsendingHelper (const T& i, const T& j);
 string contactString(System& S, int i, int j, double d, bool perm = false);
 AtomPointerVector& byResCA(AtomPointerVector& sel, AtomPointerVector& orig);
 vector<int> byResCA(AtomPointerVector& sel, System& S);
 
-// ---- Data Structure
-// nearest-neighbor searches
-class nnclass {
-  public:
-    nnclass(double _xlo, double _ylo, double _zlo, double _xhi, double _yhi, double _zhi, int _N = 20) {
-      xlo = _xlo; ylo = _ylo; zlo = _zlo;
-      xhi = _xhi; yhi = _yhi; zhi = _zhi;
-      reinitBuckets(_N);
-    }
-
-    nnclass(AtomPointerVector& _atoms, int _N, bool _addAtoms = true, vector<int>* tags = NULL) {
-      calculateExtent(_atoms);
-      reinitBuckets(_N);
-      if (_addAtoms) {
-        for (int i = 0; i < _atoms.size(); i++) {
-          addPoint(new CartesianPoint(_atoms[i]->getCoor()), (tags == NULL) ? i : (*tags)[i]);
-        }
-      }
-    }
-
-    nnclass(AtomPointerVector& _atoms, double _characteristicDistance, bool _addAtoms = true, vector<int>* tags = NULL) {
-      calculateExtent(_atoms);
-      if (xlo == xhi) { xlo -= _characteristicDistance/2; xhi += _characteristicDistance/2; }
-      if (ylo == yhi) { ylo -= _characteristicDistance/2; yhi += _characteristicDistance/2; }
-      if (zlo == zhi) { zlo -= _characteristicDistance/2; zhi += _characteristicDistance/2; }
-      int _N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/_characteristicDistance));
-      reinitBuckets(_N);
-      if (_addAtoms) {
-        for (int i = 0; i < _atoms.size(); i++) {
-          addPoint(new CartesianPoint(_atoms[i]->getCoor()), (tags == NULL) ? i : (*tags)[i]);
-        }
-      }
-    }
-
-    void calculateExtent(AtomPointerVector& _atoms) {
-      if (_atoms.size() == 0) { cout << "Error in nnclass::calculateExtent() -- empty atom vector passed!\n"; exit(-1); }
-      xlo = xhi = _atoms[0]->getX();
-      ylo = yhi = _atoms[0]->getY();
-      zlo = zhi = _atoms[0]->getZ();
-      for (int i = 0; i < _atoms.size(); i++) {
-        if (xlo > _atoms[i]->getX()) xlo = _atoms[i]->getX();
-        if (ylo > _atoms[i]->getY()) ylo = _atoms[i]->getY();
-        if (zlo > _atoms[i]->getZ()) zlo = _atoms[i]->getZ();
-        if (xhi < _atoms[i]->getX()) xhi = _atoms[i]->getX();
-        if (yhi < _atoms[i]->getY()) yhi = _atoms[i]->getY();
-        if (zhi < _atoms[i]->getZ()) zhi = _atoms[i]->getZ();
-      }
-    }
-
-    double getXLow() { return xlo; }
-    double getYLow() { return ylo; }
-    double getZLow() { return zlo; }
-    double getXHigh() { return xhi; }
-    double getYHigh() { return yhi; }
-    double getZHigh() { return zhi; }
-    int pointSize() { return pointList.size(); }
-    CartesianPoint& getPoint(int i) { return *(pointList[i]); }
-
-    void reinitBuckets(int _N) {
-      N = _N;
-      buckets.resize(N);
-      for (int i = 0; i < N; i++) {
-        buckets[i].resize(N);
-        for (int j = 0; j < N; j++) {
-          buckets[i][j].resize(N);
-          for (int k = 0; k < N; k++) { buckets[i][j][k].resize(0); }
-        }
-      }
-      pointList.resize(0);
-    }
-
-    void addPoint(CartesianPoint* p, int tag) {
-      int i, j, k;
-      pointBucket(p, &i, &j, &k);
-      if ((i < 0) || (j < 0) || (k < 0) || (i > N-1) || (j > N-1) || (k > N-1)) { cout << "Error: point " << p << " out of range for nnclass object!\n"; exit(-1); }
-      buckets[i][j][k].push_back(pair<CartesianPoint*, int>(p, tag));
-      pointList.push_back(p);
-    }
-
-    void pointBucket(CartesianPoint* p, int* i, int* j, int* k) {
-      *i = min((int) floor(N*(p->getX() - xlo)/(xhi - xlo)), N-1); // xhi should technically map to N, but we will map it to N-1
-      *j = min((int)floor(N*(p->getY() - ylo)/(yhi - ylo)), N-1);
-      *k = min((int)floor(N*(p->getZ() - zlo)/(zhi - zlo)), N-1);
-    }
-    void pointBucket(CartesianPoint p, int* i, int* j, int* k) { pointBucket(&p, i, j, k); }
-    void limitIndex(int *ind) {
-      if (*ind < 0) *ind = 0;
-      if (*ind > N-1) *ind = N-1;
-    }
-
-    double gridSpacingX() { return (xhi - xlo)/N; }
-    double gridSpacingY() { return (yhi - ylo)/N; }
-    double gridSpacingZ() { return (zhi - zlo)/N; }
-
-    void pointsWithin(CartesianPoint& c, double dmin, double dmax, vector<int>& list) {
-      double d2, dmin2, dmax2;
-      int ci, cj, ck;
-      int imax1, jmax1, kmax1, imax2, jmax2, kmax2; // external box (no point in looking beyond it, points there are too far)
-      int imin1, jmin1, kmin1, imin2, jmin2, kmin2; // internal box (no point in looking within it, points there are too close)
-      pointBucket(c, &ci, &cj, &ck);
-      pointBucket(c - CartesianPoint(dmax, dmax, dmax), &imax1, &jmax1, &kmax1);
-      pointBucket(c + CartesianPoint(dmax, dmax, dmax), &imax2, &jmax2, &kmax2);
-      pointBucket(c - CartesianPoint(dmin, dmin, dmin)/sqrt(3), &imin1, &jmin1, &kmin1);
-      pointBucket(c + CartesianPoint(dmin, dmin, dmin)/sqrt(3), &imin2, &jmin2, &kmin2);
-      // need to trim the internal box to make sure it is fully contained within the sphere of radius dmin from the central point
-      if (imin1 != ci) imin1++;
-      if (jmin1 != cj) jmin1++;
-      if (kmin1 != ck) kmin1++;
-      if (imin2 != ci) imin2--;
-      if (jmin2 != cj) jmin2--;
-      if (kmin2 != ck) kmin2--;
-      limitIndex(&imin1); limitIndex(&imin2); limitIndex(&jmin1); limitIndex(&jmin2); limitIndex(&kmin1); limitIndex(&kmin2);
-      limitIndex(&imax1); limitIndex(&imax2); limitIndex(&jmax1); limitIndex(&jmax2); limitIndex(&kmax1); limitIndex(&kmax2);
-
-      // search only within the boxes where points of interest can be, in principle
-      dmin2 = dmin*dmin; dmax2 = dmax*dmax;
-      for (int i = imax1; i <= imax2; i++) {
-        bool insi = (i >= imin1) && (i <= imin2);
-        for (int j = jmax1; j <= jmax2; j++) {
-          bool ins = insi && (j >= jmin1) && (j <= jmin2);
-          for (int k = kmax1; k <= kmax2; k++) {
-            // check all points in bucket i, j, k
-            for (int ii = 0; ii < buckets[i][j][k].size(); ii++) {
-              d2 = c.distance2(*(buckets[i][j][k][ii].first));
-              if ((d2 >= dmin2) && (d2 <= dmax2)) {
-                list.push_back(buckets[i][j][k][ii].second);
-              }
-            }
-            // skip the range from kmin1 to kmin2 (too close)
-            if (ins && (k == kmin1) && (kmin1 != kmin2)) k = kmin2 - 1;
-          }
-        }
-      }
-    }
-
-  private:
-    int N; // dimension of bucket list is N x N x N
-    double xlo, ylo, zlo, xhi, yhi, zhi;
-    vector<vector<vector<vector<pair<CartesianPoint*, int> > > > > buckets;
-    vector<CartesianPoint*> pointList;
-};
-
-class rotamer {
-  public:
-    rotamer() { atomsSC = atomsBB = NULL; rP = aaP = 1.0; aaN = "XXX"; rID = -1; }
-    rotamer(nnclass* _atomsSC, nnclass* _atomsBB, double _aaProp, double _rotProb, string _name, int _rotID) {
-      atomsSC = _atomsSC; atomsBB = _atomsBB; rP = _rotProb; aaP = _aaProp; aaN = _name; rID = _rotID;
-    }
-    nnclass* gridSC() { return atomsSC; }
-    nnclass* gridBB() { return atomsBB; }
-    double aaProp() { return aaP; }
-    double rotProb() { return rP; }
-    string aaName() { return aaN; }
-    int rotID() { return rID; }
-
-  private:
-    nnclass *atomsSC, *atomsBB;
-    double rP, aaP;
-    string aaN;
-    int rID;
-};
-
+// ---- Data Structures
 class contact {
   public:
     int resi;
@@ -412,230 +250,145 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
   }
 }
 
-// ---- Number Crunchers
-CartesianPoint getCentroid(vector<Atom*> atoms) {
-  CartesianPoint centroid(0.0, 0.0, 0.0);
-  if (atoms.size() == 0.0) MstUtils::error("cannot calculate the centroid of an empty atom set!");
-
-  for (int i = 0; i < atoms.size(); i++) {
-    centroid += atoms[i]->getCoor();
-  }
-  centroid /= (double) atoms.size();
-
-  return centroid;
-}
-
-void filterRotamers(System& _sys, options& _opt, RotamerLibrary& RotLib, vector<int>& resIndex, vector<vector<rotamer> >& rotamers, vector<set<int> >& permanentContacts, vector<double>& fractionPruned, vector<double>& freeVolume, vector<int>& origNumRots, vector<triple<double, double, double> >& pp) {
+/* This function places rotamers and builds the data structures necessary for doing all further
+ * calculations. Note that the System object is passed by COPY. This is because placing rotamers
+ * is destructive, and this way we don't have to worry about saving/restoring the original object */
+void filterRotamers(System& _sys, options& _opt, RotamerLibrary& rotLib, vector<vector<rotamer> >& rotamers, vector<set<int> >& permanentContacts, vector<double>& fractionPruned, vector<double>& freeVolume, vector<int>& origNumRots, vector<triple<double, double, double> >& pp, vector<Residue*> residues = vector<Residue*>(0)) {
   fstream rof;
-  stringstream ss;
-  int param = 19;
   bool doNotCountCB = true; // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
-  rotamers.resize(resIndex.size());
-  permanentContacts.resize(resIndex.size());
-  fractionPruned.resize(resIndex.size(), 0);
-  freeVolume.resize(resIndex.size(), 0);
-  origNumRots.resize(resIndex.size(), 0);
+
+  // assuming that if the residues array is empty, then the user wants all residues
+  if (residues.empty()) {
+    residues = _sys.getResidues();
+  } else {
+    // otherwise,
+  }
+  rotamers.resize(residues.size());
+  permanentContacts.resize(residues.size());
+  fractionPruned.resize(residues.size(), 0);
+  freeVolume.resize(residues.size(), 0);
+  origNumRots.resize(residues.size(), 0);
+  pp.resize(residues.size(), vector<double>(3, 0));
 
   // all amino acid names to add rotamers for (all except Gly and Pro)
   vector<string> aaNames = MstUtils::split("ARG ASN ASP CYS GLN GLU HIS ILE LEU LYS MET PHE SER THR TRP TYR VAL ALA", " ");
 
-  // get backbone atoms, mark which residue each belongs to, and make up a grid for searchig them
-  AtomPointerVector backbone, all;
-  map<string, int> posIdMap, posIdMapAll;
-  vector<Position*> & positions = _sys.getPositions();
-  for (int i = 0; i < resIndex.size(); i++) posIdMap[positions[resIndex[i]]->getPositionId()] = i;
-  for (int i = 0; i < positions.size(); i++) posIdMapAll[positions[i]->getPositionId()] = i;
-  vector<int> tags, tagsAll; // these tags will indicate with position index each backbone atom in the NNclass is from
-  for (int i = 0; i < _sys.atomSize(); i++) {
-    if (!_sys[i].getName().compare(0, 1, "H")) continue;
-    if (RotamerLibrary::isBackboneAtom(_sys[i])) {
-      backbone.push_back(&(_sys[i]));
-      string resId = _sys[i].getParentResidue()->getPositionId();
-      if (posIdMap.find(resId) != posIdMap.end()) {
-        tags.push_back(posIdMap[resId]);
-      } else {
-        tags.push_back(-1);
-      }
+  // get backbone atoms and make up a grid for searchig them
+  AtomPointerVector backbone, nonHyd;
+  vector<Atom*> all = S. getAtoms();
+  for (int i = 0; i < all.size(); i++) {
+    if (RotamerLibrary::isHydrogen(all[i])) continue;
+    if (RotamerLibrary::isBackboneAtom(all[i])) {
+      backbone.push_back(all[i]);
     }
-    all.push_back(&(_sys[i]));
-    string resId = _sys[i].getParentResidue()->getPositionId();
-    tagsAll.push_back(posIdMap[resId]);
+    nonHyd.push_back(all[i]);
   }
-  nnclass bbNN(backbone, _opt.clashDist, true, &tags);
-  nnclass allNN(all, _opt.contDist, true, &tagsAll);
+  ProximitySearch bbNN(backbone, _opt.clashDist, true);
+  ProximitySearch nonHydNN(nonHyd, _opt.contDist, true);
 
   // load rotamers, one position at a time
-  if (_opt.verbose) {
-    printf("rotamer filtering...\n");
-  }
+  if (_opt.verbose) printf("rotamer filtering...\n");
   if (!_opt.rotOutFile.empty()) {
     MstUtils::openFile(rof, _opt.rotOutFile, fstream::out);
   }
-  for (int i = 0; i < resIndex.size(); i++) {
-    Position &posi = _sys.getPosition(resIndex[i]);
-    if (_opt.verbose) {
-      printf("position %s, %d/%d\n", posi.getPositionId().c_str(), i+1, (int) resIndex.size());
-    }
-    triple<double, double, double> posiPP (posi.getPhi(), posi.getPsi(), posi.getOmega());
-    if (posiPP.first == MslTools::doubleMax) posiPP.first = 999.0;
-    if (posiPP.second == MslTools::doubleMax) posiPP.second = 999.0;
-    if (posiPP.third == MslTools::doubleMax) posiPP.third = 999.0;
-    pp.push_back(posiPP);
+  // TODO: I have not yet expanded the selection to include everything with 25 A of the specified residues!!!!!!!!!!
+  for (int i = 0; i < residues.size(); i++) {
+    Residue &res = *(residues[i]);
+    if (_opt.verbose) cout << "position " << res << ", " << i+1 "/" << (int) residues.size() << endl;
+    double phi = res.getPhi(); double psi = res.getPsi();
+    pp[i][0] = phi;
+    pp[i][1] = psi;
+    pp[i][2] = res.getOmega(); // ???? CHECK THE MSL NOMENCLATURE ABOUT WHICH RESIDUE THE OMEGA BELONGS TO!
 
-    // instead of erasing the native residue, rename it so that it is not used in counting rotamer probabilities
-    // and so that it does not interfere with building novel identities
-    // note: the native identity always stays as the first one
-    for (int ii = 0; ii < posi.getNumberOfIdentities(); ii++) { // sometimes there is more than one native identity (in cases of multiple possible identities in crystal structures, for example)
-      posi.getIdentity(ii).setResidueName("_NAT_" + posi.getIdentity(ii).getResidueName());
+    // make sure this residue has a proper backbone, otherwise adding rotamers will fail
+    if (!res.atomExists("N") || !res.atomExists("CA") || !res.atomExists("C")) {
+      cout << "\nWarning: will not build rotamers at position " << res << ", because N-CA-C atoms are not defined\n";
+      cout << "NOTE: this can affect the correctness of contact degree and crowdedness calculations at neighboring positions.\n" << endl;
+      for (int ii = 0; ii < res.atomSize(); ii++) cout << res[ii] << endl;
+      continue;
     }
-    Residue& nativeRes = posi.getCurrentIdentity();
 
-    // load rotamers of each amino acid separately to conserve memory: 
-    // since the final data structure we need is not an MSL one, it would
-    // be a huge waste to load everything first and then build our data structure
+    // load rotamers of each amino acid
     int numRemRotsInPosition = 0; int totNumRotsInPosition = 0;
     double freeVolumeNum = 0; double freeVolumeDen = 0;
     for (int j = 0; j < aaNames.size(); j++) {
       if (_opt.aaProp.find(aaNames[j]) == _opt.aaProp.end()) MstUtils::error("no propensity defined for amino acid " + aaNames[j]);
       double aaProp = _opt.aaProp[aaNames[j]];
-      if (_opt.verbose) {
-        printf("%s %.3f: ", aaNames[j].c_str(), aaProp);
-      }
-      // build in the identity, copying the backbone from native
-      AtomPointerVector ratoms;
-      for (int k = 0; k < aaAtomNames[aaNames[j]].size(); k++) {
-        string an = aaAtomNames[aaNames[j]][k];
-        string atomId = posi.getPositionId() + "," + aaNames[j] + "," + an;
-        Atom* nat = nativeRes.findAtom(an, false);
-        if (RotamerLibrary::isBackboneAtom(an) && (nat != NULL) && nat->hasCoor()) ratoms.push_back(new Atom(atomId, nat->getCoor()));
-        else { ratoms.push_back(new Atom(atomId)); ratoms.back()->setHasCoordinates(false); }
-      }
-      posi.addIdentity(ratoms, aaNames[j]);
-      ratoms.deletePointers();
-      posi.setActiveIdentity(aaNames[j]);
-      Residue& addedIdentity = posi.getCurrentIdentity();
-      RotamerLibrary* rotLib = sysRot.getRotamerLibrary();
+      if (_opt.verbose) printf("%s %.3f: ", aaNames[j].c_str(), aaProp);
 
-      // for bbdep libraries, make sure the position has at least N, CA, C backbone atoms,
-      // because otherwise phi/psi cannot be computed (and it is also not correct to use the default bin)
-      if (rotLib->isBackboneDependent()) {
-        if (!(addedIdentity.atomExists("N") && addedIdentity.getLastFoundAtom().hasCoor() &&
-              addedIdentity.atomExists("CA") && addedIdentity.getLastFoundAtom().hasCoor() &&
-              addedIdentity.atomExists("C") && addedIdentity.getLastFoundAtom().hasCoor())) {
-          cout << "\nWarning: will not build rotamers from a bb-dep library at position " << posi.getPositionId() << ", because not all main-chain atoms defined\n";
-          cout << "NOTE: this will affect the correctness of contact degree and crowdedness calculations at other positions.\n" << addedIdentity << endl;
-          for (int ii = 0; ii < addedIdentity.atomSize(); ii++) cout << addedIdentity[ii] << endl;
-          posi.removeIdentity(aaNames[j]);
-          break;
-        }
-      }
-      int nr = (rotLib->isBackboneDependent()) ? rotLib->size("", aaNames[j], posi.getPhi(), posi.getPsi()) : rotLib->size("", aaNames[j]);
-      vector<int> rotIndices;
-      if (!sysRot.loadRotamers(&posi, aaNames[j], nr, "", false, &rotIndices)) MstUtils::error("Cannot load rotamers for of " + aaNames[j] + " in " + posi.getPositionId());
+      int nr = rotLib.numberOfRotamers(aaNames[i], phi, psi);
+      Residue resCopy;
+      resCopy.copyAtoms(res); // make a copy of the original residue for the purposes of placing rotamers, so as not to destroy the structure
+      for (int ri = 0; ri < nr; ri++) {
+        rotLib.placeRotamer(resCopy, aaNames[i], ri);
+        double rotProb = rotLib.rotamerProbability(aaNames[i], ri, phi, psi);
 
-      // check to see if the rotamers were successfully built (i.e., make sure all side-chain atoms were correctly placed)
-      bool succ = true;
-      for (int k = 0; k < addedIdentity.atomSize(); k++) {
-        if (RotamerLibrary::isBackboneAtom(addedIdentity.getAtom(k))) continue;
-        if (!addedIdentity.getAtom(k).hasCoor()) {
-          cout << "Warning: could not build rotamers for " << aaNames[j] << " at position " << posi.getPositionId() << ", skipping (this will affect the accuracy of the contact probability map)...\n";
-          for (int ii = 0; ii < addedIdentity.atomSize(); ii++) cout << addedIdentity[ii] << endl;
-          posi.removeIdentity(aaNames[j]);
-          succ = false;
-          break;
-        }
-      }
-      if (!succ) continue;
-
-      // If rotamers were successfully built, see which need to be pruned (clash with the backbone).
-      // Also measure contribution to the free volume
-      int numRemRots = 0;
-      vector<int> closeOnes;
-      for (int r = 0; r < addedIdentity.getNumberOfAltConformations(); r++) {
-        double rotProb = rotLib->getRotamerWeight("", aaNames[j], rotIndices[r]);
+        // see if the rotamer needs to be pruned (clash with the backbone).
+        // also measure contribution to the free volume
         bool prune = false;
-        addedIdentity.setActiveConformation(r);
-//        Atom& ca = addedIdentity.getAtom("CA");
-        for (int k = 0; k < addedIdentity.atomSize(); k++) {
-          if (RotamerLibrary::isBackboneAtom(addedIdentity[k])) continue;
+        vector<int> closeOnes;
+        for (int k = 0; k < resCopy.atomSize(); k++) {
+          Atom& a = resCopy[k];
+          if (RotamerLibrary::isBackboneAtom(a)) continue;
           // free volume contributions
           closeOnes.clear();
-          allNN.pointsWithin(addedIdentity[k].getCoor(), 0.0, _opt.contDist, closeOnes);
+          nonHydNN.pointsWithin(a.getCoor(), 0.0, _opt.contDist, closeOnes);
           for (int ci = 0; ci < closeOnes.size(); ci++) {
             // self clashes do not count (the rotamer library should not allow true clashes with own backbone or own side-chain)
-            if (closeOnes[ci] != i) {
-//              freeVolumeDen += aaProp*rotProb/ca.distance(addedIdentity[k]);
+            if (nonHyd[closeOnes[ci]]->getResidue() != res) {
               freeVolumeNum += aaProp*rotProb;
               break;
             }
           }
-//          freeVolumeDen += aaProp*rotProb/ca.distance(addedIdentity[k]);
           freeVolumeDen += aaProp*rotProb;
 
           // shuld the rotamer be pruned?
-          if (doNotCountCB && addedIdentity.getResidueName().compare("ALA") && !addedIdentity[k].getName().compare("CB")) continue;
+          if (doNotCountCB && !resCopy.isNamed("ALA") && a.isNamed("CB")) continue;
           closeOnes.clear();
-          bbNN.pointsWithin(addedIdentity[k].getCoor(), 0.0, _opt.clashDist, closeOnes);
+          bbNN.pointsWithin(a.getCoor(), 0.0, _opt.clashDist, closeOnes);
           for (int ci = 0; ci < closeOnes.size(); ci++) {
             // backbone atoms of the same residue do not count as clashing (the rotamer library should not allow true clashes with own backbone)
-            if (closeOnes[ci] != i) {
+            if (backbone[closeOnes[ci]]->getResidue() != res) {
               prune = true;
               // clashes with ALA have a special meaning (permanent "unavoidable" contacts; need to find all of them, though unlikely to have more than one)
-              if (!aaNames[j].compare("ALA")) permanentContacts[i].insert(closeOnes[ci]);
+              if (resCopy.isNamed("ALA")) permanentContacts[i].insert(closeOnes[ci]);
               else break;
             }
           }
           if (prune) break;
         }
-        // if rotamer not pruned, prepare a datastructure corresponding to it for use in NN searching
-        if (!prune) {
-          if (!_opt.rotOutFile.empty()) {
-            ss.str("");
-            pdbw.open(ss);
-            pdbw.write(addedIdentity.getAtomPointers());
-            string pdbs = ss.str();
-            rof << "REM " << addedIdentity.getIdentityId() << ", rotamer " << r+1 << endl << pdbs << "END\n";
-            pdbw.close();
-          }
-          AtomPointerVector heavySC, heavyBB;
-          for (int ai = 0; ai < addedIdentity.atomSize(); ai++) {
-            if (addedIdentity[ai].getName().compare(0, 1, "H")) {
-              if (RotamerLibrary::isBackboneAtom(addedIdentity[ai]) || (doNotCountCB && addedIdentity.getResidueName().compare("ALA") && !addedIdentity[ai].getName().compare("CB"))) {
-                heavyBB.push_back(&(addedIdentity[ai]));
-              } else {
-                heavySC.push_back(&(addedIdentity[ai]));
-              }
+        if (prune) continue;
+
+        if (!_opt.rotOutFile.empty()) {
+          rof << "REM " << resCopy << ", rotamer " << r+1 << endl;
+          Structure rot;
+          rot.addAtoms(resCopy.getAtoms());
+          rot.writePDB(rof);
+        }
+        AtomPointerVector heavySC, heavyBB;
+        for (int ai = 0; ai < resCopy.atomSize(); ai++) {
+          if (!RotamerLibrary::isHydrogen(resCopy[ai])) {
+            if (RotamerLibrary::isBackboneAtom(resCopy[ai]) || (doNotCountCB && !resCopy.isNamed("ALA") && resCopy[ai].isNamed("CB"))) {
+              heavyBB.push_back(&(resCopy[ai]));
+            } else {
+              heavySC.push_back(&(resCopy[ai]));
             }
           }
-          rotamers[i].push_back(rotamer(new nnclass(heavySC, _opt.contDist), new nnclass(heavyBB, _opt.contDist), aaProp, rotProb, aaNames[j], r));
-          if (_opt.verbose) {
-            printf("%d %.3f; ", r, rotProb);
-          }
-          numRemRots++;
-          numRemRotsInPosition++;
         }
+        rotamers[i].push_back(rotamer(new ProximitySearch(heavySC, _opt.contDist), new ProximitySearch(heavyBB, _opt.contDist), aaProp, rotProb, aaNames[j], r));
+        if (_opt.verbose) printf("%d %.3f; ", r, rotProb);
+        numRemRots++;
+        numRemRotsInPosition++;
       }
-      totNumRotsInPosition += addedIdentity.getNumberOfAltConformations();
-      if (_opt.verbose) cout << numRemRots << "/" << addedIdentity.getNumberOfAltConformations() << " remaining at position " << addedIdentity.toString() << endl;
-      posi.removeIdentity(aaNames[j]);
-      // MSL is not very good at keeping up the IC Table as identities are added and removed. Since
-      // we don't really need the IC Table after rotamers are placed, clean it up periodically
-      _sys.resetIcTable();
+      totNumRotsInPosition += nr;
     }
+    if (_opt.verbose) cout << numRemRots << "/" << totNumRotsInPosition << " remaining at position " << res << endl;
     fractionPruned[i] = (totNumRotsInPosition - numRemRotsInPosition)*1.0/totNumRotsInPosition;
     origNumRots[i] = totNumRotsInPosition;
     freeVolume[i] = 1 - freeVolumeNum/freeVolumeDen;
-    posi.setActiveIdentity(nativeRes.getResidueName()); // return the native as the active identity
-    if (nativeRes.getResidueName().compare(0, 5, "_NAT_") == 0) { // rename native identity back to its original
-      nativeRes.setResidueName(nativeRes.getResidueName().substr(5));
-    }
   }
-  if (_opt.verbose) {
-    printf("end of rotamer filtering...\n");
-  }
-  if (!_opt.rotOutFile.empty()) {
-    rof.close();
-  }
+  if (_opt.verbose) cout << "end of rotamer filtering..." << endl;
+  if (!_opt.rotOutFile.empty()) rof.close();
 }
 
 double contactProbability (vector<rotamer>& posi, vector<rotamer>& posj, options& iopts, string* contactInfo = NULL, vector<double>* cpi = NULL, vector<double>* cpj = NULL) {
@@ -670,7 +423,7 @@ double contactProbability (vector<rotamer>& posi, vector<rotamer>& posj, options
       // otherwise, investigage point-by-point
       bool cont = false;
       vector<int> closeOnes;
-      nnclass* srcGrid = posj[j].gridSC();
+      ProximitySearch* srcGrid = posj[j].gridSC();
       for (int aj = 0; aj < srcGrid->pointSize(); aj++) {
         posi[i].gridSC()->pointsWithin(srcGrid->getPoint(aj), 0.0, iopts.contDist, closeOnes);
         if (closeOnes.size() > 0) {
@@ -705,7 +458,7 @@ void computeContactDegrees(System& S, options& iopts, vector<int>& resIndex, vec
     Position &p = S.getPosition(resIndex[i]);
     R.push_back(getCA(p));
   }
-  
+
   // aling CA atoms to have the principal component along X
   Frame O, F;
   CoordAxes xyz(CartesianPoint(1, 0, 0), CartesianPoint(0, 1, 0), CartesianPoint(0, 0, 1));
@@ -786,7 +539,7 @@ int main(int argc, char *argv[]) {
   // process input arguments
   options iopts;
   parseCommandLine(argc, argv, iopts);
-  
+
   // legal residue names that are considered "protein" here
   vector<string> legalNames;
   legalNames.push_back("ALA"); legalNames.push_back("CYS"); legalNames.push_back("ASP"); legalNames.push_back("GLU"); legalNames.push_back("PHE"); legalNames.push_back("GLY");
@@ -801,10 +554,10 @@ int main(int argc, char *argv[]) {
 
   // go through all PDB files
   for (int si = 0; si < iopts.pdbfs.size(); si++) {
-    Structure S(iopts.pdbfs[si]);
     Structure So(iopts.pdbfs[si]);                       // original input PDB structure
     Structure S;                                         // just the region of the original structure corresponding to the map
-    proteinOnly(S, So, legalNames, iopts.renumPDB);
+    proteinOnly(S, So, legalNames);
+    if (iopts.renumPDB) S.renumber();
 
     // open output file and write header
     fstream of;
@@ -817,21 +570,20 @@ int main(int argc, char *argv[]) {
       buf = cout.rdbuf();
     }
     ostream out(buf);
-    
+
     // --- load and rotamers, create a data structure for each rotamer at each position for fast neighbor searching
     vector<vector<rotamer> > rotamers;
     vector<set<int> > permanentContacts;
     vector<double> fractionPruned, freeVolume;
     vector<int> origNumRots;
-    vector<triple<double, double, double> > pp; // phi, psi, and omega angles for each position
-    vector<int> resIndex; // can optionally limit to a subset of residues within the system
+    vector<vector<double> > pp; // phi, psi, and omega angles for each position
+    vector<Residue*> residues;  // can optionally limit to a subset of residues within the system
     if (!iopts.focus.empty()) {
-      AtomSelection selector(S.getAtomPointers());
-      resIndex = byResCA(selector.select(iopts.focus, true), S);
+      residues = S.selectByRes(iopts.focus); // ?? NEEDS TO BE IMPLEMENTED!
     } else {
-      for (int i = 0; i < S.positionSize(); i++) resIndex.push_back(i);
+      residues = S.getResidues();
     }
-    filterRotamers(S, iopts, sysRot, resIndex, rotamers, permanentContacts, fractionPruned, freeVolume, origNumRots, pp);
+    filterRotamers(S, iopts, RL, rotamers, permanentContacts, fractionPruned, freeVolume, origNumRots, pp, residues);
 
     // --- compute contact degrees
     vector<contact> conts;
@@ -927,53 +679,39 @@ int main(int argc, char *argv[]) {
 
 
 // ---- utility functions definitions
-bool isNameLegal(Position& p, vector<string>& legalNames) {
-  const char* name = p.getResidueName().c_str();
-  for (int i = 0; i < legalNames.size(); i++) {
-    if (strcasecmp(name, legalNames[i].c_str()) == 0) return true;
-  }
-  return false;
-}
-
-void proteinOnly(System& S, AtomPointerVector& A, vector<string>& legalNames, bool renumber) {
-  AtomPointerVector v;
-  for (int i = 0; i < A.size(); i++) {
-    bool isNameLegal = false;
+void proteinOnly(System& S, System& So, vector<string>& legalNames) {
+  AtomPointerVector Ao = So.getAtoms(), A;
+  for (int i = 0; i < Ao.size(); i++) {
+    bool nameLegal = false;
     for (int j = 0; j < legalNames.size(); j++) {
-      if (A[i]->getResidueName().compare(legalNames[j]) == 0) { isNameLegal = true; break; }
+      if (Ao[i]->getResidue()->isNamed(legalNames[j])) { nameLegal = true; break; }
     }
-    if (isNameLegal) v.push_back(A[i]);
+    if (nameLegal) A.push_back(Ao[i]);
   }
-  S.addAtoms(v);
-  if (renumber) {
-    for (int i = 0; i < S.chainSize(); i++) {
-      S(i).renumberChain(1);
-    }
-  }
+  S.addAtoms(&A);
 }
 
-Atom* getCA(Position& p) {
-  if (!p.atomExists("CA")) {
-    Atom ca("A,1,XXX,CA");
+Atom* getCA(Residue& p) {
+  Atom* ca = p.findAtom("CA", false);
+  if (ca == NULL) {
+    ca = new Atom(1, "CA", 0.0, 0.0, 0.0, 0.0, 0.0, true);
     // attempt to find the centroid of the backbone
     vector<string> bban;
     bban.push_back("CA");
     bban.push_back("C");
     bban.push_back("N");
     bban.push_back("O");
-    vector<Atom*> bba;
+    AtomPointerVector bba;
     for (int i = 0; i < bban.size(); i++) {
-      if (p.atomExists(bban[i])) bba.push_back(&(p.getAtom(bban[i])));
+      Atom* a = p.findAtom(bban[i]);
+      if (a != NULL) bba.push_back(a);
     }
-    if (bba.size() > 0) {
-      ca.setCoor(getCentroid(bba));
-    } else {
-      // otherwise, get the overall centroid
-      ca.setCoor(p(0).getCentroid());
-    }
-    p(0).addAtom(ca);
+    // otherwise, get the overall centroid
+    if (bba.size() == 0) bba = p.getAtoms();
+    ca.setCoor(bba.getGeometricCenter());
+    p.appendAtom(ca);
   }
-  return &(p.getAtom("CA"));
+  return ca;
 }
 
 template <class T>

@@ -12,7 +12,7 @@ class RotamerLibrary {
     RotamerLibrary() {}
     RotamerLibrary(string rotLibFile);
     ~RotamerLibrary();
-  
+
     void readRotamerLibrary(string rotLibFile);
 
     /* returns the index of the bin into which the given phi/psi value combination
@@ -23,14 +23,18 @@ class RotamerLibrary {
     pair<real, real> getBinPhiPsi(string aa, int bi);
 
     /* places the specified rotamer into the given Residue. NOTE: the original residue
-     * is modified, with some of its atoms potentially destroyed (as needed), so if you 
-     * want to be able to go back to the wild type, first make a copy of the residue 
+     * is modified, with some of its atoms potentially destroyed (as needed), so if you
+     * want to be able to go back to the wild type, first make a copy of the residue
      * before placing the rotamer. */
     void placeRotamer(Residue& res, string aa, int rotIndex, bool strict = true);
 
     /* decides whether the atom is a backbone atom basded on the name */
     static bool isBackboneAtom(string atomName);
     static bool isBackboneAtom(Atom& atom) { return isBackboneAtom(atom.getName()); }
+    static bool isBackboneAtom(Atom* atom) { return isBackboneAtom(atom->getName()); }
+    static bool isHydrogen(string atomName);
+    static bool isHydrogen(Atom& atom) { return isHydrogen(atom.getName()); }
+    static bool isHydrogen(Atom* atom) { return isHydrogen(atom->getName()); }
 
     int numberOfRotamers(string aa, real phi = Residue::badDihedral, real psi = Residue::badDihedral);
     real rotamerProbability(string aa, int ri, real phi = Residue::badDihedral, real psi = Residue::badDihedral);
@@ -48,7 +52,7 @@ class RotamerLibrary {
 
     // map a given angle, in degrees to the "standard" range of [-180, 180)
     real angleToStandardRange(real angle);
-    
+
     // return a vector of keys given a map
     template<class T1, class T2>
     vector<T1> keys(map<T1, T2>& mymap, bool sorted = false) {
@@ -75,7 +79,7 @@ class RotamerLibrary {
     map<string, vector<vector<real> > > prob;
 
     /* for a given amino acid, binFreq[aa] stores the frequencies of each phi/psi bin. These
-     * are stored as reals, so they can be either counts (i.e., number of occurrences) as with 
+     * are stored as reals, so they can be either counts (i.e., number of occurrences) as with
      * Dunbrack's rotamer library or true frequencies (i.e., probabilities). */
     map<string, vector<real> > binFreq;
 
@@ -99,7 +103,7 @@ class RotamerLibrary {
     /* phi/psi bins are required to be on a grid, but the grid lines do not need to be
      * unifirm, do not need to be the same between phi and psi, and can vary between
      * different amino acids. The two variables below store where the grid lines in phi
-     * and psi lie, such that the total number of bins for amino-acid aa is 
+     * and psi lie, such that the total number of bins for amino-acid aa is
      * binPhiCenters[aa].size() * binPsiCenters[aa].size() */
     map<string, vector<real> > binPhiCenters;
     map<string, vector<real> > binPsiCenters;

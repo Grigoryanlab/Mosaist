@@ -135,7 +135,7 @@ void Structure::readPDB(string pdbFile, string options) {
     }
     // many PDB files in the Protein Data Bank call the delta carbon of isoleucine CD1, but
     // the convention in basically all MM packages is to call it CD, since there is only one
-    if (fixIleCD1 && atomname.compare("CD1") == 0) atomname = "CD"; 
+    if (fixIleCD1 && atomname.compare("CD1") == 0) atomname = "CD";
 
     // if necessary, make a new residue
     bool reallyNewAtom = true; // is this a truely new atom, as opposed to an alternative position?
@@ -168,7 +168,12 @@ void Structure::readPDB(string pdbFile, string options) {
 }
 
 void Structure::writePDB(string pdbFile, string options) {
-  fstream ofs; MstUtils::openFile(ofs, pdbFile, fstream::out, "Structure::writePDB");
+  fstream ofs; MstUtils::openFile(ofs, pdbFile, fstream::out, "Structure::writePDB(string, string)");
+  writePDB(ofs, options);
+  ofs.close();
+}
+
+void Structure::writePDB(fstream& ofs, string options) {
   options = MstUtils::uc(options);
 
 ///  my $chainstr = shift; // probably want to implement this eventually. Or maybe some more generic selection mechanism based on regular expressions applied onto full atom strings.
@@ -252,7 +257,6 @@ void Structure::writePDB(string pdbFile, string options) {
       ofs << "END" << endl;
     }
   }
-  ofs.close();
 }
 
 bool Structure::appendChain(Chain* C, bool allowRename) {
@@ -301,7 +305,7 @@ Chain* Structure::appendChain(string cid, bool allowRename) {
 
 vector<Atom*> Structure::getAtoms() {
   vector<Atom*> vec;
-  
+
   for (int i = 0; i < this->chainSize(); i++) {
     Chain& c = (*this)[i];
     for (int j = 0; j < c.residueSize(); j++) {
@@ -316,7 +320,7 @@ vector<Atom*> Structure::getAtoms() {
 
 vector<Residue*> Structure::getResidues() {
   vector<Residue*> vec;
-  
+
   for (int i = 0; i < this->chainSize(); i++) {
     Chain& c = (*this)[i];
     vector<Residue*> chainResidues = c.getResidues();
@@ -324,6 +328,22 @@ vector<Residue*> Structure::getResidues() {
   }
 
   return vec;
+}
+
+void Structure::renumber() {
+  int index = 1;
+  for (int i = 0; i < chains.size(); i++) {
+    Chain& chain = (*this)[i];
+    for (int j = 0; j < chain.residueSize(); j++) {
+      Residue& res = chain[j];
+      res.setNum(j+1);
+      for (int k = 0; k < res.atomSize(); k++) {
+        Atom& a = res[k];
+        a.setIndex(index);
+        index++;
+      }
+    }
+  }
 }
 
 void Structure::addAtom(Atom* A) {
@@ -512,6 +532,15 @@ void Residue::deleteAtom(int i) {
   }
 }
 
+void Residue::copyAtoms(Residue& R) {
+  deleteAtoms();
+  for (int i = 0; i < R.atomSize(); i++) {
+    atoms.push_back(new Atom(R[i]));
+    atoms.back()->setParent(this);
+  }
+  if (parent != NULL) parent->incrementNumAtoms(R.atomSize());
+}
+
 void Residue::deleteAtoms() {
   if (parent != NULL) {
     parent->incrementNumAtoms(-atoms.size());
@@ -566,7 +595,7 @@ Residue* Residue::iPlusDelta(int off) {
   }
   int i = chain->getResidueIndex(this);
   if ((i + off >= chain->residueSize()) || (i + off < 0)) return NULL;
-  return &(chain->getResidue(i + off));    
+  return &(chain->getResidue(i + off));
 }
 
 Residue* Residue::nextResidue() {
@@ -577,7 +606,7 @@ Residue* Residue::previousResidue() {
   return iPlusDelta(-1);
 }
 
-// C- N  CA  C 
+// C- N  CA  C
 real Residue::getPhi(bool strict) {
   Residue* res1 = previousResidue();
   if (res1 == NULL) return badDihedral;
@@ -586,7 +615,7 @@ real Residue::getPhi(bool strict) {
   Atom* C = findAtom("CA", false);
   Atom* D = findAtom("C", false);
   if ((A == NULL) || (B == NULL) || (C == NULL) || (D == NULL)) {
-    if (strict) MstUtils::error("not all backbone atoms present to compute PHI for residue " + MstUtils::toString(*this));
+    if (strict) MstUtils::error("not all backbone atoms present to compute PHI for residue " + MstUtils::toString(*this), "Residue::getPhi");
     return badDihedral;
   }
 
@@ -602,7 +631,23 @@ real Residue::getPsi(bool strict) {
   Atom* C = findAtom("C", false);
   Atom* D = res1->findAtom("N", false);
   if ((A == NULL) || (B == NULL) || (C == NULL) || (D == NULL)) {
-    if (strict) MstUtils::error("not all backbone atoms present to compute PSI for residue " + MstUtils::toString(*this));
+    if (strict) MstUtils::error("not all backbone atoms present to compute PSI for residue " + MstUtils::toString(*this), "Residue::getPsi");
+    return badDihedral;
+  }
+
+  return CartesianGeometry::dihedral(*A, *B, *C, *D);
+}
+
+// CA C  N+  CA+
+real Residue::getOmega(bool strict) {
+  Residue* res1 = nextResidue();
+  if (res1 == NULL) return badDihedral;
+  Atom* A = findAtom("CA", false);
+  Atom* B = findAtom("C", false);
+  Atom* C = res1->findAtom("N", false);
+  Atom* D = res1->findAtom("CA", false);
+  if ((A == NULL) || (B == NULL) || (C == NULL) || (D == NULL)) {
+    if (strict) MstUtils::error("not all backbone atoms present to compute OMEGA for residue " + MstUtils::toString(*this), "Residue::getOmega");
     return badDihedral;
   }
 
@@ -743,7 +788,7 @@ string Atom::pdbLine(int resIndex, int atomIndex) {
   else { sprintf(atomname, "%.4s", name); }
 
   // moduli are used to make sure numbers do not go over prescribe field widths (this is not enforced by sprintf like with strings)
-  sprintf(line, "%6s%5d %-4s%c%-4s%.1s%4d%c   %8.3f%8.3f%8.3f%6.2f%6.2f      %.4s", 
+  sprintf(line, "%6s%5d %-4s%c%-4s%.1s%4d%c   %8.3f%8.3f%8.3f%6.2f%6.2f      %.4s",
           isHetero() ? "HETATM" : "ATOM  ", atomIndex % 100000, atomname, alt, resname.c_str(), chainID.c_str(),
           resnum % 10000, icode, x, y, z, occ, B, segID.c_str());
 
@@ -986,22 +1031,22 @@ bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<At
 bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode) {
     int i, j, m, m1, l, k;
     real e0, rms1, d, h, g;
-    real cth, sth, sqrth, p, det, sigma;  
+    real cth, sth, sqrth, p, det, sigma;
     real xc[3], yc[3];
     real a[3][3], b[3][3], r[3][3], e[3], rr[6], ss[6];
     real sqrt3=1.73205080756888, tol=0.01;
     int ip[]={0, 1, 3, 1, 2, 4, 3, 4, 5};
     int ip2312[]={1, 2, 0, 1};
-    
+
     int a_failed=0, b_failed=0;
     real epsilon=0.00000001;
-    
+
     int n=_ref.size();
     if(n != _align.size()) {
         cout << "Two proteins have different length!" << endl;
         return false;
     }
-    
+
     //initializtation
     _rmsd=0;
     rms1=0;
@@ -1020,27 +1065,27 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
             }
         }
     }
-    
+
     if (n<1) {
         cout << "Protein length is zero!" << endl;
         return false;
-    } 
+    }
 
     //compute centers for vector sets x, y
     for(i=0; i<n; i++){
         xc[0] += _align[i]->getX();
         xc[1] += _align[i]->getY();
         xc[2] += _align[i]->getZ();
-        
+
         yc[0] += _ref[i]->getX();
         yc[1] += _ref[i]->getY();
         yc[2] += _ref[i]->getZ();
     }
     for(i=0; i<3; i++){
         xc[i] = xc[i]/(real)n;
-        yc[i] = yc[i]/(real)n;        
+        yc[i] = yc[i]/(real)n;
     }
-    
+
     //compute e0 and matrix r
     for (m=0; m<n; m++) {
         e0 += (_align[m]->getX()-xc[0])*(_align[m]->getX()-xc[0]) \
@@ -1062,27 +1107,27 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
     //compute determinat of matrix r
     det = r[0][0] * ( r[1][1]*r[2][2] - r[1][2]*r[2][1] )       \
     - r[0][1] * ( r[1][0]*r[2][2] - r[1][2]*r[2][0] )       \
-    + r[0][2] * ( r[1][0]*r[2][1] - r[1][1]*r[2][0] ); 
+    + r[0][2] * ( r[1][0]*r[2][1] - r[1][1]*r[2][0] );
     sigma=det;
-    
+
     //compute tras(r)*r
     m = 0;
     for (j=0; j<3; j++) {
-        for (i=0; i<=j; i++) {            
+        for (i=0; i<=j; i++) {
             rr[m]=r[0][i]*r[0][j]+r[1][i]*r[1][j]+r[2][i]*r[2][j];
             m++;
         }
     }
-    
+
     real spur=(rr[0]+rr[2]+rr[5]) / 3.0;
     real cof = (((((rr[2]*rr[5] - rr[4]*rr[4]) + rr[0]*rr[5]) \
           - rr[3]*rr[3]) + rr[0]*rr[2]) - rr[1]*rr[1]) / 3.0;
-    det = det*det; 
-    
+    det = det*det;
+
     for (i=0; i<3; i++){
         e[i]=spur;
     }
-    
+
     if (spur>0) {
         d = spur*spur;
         h = d - cof;
@@ -1092,22 +1137,22 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
             sqrth = sqrt(h);
             d = h*h*h - g*g;
             if(d<0.0) d=0.0;
-            d = atan2( sqrt(d), -g ) / 3.0;         
+            d = atan2( sqrt(d), -g ) / 3.0;
             cth = sqrth * cos(d);
             sth = sqrth*sqrt3*sin(d);
             e[0]= (spur + cth) + cth;
-            e[1]= (spur - cth) + sth;            
+            e[1]= (spur - cth) + sth;
             e[2]= (spur - cth) - sth;
 
-            if (mode!=0) {//compute a                
+            if (mode!=0) {//compute a
                 for (l=0; l<3; l=l+2) {
-                    d = e[l];  
+                    d = e[l];
                     ss[0] = (d-rr[2]) * (d-rr[5])  - rr[4]*rr[4];
                     ss[1] = (d-rr[5]) * rr[1]      + rr[3]*rr[4];
                     ss[2] = (d-rr[0]) * (d-rr[5])  - rr[3]*rr[3];
                     ss[3] = (d-rr[2]) * rr[3]      + rr[1]*rr[4];
-                    ss[4] = (d-rr[0]) * rr[4]      + rr[1]*rr[3];                
-                    ss[5] = (d-rr[0]) * (d-rr[2])  - rr[1]*rr[1]; 
+                    ss[4] = (d-rr[0]) * rr[4]      + rr[1]*rr[3];
+                    ss[5] = (d-rr[0]) * (d-rr[2])  - rr[1]*rr[1];
 
                     if (fabs(ss[0])<=epsilon) ss[0]=0.0;
                     if (fabs(ss[1])<=epsilon) ss[1]=0.0;
@@ -1117,7 +1162,7 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
                     if (fabs(ss[5])<=epsilon) ss[5]=0.0;
 
                     if (fabs(ss[0]) >= fabs(ss[2])) {
-                        j=0;                    
+                        j=0;
                         if( fabs(ss[0]) < fabs(ss[5])){
                             j = 2;
                         }
@@ -1132,8 +1177,8 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
                     for (i=0; i<3; i++) {
                         k=ip[i+j];
                         a[i][l] = ss[k];
-                        d = d + ss[k]*ss[k];                        
-                    } 
+                        d = d + ss[k]*ss[k];
+                    }
 
 
                     //if( d > 0.0 ) d = 1.0 / sqrt(d);
@@ -1141,7 +1186,7 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
                     else d=0.0;
                     for (i=0; i<3; i++) {
                         a[i][l] = a[i][l] * d;
-                    }               
+                    }
                 }//for l
 
                 d = a[0][0]*a[0][2] + a[1][0]*a[1][2] + a[2][0]*a[2][2];
@@ -1150,7 +1195,7 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
                     m=0;
                 } else {
                     m1=0;
-                    m=2;                
+                    m=2;
                 }
                 p=0;
                 for(i=0; i<3; i++){
@@ -1164,30 +1209,30 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
                             continue;
                         }
                         p = fabs( a[i][m] );
-                        j = i;                    
+                        j = i;
                     }
                     k = ip2312[j];
                     l = ip2312[j+1];
-                    p = sqrt( a[k][m]*a[k][m] + a[l][m]*a[l][m] ); 
+                    p = sqrt( a[k][m]*a[k][m] + a[l][m]*a[l][m] );
                     if (p > tol) {
                         a[j][m1] = 0.0;
                         a[k][m1] = -a[l][m]/p;
-                        a[l][m1] =  a[k][m]/p;                                                       
+                        a[l][m1] =  a[k][m]/p;
                     } else {//goto 40
                         a_failed=1;
-                    }     
+                    }
                 } else {//if p<=tol
                     p = 1.0 / sqrt(p);
                     for(i=0; i<3; i++){
                         a[i][m1] = a[i][m1]*p;
-                    }                                  
-                }//else p<=tol  
+                    }
+                }//else p<=tol
                 if (a_failed!=1) {
                     a[0][1] = a[1][2]*a[2][0] - a[1][0]*a[2][2];
                     a[1][1] = a[2][2]*a[0][0] - a[2][0]*a[0][2];
-                    a[2][1] = a[0][2]*a[1][0] - a[0][0]*a[1][2];       
-                }                                   
-            }//if(mode!=0)       
+                    a[2][1] = a[0][2]*a[1][0] - a[0][0]*a[1][2];
+                }
+            }//if(mode!=0)
         }//h>0
 
         //compute b anyway
@@ -1204,8 +1249,8 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
                 else d=0.0;
                 for (i=0; i<3; i++) {
                     b[i][l] = b[i][l]*d;
-                }                
-            }            
+                }
+            }
             d = b[0][0]*b[0][1] + b[1][0]*b[1][1] + b[2][0]*b[2][1];
             p=0.0;
 
@@ -1225,25 +1270,25 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
                 }
                 k = ip2312[j];
                 l = ip2312[j+1];
-                p = sqrt( b[k][0]*b[k][0] + b[l][0]*b[l][0] ); 
+                p = sqrt( b[k][0]*b[k][0] + b[l][0]*b[l][0] );
                 if (p > tol) {
                     b[j][1] = 0.0;
                     b[k][1] = -b[l][0]/p;
-                    b[l][1] =  b[k][0]/p;        
+                    b[l][1] =  b[k][0]/p;
                 } else {
                     //goto 40
                     b_failed=1;
-                }                
+                }
             } else {//if( p <= tol )
                 p = 1.0 / sqrt(p);
                 for(i=0; i<3; i++){
                     b[i][1]=b[i][1]*p;
                 }
-            }            
+            }
             if (b_failed!=1){
                 b[0][2] = b[1][0]*b[2][1] - b[1][1]*b[2][0];
                 b[1][2] = b[2][0]*b[0][1] - b[2][1]*b[0][0];
-                b[2][2] = b[0][0]*b[1][1] - b[0][1]*b[1][0]; 
+                b[2][2] = b[0][0]*b[1][1] - b[0][1]*b[1][0];
                 //compute u
                 for (i=0; i<3; i++){
                     for(j=0; j<3; j++){
@@ -1257,27 +1302,27 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
             for(i=0; i<3; i++){
                 t[i] = ((yc[i] - u[i][0]*xc[0]) - u[i][1]*xc[1])    \
                         - u[i][2]*xc[2];
-            }            
+            }
         }//if(mode!=0 && a_failed!=1)
     } else {//spur>0, just compute t and errors
         //compute t
         for (i=0; i<3; i++) {
             t[i] = ((yc[i] - u[i][0]*xc[0]) - u[i][1]*xc[1]) - u[i][2]*xc[2];
         }
-    } //else spur>0 
+    } //else spur>0
 
     //compute rmsd
     for(i=0; i<3; i++){
         if( e[i] < 0 ) e[i] = 0;
-        e[i] = sqrt( e[i] );           
-    }            
+        e[i] = sqrt( e[i] );
+    }
     d = e[2];
     if( sigma < 0.0 ){
         d = - d;
     }
     d = (d + e[1]) + e[0];
-    rms1 = (e0 - d) - d; 
-    if( rms1 < 0.0 ) rms1 = 0.0;  
+    rms1 = (e0 - d) - d;
+    if( rms1 < 0.0 ) rms1 = 0.0;
 
     _rmsd=sqrt(rms1/(real)n);
 
@@ -1618,4 +1663,3 @@ string MstUtils::readNullTerminatedString(fstream& ifs) {
   }
   return str;
 }
-

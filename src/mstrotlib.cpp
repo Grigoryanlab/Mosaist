@@ -84,7 +84,7 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     binPsiCenters[aa] = keys(uniquePsi, true);
     vector<int> binIndex(nb);
     for (int i = 0; i < nb; i++) {
-      binIndex[i] = getBackboneBin(aa, bins[i][0], bins[i][1]);    
+      binIndex[i] = getBackboneBin(aa, bins[i][0], bins[i][1]);
       binFreq[aa][binIndex[i]] = bins[i][2];
     }
 
@@ -180,7 +180,7 @@ void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool st
   Frame R(CA, X, Y, Z);               // residue frame
   Frame L;                            // Frame class defaults to the laboratory frame
   Transform T = TransformFactory::switchFrames(R, L);
-  
+
   // fish out the right rotamer and copy it over to the residue, destroying previous atoms
   vector<Atom*> newAtoms(rots.atomSize(), NULL);
   for (int i = 0; i < rots.atomSize(); i++) {
@@ -222,17 +222,23 @@ bool RotamerLibrary::isBackboneAtom(string atomName) {
       if ((atomName.compare("C") == 0) || (atomName.compare("CA") == 0) || (atomName.compare("CY") == 0) || (atomName.compare("CAY") == 0)) return true;
       return false;
     case 'O':
-      if ((atomName.compare("O") == 0) || (atomName.compare("OY") == 0) || (atomName.compare("OXT") == 0) || 
-          (atomName.compare("OT1") == 0) || (atomName.compare("OT2") == 0) || 
+      if ((atomName.compare("O") == 0) || (atomName.compare("OY") == 0) || (atomName.compare("OXT") == 0) ||
+          (atomName.compare("OT1") == 0) || (atomName.compare("OT2") == 0) ||
           ((atomName.size() >= 3) && (atomName.compare(0, 3, "OCT") == 0))) return true;
       return false;
     case 'H':
-      if ((atomName.compare("H") == 0) || (atomName.compare("HA1") == 0) || (atomName.compare("HN") == 0) || 
+      if ((atomName.compare("H") == 0) || (atomName.compare("HA1") == 0) || (atomName.compare("HN") == 0) ||
           ((atomName.size() >= 2) && ((atomName.compare(0, 2, "HT") == 0) || (atomName.compare(0, 2, "HY") == 0)))) return true;
       return false;
     default:
       return false;
   }
+}
+
+bool RotamerLibrary::isHydrogen(string atomName) {
+  if (atomName.length() == 0) return false;
+  if (atomName.compare(0, 1, "H") == 0) return true;
+  return false;
 }
 
 int RotamerLibrary::getBackboneBin(string aa, real phi, real psi, bool assumeDefault) {

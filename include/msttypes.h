@@ -27,6 +27,8 @@ class Structure;
 
 typedef double real;
 typedef Structure System;                // for interchangability with MSL
+typedef int residueID[2];
+typedef int atomID[3];
 
 class Structure {
   friend class Chain;
@@ -36,9 +38,10 @@ class Structure {
     Structure(string pdbFile, string options = "");
     Structure(Structure& S);
     ~Structure();
-    
+
     void readPDB(string pdbFile, string options = "");
     void writePDB(string pdbFile, string options = "");
+    void writePDB(fstream& ofs, string options = "");
     void reset();
 
     int chainSize() const { return chains.size(); }
@@ -52,6 +55,7 @@ class Structure {
     vector<Atom*> getAtoms();
     vector<Residue*> getResidues();
     void setName(string _name) { name = _name; }
+    void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout
 
     /* ----- functions that grow/shrink structure ----- */
     /* returns false if the chain name collides with existing chain names and no suitable single-letter
@@ -95,7 +99,7 @@ class Chain {
     Chain(Chain& C);
     Chain(string chainID, string segID);
     ~Chain();
-  
+
     int residueSize() { return residues.size(); }
     int positionSize() { return residueSize(); }  // for interchangability with MSL
     int atomSize() { return numAtoms; }
@@ -113,7 +117,7 @@ class Chain {
      * call getResidues() and construct your own data structure (e.g., a map<>) for fast lookups. */
     Residue* findResidue(string resname, int resnum);
     Residue* findResidue(string resname, int resnum, char icode);
-    
+
     void setID(string _cid) { cid = _cid; }
     void setSegID(string _sid) { sid = _sid; }
 
@@ -166,6 +170,8 @@ class Residue {
     void setName(const char* _name) { resname = (string) _name; }
     void setName(string _name) { resname = _name; }
     void setIcode(char _icode) { icode = _icode; }
+    void setNum(int num) { resnum = num; }
+    void copyAtoms(Residue& R);
 
     /* ----- functions that grow/shrink structure ----- */
     void appendAtom(Atom* A);
@@ -190,6 +196,7 @@ class Residue {
     Residue* iPlusDelta(int off);
     real getPhi(bool strict = true);
     real getPsi(bool strict = true);
+    real getOmega(bool strict = true);
 
     static const real badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
@@ -268,6 +275,12 @@ class Atom {
     real distance(Atom* another) { return distance(*another); }
     real distance2(Atom& another);
     real distance2(Atom* another) { return distance2(*another); }
+
+    friend ostream & operator<<(ostream &_os, Atom& _atom) {
+      _os << _atom.getName() << _atom.getAlt() << " " << _atom.index << " " << (_atom.isHetero() ? "HETERO" : "");
+      _os << _atom.x << " " << _atom.y << " " << _atom.z << " : " << _atom.occ << " " << _atom.B;
+      return _os;
+    }
 
   protected:
     void setParent(Residue* _parent) { parent = _parent; } // will not itself update residue/atom counts in parents
@@ -376,7 +389,7 @@ class AtomPointerVector : public vector<Atom*> {
 };
 
 class RMSDCalculator {
- public:  
+ public:
     RMSDCalculator() {}
     ~RMSDCalculator() {}
 
@@ -480,7 +493,7 @@ class MstUtils {
     static int toInt(string num, bool strict = true);
     static MST::real toReal(string num, bool strict = true);
     static MST::real mod(MST::real num, MST::real den);
-    static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); } 
+    static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string pathBase(string fn); // gets the base name of the path (removes the extension)
     static bool fileExists(const char *filename);
     static bool isDir(const char *filename);
