@@ -388,7 +388,10 @@ Chain::Chain(Chain& C) {
   for (int i = 0; i < C.residueSize(); i++) {
     residues.push_back(new Residue(C[i]));
     residues.back()->setParent(this);
+    residueIndexInChain[residues.back()] = i;
   }
+  cid = C.cid;
+  sid = C.sid;
 }
 
 Chain::Chain(string chainID, string segID) {
@@ -1520,6 +1523,11 @@ bool ProximitySearch::pointsWithin(CartesianPoint c, real dmin, real dmax, vecto
   return found;
 }
 
+vector<int> ProximitySearch::getPointsWithin(CartesianPoint c, real dmin, real dmax, bool byTag) {
+  vector<int> closeOnes;
+  pointsWithin(c, dmin, dmax, &closeOnes, byTag);
+  return closeOnes;
+}
 
 
 /* --------- MstUtils --------- */

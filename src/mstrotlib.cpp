@@ -149,14 +149,6 @@ real RotamerLibrary::rotamerProbability(string aa, int ri, real phi, real psi) {
   return prob[aa][bi][ri];
 }
 
-//vector<string> RotamerLibrary::availableAminoAcids() {
-//  vector<string> aas;
-//  for (map<string, vector<Residue*> >::iterator it = rotamers.begin(); it != rotamers.end(); ++it) {
-//    aas.push_back(it->first);
-//  }
-//  return aas;
-//}
-
 void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool strict) {
   double phi = res.getPhi();
   double psi = res.getPsi();

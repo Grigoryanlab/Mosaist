@@ -450,6 +450,7 @@ class ProximitySearch {
     static void calculateExtent(Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi);
 
     bool pointsWithin(CartesianPoint c, real dmin, real dmax, vector<int>* list = NULL, bool byTag = false);
+    vector<int> getPointsWithin(CartesianPoint c, real dmin, real dmax, bool byTag = false);
 
   protected:
     void setBinWidths();
