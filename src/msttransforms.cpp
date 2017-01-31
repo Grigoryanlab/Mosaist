@@ -12,8 +12,8 @@ Frame::Frame() {
 }
 
 Frame::Frame(CartesianPoint& _O, CartesianPoint& _X, CartesianPoint& _Y, CartesianPoint& _Z) {
-  MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3), 
-      "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)"); 
+  MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3),
+      "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)");
   real xn = _X.norm(); real yn = _Y.norm(); real zn = _Z.norm();
   O[0] = _O[0]; O[1] = _O[1]; O[2] = _O[2];
   X[0] = _X[0]/xn; X[1] = _X[1]/xn; X[2] = _X[2]/xn;
@@ -93,7 +93,7 @@ Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, Carte
   points[0] = &A;
   points[1] = &B;
   points[2] = &C;
-  points[2] = &D;
+  points[3] = &D;
   for (int i = 0; i < 4; i++) {
     CartesianPoint* P = points[i];
     for (int j = 0; j < 4; j++) {
@@ -331,8 +331,8 @@ Transform TransformFactory::rotateAroundLine(real p1, real p2, real p3, real q1,
   real sinThy = r1/sqrt(r1*r1 + r2*r2 + r3*r3);
   real cosThy = sqrt((r2*r2 + r3*r3)/(r1*r1 + r2*r2 + r3*r3));
 
-  return translate(p1, p2, p3) * rotateAroundX(-sinThx, cosThx) * rotateAroundY(sinThy, cosThy) * 
-         rotateAroundZ(sin(a * degreesToRadians), cos(a * degreesToRadians)) * 
+  return translate(p1, p2, p3) * rotateAroundX(-sinThx, cosThx) * rotateAroundY(sinThy, cosThy) *
+         rotateAroundZ(sin(a * degreesToRadians), cos(a * degreesToRadians)) *
          rotateAroundY(-sinThy, cosThy) * rotateAroundX(sinThx, cosThx) * translate(-p1, -p2, -p3);
 }
 
@@ -340,7 +340,7 @@ Transform TransformFactory::rotateAroundLine(CartesianPoint& p, CartesianPoint& 
   if ((p.size() != 3) || (q.size() != 3)) {
     MstUtils::error("Rotation axes of unexpected dimension " + MstUtils::toString(p.size()) + " and " + MstUtils::toString(q.size()), "TransformFactory::rotateAroundLine");
   }
-  return rotateAroundLine(p[0], p[1], p[2], q[0], q[1], q[2], a);  
+  return rotateAroundLine(p[0], p[1], p[2], q[0], q[1], q[2], a);
 }
 
 Transform TransformFactory::alignVectorWithXAxis(real u, real v, real w) {
