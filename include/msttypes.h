@@ -51,6 +51,7 @@ class Structure {
     Chain* getChainByID(string id) { return (chainsByID.find(id) != chainsByID.end()) ? chainsByID[id] : NULL; }
     Chain* getChainBySegID(string id) { return (chainsBySegID.find(id) != chainsBySegID.end()) ? chainsBySegID[id] : NULL; }
     Chain& getChain(int i) { return (*this)[i]; }
+    Residue& getResidue(int i);
     Chain& operator[](int i) const { return *(chains[i]); }
     vector<Atom*> getAtoms();
     vector<Residue*> getResidues();
@@ -196,7 +197,7 @@ class Residue {
     Residue* iPlusDelta(int off);
     real getPhi(bool strict = true);
     real getPsi(bool strict = true);
-    real getOmega(bool strict = true);
+    real getOmega(bool strict = true); // TODO: ???? CHECK THE MSL NOMENCLATURE ABOUT WHICH RESIDUE THE OMEGA BELONGS TO!
 
     static const real badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
@@ -266,7 +267,7 @@ class Atom {
      * the same index will return things back to the way they were originally. */
     void swapWithAlternative(int altInd);
 
-    void addAlternative(real _x, real _y, real _z, real _B, real _occ, char _alt);
+    void addAlternative(real _x, real _y, real _z, real _B, real _occ, char _alt = ' ');
 
     string pdbLine() { return pdbLine((this->parent == NULL) ? 1 : this->parent->getNum(), index); }
     string pdbLine(int resIndex, int atomIndex);

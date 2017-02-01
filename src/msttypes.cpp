@@ -303,6 +303,20 @@ Chain* Structure::appendChain(string cid, bool allowRename) {
   return newChain;
 }
 
+Residue& Structure::getResidue(int i) {
+  if ((i < 0) && (i >= residueSize()))
+    MstUtils::error("residue index " + MstUtils::toString(i) + " out of range for Structure", "Structure::getResidue(int)");
+  for (int ci = 0; ci < chainSize(); ci++) {
+    Chain& chain = getChain(ci);
+    if (i >= chain.residueSize()) {
+      i -= chain.residueSize();
+    } else {
+      return chain[i];
+    }
+  }
+  MstUtils::error("something strange happened; most likely, various counters are inconsistent in Structure object", "Structure::getResidue(int)");
+}
+
 vector<Atom*> Structure::getAtoms() {
   vector<Atom*> vec;
 
