@@ -148,7 +148,7 @@ class Residue {
 
   public:
     Residue();
-    Residue(Residue& R);
+    Residue(Residue& R, bool copyAlt = true);
     Residue(string _resname, int _resnum, char _icode = ' ');
     ~Residue();
 
@@ -172,7 +172,11 @@ class Residue {
     void setName(string _name) { resname = _name; }
     void setIcode(char _icode) { icode = _icode; }
     void setNum(int num) { resnum = num; }
-    void copyAtoms(Residue& R);
+    void copyAtoms(Residue& R, bool copyAlt = true);
+
+    /* for all atoms in this residue, overwrite the main coordinate set with the
+     * coordinate set from the alternative with the specified index. */
+    void makeAlternativeMain(int altInd);
 
     /* ----- functions that grow/shrink structure ----- */
     void appendAtom(Atom* A);
@@ -227,7 +231,7 @@ class Atom {
 
   public:
     Atom();
-    Atom(Atom& A);
+    Atom(Atom& A, bool copyAlt = true);
     Atom(int _index, string _name, real _x, real _y, real _z, real _B, real _occ, bool _het, char _alt = ' ', Residue* _parent = NULL);
     ~Atom();
 
@@ -244,7 +248,7 @@ class Atom {
     int getIndex() { return index; }
     char getAlt() { return alt; }
     bool isNamed(const char* _name) { return (strcmp(name, _name) == 0); }
-    bool isNamed(string& _name) { return isNamed(_name.c_str()); }
+    bool isNamed(string _name) { return isNamed(_name.c_str()); }
     int numAlternatives() { return (alternatives == NULL) ? 0 : alternatives->size(); }
     Residue* getParent() { return parent; }
     Residue* getResidue() { return parent; }
@@ -262,10 +266,15 @@ class Atom {
     void setB(real _B) { B = _B; }
     void seetHet(bool _het) { het = _het; }
     void setIndex(int _index) { index = _index; }
+
     /* make the alternative with the specified index the main one, making the current
      * main position the alternative with the specified index. Calling this twice with
      * the same index will return things back to the way they were originally. */
     void swapWithAlternative(int altInd);
+
+    /* overwrite the main coordinate set with the coordinate set from the alternative
+     * with the specified index. */
+    void makeAlternativeMain(int altInd);
 
     void addAlternative(real _x, real _y, real _z, real _B, real _occ, char _alt = ' ');
 
@@ -471,6 +480,44 @@ class ProximitySearch {
     vector<vector<vector<vector<int> > > > buckets;
     vector<CartesianPoint*> pointList;
     vector<int> pointTags;
+};
+
+template<class T>
+class DecoratedProximitySearch : public ProximitySearch {
+  public:
+    DecoratedProximitySearch(real _xlo, real _ylo, real _zlo, real _xhi, real _yhi, real _zhi, int _N = 20) :
+      ProximitySearch(_xlo, _ylo, _zlo, _xhi, _yhi, _zhi, _N) {}
+    DecoratedProximitySearch(AtomPointerVector& _atoms, int _N, vector<T>& _tags, real pad = 0) :
+      ProximitySearch(_atoms, _N, true, NULL, pad) {
+      tags = _tags;
+    }
+    DecoratedProximitySearch(AtomPointerVector& _atoms, int _N, real pad = 0) : ProximitySearch(_atoms, _N, false, NULL, pad) {}
+    DecoratedProximitySearch(AtomPointerVector& _atoms, real _characteristicDistance, vector<T>& _tags, real pad = 0) :
+      ProximitySearch(_atoms, _characteristicDistance, true, NULL, pad) {
+      tags = _tags;
+    }
+    DecoratedProximitySearch(AtomPointerVector& _atoms, real _characteristicDistance, real pad = 0) :
+      ProximitySearch(_atoms, _characteristicDistance, false, NULL, pad) { }
+
+    T getPointTag(int i) { return tags[this->ProximitySearch::getPointTag(i)]; }
+    void addPoint(CartesianPoint _p, T tag) {
+      this->ProximitySearch::addPoint(_p, tags.size());
+      tags.push_back(tag);
+    }
+
+    bool pointsWithin(CartesianPoint c, real dmin, real dmax) { return this->ProximitySearch::pointsWithin(c, dmin, dmax); }
+    vector<T> getPointsWithin(CartesianPoint c, real dmin, real dmax) {
+      vector<int> inds = this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
+      vector<T> ret(inds.size());
+      for (int i = 0; i < inds.size(); i++) ret[i] = tags[i];
+      return ret;
+    }
+    vector<int> getPointsWithinIndices(CartesianPoint c, real dmin, real dmax) {
+      return this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
+    }
+
+  private:
+    vector<T> tags;
 };
 
 }

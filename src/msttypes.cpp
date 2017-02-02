@@ -315,6 +315,7 @@ Residue& Structure::getResidue(int i) {
     }
   }
   MstUtils::error("something strange happened; most likely, various counters are inconsistent in Structure object", "Structure::getResidue(int)");
+  return *(new Residue()); // just to make the compiler happy and not throw a warning; this is never reached
 }
 
 vector<Atom*> Structure::getAtoms() {
@@ -509,10 +510,10 @@ Residue::Residue() {
   icode = ' ';
 }
 
-Residue::Residue(Residue& R) {
+Residue::Residue(Residue& R, bool copyAlt) {
   parent = R.parent;
   for (int i = 0; i < R.atomSize(); i++) {
-    atoms.push_back(new Atom(R[i]));
+    atoms.push_back(new Atom(R[i], copyAlt));
     atoms.back()->setParent(this);
   }
   resnum = R.resnum;
@@ -549,13 +550,19 @@ void Residue::deleteAtom(int i) {
   }
 }
 
-void Residue::copyAtoms(Residue& R) {
+void Residue::copyAtoms(Residue& R, bool copyAlt) {
   deleteAtoms();
   for (int i = 0; i < R.atomSize(); i++) {
-    atoms.push_back(new Atom(R[i]));
+    atoms.push_back(new Atom(R[i], copyAlt));
     atoms.back()->setParent(this);
   }
   if (parent != NULL) parent->incrementNumAtoms(R.atomSize());
+}
+
+void Residue::makeAlternativeMain(int altInd) {
+  for (int i = 0; i < atomSize(); i++) {
+    (*this)[i].makeAlternativeMain(altInd);
+  }
 }
 
 void Residue::deleteAtoms() {
@@ -625,7 +632,9 @@ Residue* Residue::previousResidue() {
 
 // C- N  CA  C
 real Residue::getPhi(bool strict) {
+cout << "working within " << MstUtils::toString(*this) << endl;
   Residue* res1 = previousResidue();
+cout << "previous " << MstUtils::toString(*res1) << endl;
   if (res1 == NULL) return badDihedral;
   Atom* A = res1->findAtom("C", false);
   Atom* B = findAtom("N", false);
@@ -696,7 +705,7 @@ Atom::Atom() {
   alternatives = NULL;
 }
 
-Atom::Atom(Atom& A) {
+Atom::Atom(Atom& A, bool copyAlt) {
   index = A.index;
   name = NULL;
   setName(A.name);
@@ -708,7 +717,7 @@ Atom::Atom(Atom& A) {
   het = A.het;
   alt = A.alt;
   parent = A.parent;
-  if (A.alternatives != NULL) {
+  if (copyAlt && (A.alternatives != NULL)) {
     alternatives = new vector<altInfo>(A.alternatives->size());
     for (int i = 0; i < A.alternatives->size(); i++) {
       (*alternatives)[i] = (*(A.alternatives))[i];
@@ -770,6 +779,12 @@ void Atom::swapWithAlternative(int altInd) {
   altInfo temp = targ;
   targ.x = x; targ.y = y; targ.z = z; targ.occ = occ; targ.B = B; targ.alt = alt;
   x = temp.x; y = temp.y; z = temp.z; occ = temp.occ; B = temp.B; alt = temp.alt;
+}
+
+void Atom::makeAlternativeMain(int altInd) {
+  if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("specified alternative index out of bounds", "Atom::makeAlternativeMain");
+  altInfo& targ = (*alternatives)[altInd];
+  x = targ.x; y = targ.y; z = targ.z; occ = targ.occ; B = targ.B; alt = targ.alt;
 }
 
 void Atom::addAlternative(real _x, real _y, real _z, real _B, real _occ, char _alt) {
