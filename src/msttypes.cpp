@@ -540,6 +540,10 @@ void Residue::appendAtom(Atom* A) {
   }
 }
 
+void Residue::appendAtoms(vector<Atom*>& A) {
+  for (int i = 0; i < A.size(); i++) appendAtom(A[i]);
+}
+
 void Residue::deleteAtom(int i) {
   if ((i < 0) || (i >= atoms.size())) {
     MstUtils::error("index out of range of atom vector in residue", "Residue::deleteAtom");
@@ -632,9 +636,7 @@ Residue* Residue::previousResidue() {
 
 // C- N  CA  C
 real Residue::getPhi(bool strict) {
-cout << "working within " << MstUtils::toString(*this) << endl;
   Residue* res1 = previousResidue();
-cout << "previous " << MstUtils::toString(*res1) << endl;
   if (res1 == NULL) return badDihedral;
   Atom* A = res1->findAtom("C", false);
   Atom* B = findAtom("N", false);
@@ -844,6 +846,15 @@ CartesianPoint AtomPointerVector::getGeometricCenter() {
   }
   C /= this->size();
   return C;
+}
+
+real AtomPointerVector::radiusOfGyration() {
+  CartesianPoint center = getGeometricCenter();
+  real s = 0;
+  for (int i = 0; i < size(); i++) {
+      s += CartesianPoint((*this)[i]).distance2(center);
+  }
+  return sqrt(s / size());
 }
 
 /* --------- CartesianPoint --------- */

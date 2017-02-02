@@ -56,17 +56,27 @@ class aaRotamers {
     string aaName() { return rotamers->getName(); }
     void addRotamer(Residue& res, int _rID, double _rP) {
       // the main coordinate set is some "current" rotamer, so all rotamers are kept in alternative
-      if (rotamers->atomSize() == 0) rotamers->copyAtoms(res);
-      int k = 0;
-      for (int i = 0; i < res.atomSize(); i++) {
-        Atom& a = res[i];
-        if (RotamerLibrary::isHydrogen(a)) continue;
-        if ((k >= rotamers->atomSize()) || (!(*rotamers)[k].isNamed(a.getName())))
-          MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
-        (*rotamers)[k].addAlternative(a.getX(), a.getY(), a.getZ(), 0.0, 1.0);
-        k++;
+      // thus, the first time, effectively copy the coordinates twice
+      while (1) {
+        bool isempty = (rotamers->atomSize() == 0);
+        int k = 0;
+        for (int i = 0; i < res.atomSize(); i++) {
+          Atom& a = res[i];
+          if (RotamerLibrary::isHydrogen(a)) continue;
+cout << a << endl << (*rotamers)[k] << endl << i << endl << k << endl << endl;
+          if (isempty) {
+            rotamers->appendAtom(new Atom(a)); // the first time into the main set (new atoms)
+          } else {
+            if ((k >= rotamers->atomSize()) || (!(*rotamers)[k].isNamed(a.getName())))
+              MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
+            (*rotamers)[k].addAlternative(a.getX(), a.getY(), a.getZ(), 0.0, 1.0); // the into alternatives
+            k++;
+          }
+        }
+        if (k != rotamers->atomSize()) MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
+        if (isempty) isempty = false;
+        else break;
       }
-      if (k != rotamers->atomSize()) MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
       rID.push_back(_rID);
       rP.push_back(_rP);
     }

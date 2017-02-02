@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
     int ri = MstUtils::randInt(R.numberOfRotamers(aa, res.getPhi(), res.getPsi()));
     real prob = R.rotamerProbability(aa, ri, res.getPhi(), res.getPsi());
     cout << "At position " << res << " placing rotamer " << ri << " of " << aa << ", with probability " << prob << endl;
-    R.placeRotamer(res, aa, ri, false);
+    R.placeRotamer(res, aa, ri);
   }
   S.writePDB(outBase + ".pdb", "renumber");
 
@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
         string aa = aas[k];
         int nr = R.numberOfRotamers(aa, res.getPhi(), res.getPsi());
         for (int r = 0; r < nr; r++) {
-          R.placeRotamer(res, aa, r, false);
+          R.placeRotamer(res, aa, r);
         }
       }
     }

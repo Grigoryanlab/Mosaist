@@ -25,8 +25,13 @@ class RotamerLibrary {
     /* places the specified rotamer into the given Residue. NOTE: the original residue
      * is modified, with some of its atoms potentially destroyed (as needed), so if you
      * want to be able to go back to the wild type, first make a copy of the residue
-     * before placing the rotamer. */
-    void placeRotamer(Residue& res, string aa, int rotIndex, bool strict = true);
+     * before placing the rotamer. If a destination residue is specified, rather than
+     * modifying the target residue in place, it modifies the destination residue.
+     * Expects that the destination residue will either be empty (i.e., no atoms) OR
+     * will be filled with precisely the correct atoms for the amino acid. The latter
+     * corresponds to the case when the destination residue was already previously built
+     * by this function, with perhaps a different rotamer; this case is for efficiency. */
+    void placeRotamer(Residue& res, string aa, int rotIndex, Residue* dest_ptr = NULL, bool strict = false);
 
     /* decides whether the atom is a backbone atom basded on the name */
     static bool isBackboneAtom(string atomName);
@@ -36,14 +41,18 @@ class RotamerLibrary {
     static bool isHydrogen(Atom& atom) { return isHydrogen(atom.getName()); }
     static bool isHydrogen(Atom* atom) { return isHydrogen(atom->getName()); }
 
-    int numberOfRotamers(string aa, real phi = Residue::badDihedral, real psi = Residue::badDihedral);
-    real rotamerProbability(string aa, int ri, real phi = Residue::badDihedral, real psi = Residue::badDihedral);
+    int numberOfRotamers(string aa, real phi = Residue::badDihedral, real psi = Residue::badDihedral, bool strict = false);
+    real rotamerProbability(string aa, int ri, real phi = Residue::badDihedral, real psi = Residue::badDihedral, bool strict = false);
     vector<string> availableAminoAcids() { return keys(rotamers); }
 
   protected:
     /* given an array of angles, stored in ascending order (i.e., in the counter-clockwise
      * direction), find the array index with the angle closest to the given angle */
     int findClosestAngle(vector<real>& array, real value);
+
+    /* make newAtoms be a vector of atoms corresponding to the given rotamer, upon
+     * transformation according to the given Transform. */
+    void transformRotamerAtoms(Transform& T, Residue& rots, int rotIndex, vector<Atom*>& newAtoms);
 
     // computes the difference between two angles, choosing the closest direction
     // (i.e., either clockwise, indicated by a negative difference or counter-clockwise,

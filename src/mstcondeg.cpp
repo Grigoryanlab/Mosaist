@@ -55,7 +55,6 @@ void ConFind::init(Structure& S) {
 }
 
 bool ConFind::cache(Residue* res) {
-cout << "working on " << MstUtils::toString(*res) << endl;
   if (rotamers.find(res) != rotamers.end()) return true;
   bool doNotCountCB = true; // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
 
@@ -64,9 +63,7 @@ cout << "working on " << MstUtils::toString(*res) << endl;
     MstUtils::warn("cannot build rotamers at position " + MstUtils::toString(*res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
     return false;
   }
-cout << "trying to get phi/psi for " << MstUtils::toString(*res) << endl;
   real phi = res->getPhi(); real psi = res->getPsi();
-cout << "phi = " << phi << ", psi = " << psi << endl;
 
   // load rotamers of each amino acid
   int numRemRotsInPosition = 0; int totNumRotsInPosition = 0;
@@ -76,20 +73,19 @@ cout << "phi = " << phi << ", psi = " << psi << endl;
     if (aaProp.find(aa) == aaProp.end()) MstUtils::error("no propensity defined for amino acid " + aa);
     double aaP = aaProp[aa];
     int nr = rotLib->numberOfRotamers(aa, phi, psi);
-    Residue resCopy;
-    resCopy.copyAtoms(*res); // make a copy of the original residue for the purposes of placing rotamers, so as not to destroy the structure
+    Residue rot;
     rotamers[res].push_back(new aaRotamers(aa, res));
     aaRotamers& aaRots = *(rotamers[res].back());
     for (int ri = 0; ri < nr; ri++) {
-      rotLib->placeRotamer(resCopy, aa, ri);
+      rotLib->placeRotamer(*res, aa, ri, &rot);
       double rotP = rotLib->rotamerProbability(aa, ri, phi, psi);
 
       // see if the rotamer needs to be pruned (clash with the backbone).
       // also measure contribution to the free volume
       bool prune = false;
       vector<int> closeOnes;
-      for (int k = 0; k < resCopy.atomSize(); k++) {
-        Atom& a = resCopy[k];
+      for (int k = 0; k < rot.atomSize(); k++) {
+        Atom& a = rot[k];
         if (RotamerLibrary::isBackboneAtom(a)) continue;
         // free volume contributions
         closeOnes.clear();
@@ -104,7 +100,7 @@ cout << "phi = " << phi << ", psi = " << psi << endl;
         freeVolumeDen += aaP*rotP;
 
         // shuld the rotamer be pruned?
-        if (doNotCountCB && !resCopy.isNamed("ALA") && a.isNamed("CB")) continue;
+        if (doNotCountCB && !rot.isNamed("ALA") && a.isNamed("CB")) continue;
         closeOnes.clear();
         bbNN->pointsWithin(a.getCoor(), 0.0, clashDist, &closeOnes);
         for (int ci = 0; ci < closeOnes.size(); ci++) {
@@ -112,7 +108,7 @@ cout << "phi = " << phi << ", psi = " << psi << endl;
           if (backbone[closeOnes[ci]]->getResidue() != res) {
             prune = true;
             // clashes with ALA have a special meaning (permanent "unavoidable" contacts; need to find all of them, though unlikely to have more than one)
-            if (resCopy.isNamed("ALA")) permanentContacts[res].insert(closeOnes[ci]);
+            if (rot.isNamed("ALA")) permanentContacts[res].insert(closeOnes[ci]);
             else break;
           }
         }
@@ -121,12 +117,12 @@ cout << "phi = " << phi << ", psi = " << psi << endl;
       if (prune) continue;
 
       // if not pruned, cache info about it
-      aaRots.addRotamer(resCopy, ri, rotP);
-      for (int ai = 0; ai < resCopy.atomSize(); ai++) {
-        if (!RotamerLibrary::isHydrogen(resCopy[ai])) {
-          Atom& a = resCopy[ai];
+      aaRots.addRotamer(rot, ri, rotP);
+      for (int ai = 0; ai < rot.atomSize(); ai++) {
+        if (!RotamerLibrary::isHydrogen(rot[ai])) {
+          Atom& a = rot[ai];
           if (RotamerLibrary::isBackboneAtom(a)) continue;
-          if (doNotCountCB && a.isNamed("CB") && !resCopy.isNamed("ALA")) continue;
+          if (doNotCountCB && a.isNamed("CB") && !rot.isNamed("ALA")) continue;
           rotamerAtomInfo rotAtom(&aaRots, aaRots.numberOfRotamers(), ai);
           rotamerHeavySC->addPoint(a, rotAtom);
         }
@@ -143,7 +139,6 @@ cout << "phi = " << phi << ", psi = " << psi << endl;
 }
 
 bool ConFind::cache(vector<Residue*>& residues) {
-cout << "and then here" << endl;
   bool ret = true;
   for (int i = 0; i < residues.size(); i++) {
     ret = ret && cache(residues[i]);
@@ -152,7 +147,6 @@ cout << "and then here" << endl;
 }
 
 bool ConFind::cache(Structure& S) {
-cout << "and here" << endl;
   vector<Residue*> residues = S.getResidues();
   return cache(residues);
 }

@@ -84,7 +84,7 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     binPsiCenters[aa] = keys(uniquePsi, true);
     vector<int> binIndex(nb);
     for (int i = 0; i < nb; i++) {
-      binIndex[i] = getBackboneBin(aa, bins[i][0], bins[i][1]);
+      binIndex[i] = getBackboneBin(aa, bins[i][0], bins[i][1], false);
       binFreq[aa][binIndex[i]] = bins[i][2];
     }
 
@@ -138,18 +138,18 @@ real RotamerLibrary::angleToStandardRange(real angle) {
   return MstUtils::mod(angle + 180, 360.0) - 180;
 }
 
-int RotamerLibrary::numberOfRotamers(string aa, real phi, real psi) {
-  int bi = getBackboneBin(aa, phi, psi);
+int RotamerLibrary::numberOfRotamers(string aa, real phi, real psi, bool strict) {
+  int bi = getBackboneBin(aa, phi, psi, !strict);
   if (rotamers[aa][bi]->atomSize() == 0) return 1; // for GLY
   return rotamers[aa][bi]->getAtom(0).numAlternatives() + 1;
 }
 
-real RotamerLibrary::rotamerProbability(string aa, int ri, real phi, real psi) {
-  int bi = getBackboneBin(aa, phi, psi);
+real RotamerLibrary::rotamerProbability(string aa, int ri, real phi, real psi, bool strict) {
+  int bi = getBackboneBin(aa, phi, psi, !strict);
   return prob[aa][bi][ri];
 }
 
-void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool strict) {
+void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, Residue* dest_ptr, bool strict) {
   double phi = res.getPhi();
   double psi = res.getPsi();
   int binInd = getBackboneBin(aa, phi, psi, !strict);
@@ -173,8 +173,45 @@ void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool st
   Frame L;                            // Frame class defaults to the laboratory frame
   Transform T = TransformFactory::switchFrames(R, L);
 
-  // fish out the right rotamer and copy it over to the residue, destroying previous atoms
-  vector<Atom*> newAtoms(rots.atomSize(), NULL);
+  // fish out the right rotamer and transform it onto the residue
+  vector<Atom*> newAtoms; transformRotamerAtoms(T, rots, rotIndex, newAtoms);
+  if (dest_ptr == NULL) {
+    vector<int> oldAtoms; // atoms to be deleted (mostly side-chain atoms of the previous residue)
+    for (int i = 0; i < res.atomSize(); i++) {
+      Atom& a = res[i];
+      if (!isBackboneAtom(a.getName()) || ((aa.compare("PRO") == 0) && a.isNamed("H"))) {
+        oldAtoms.push_back(i);
+      }
+    }
+
+    // copy rotamer atoms over to the residue, destroying previous atoms
+    res.replaceAtoms(newAtoms, &oldAtoms);
+    res.setName(aa);
+  } else {
+    Residue& dest = *dest_ptr;
+    // this means a previous residue has been specified. It should be either empty
+    // or have been previously filled by the same function.
+    if (dest.atomSize() == 0) {
+      dest.setName(aa);
+      dest.appendAtoms(newAtoms); // first the side-chain
+      for (int i = 0; i < res.atomSize(); i++) {
+        Atom& a = res[i];
+        if (!isBackboneAtom(a.getName()) || ((aa.compare("PRO") == 0) && a.isNamed("H"))) {
+          dest.appendAtom(new Atom(a));
+        }
+      }
+    } else {
+      if (!dest.isNamed(aa)) MstUtils::error("specified destination residue is neither empty nor does it contain a rotamer of the same amino acid", "RotamerLibrary::placeRotamer");
+      for (int i = 0; i < newAtoms.size(); i++) {
+        if (!dest[i].isNamed(newAtoms[i]->getNameC())) MstUtils::error("specified destination residue is neither empty nor does it contain a rotamer of the same amino acid", "RotamerLibrary::placeRotamer");
+        dest[i].setCoor(newAtoms[i]->getCoor());
+      }
+    }
+  }
+}
+
+void RotamerLibrary::transformRotamerAtoms(Transform& T, Residue& rots, int rotIndex, vector<Atom*>& newAtoms) {
+  newAtoms.resize(rots.atomSize(), NULL);
   for (int i = 0; i < rots.atomSize(); i++) {
     Atom& a = rots[i];
     if (a.numAlternatives() < rotIndex) {
@@ -186,15 +223,6 @@ void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, bool st
     newAtoms[i] = newAtom;
     if (rotIndex > 0) a.swapWithAlternative(rotIndex-1);
   }
-  vector<int> oldAtoms;
-  for (int i = 0; i < res.atomSize(); i++) {
-    Atom& a = res[i];
-    if (!isBackboneAtom(a.getName()) || ((aa.compare("PRO") == 0) && a.isNamed("H"))) {
-      oldAtoms.push_back(i);
-    }
-  }
-  res.replaceAtoms(newAtoms, &oldAtoms);
-  res.setName(aa);
 }
 
 bool RotamerLibrary::isBackboneAtom(string atomName) {

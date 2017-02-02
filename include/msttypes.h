@@ -180,6 +180,7 @@ class Residue {
 
     /* ----- functions that grow/shrink structure ----- */
     void appendAtom(Atom* A);
+    void appendAtoms(vector<Atom*>& A);
     void deleteAtoms();
     void deleteAtom(int ind);
 
@@ -389,6 +390,7 @@ class AtomPointerVector : public vector<Atom*> {
     AtomPointerVector(const vector<Atom*>& other) : vector<Atom*>(other) { }
 
     CartesianPoint getGeometricCenter();
+    real radiusOfGyration();
 
     friend ostream & operator<<(ostream &_os, AtomPointerVector& _atoms) {
       for (int i = 0; i < _atoms.size(); i++) {
