@@ -565,6 +565,7 @@ void Residue::copyAtoms(Residue& R, bool copyAlt) {
 
 void Residue::makeAlternativeMain(int altInd) {
   for (int i = 0; i < atomSize(); i++) {
+cout << "making alternative " << altInd << " the main; " << (*this)[i].numAlternatives() << " alternatives; " << (*this)[i].getName() << "; " << getName() << endl;
     (*this)[i].makeAlternativeMain(altInd);
   }
 }
@@ -666,14 +667,14 @@ real Residue::getPsi(bool strict) {
   return CartesianGeometry::dihedral(*A, *B, *C, *D);
 }
 
-// CA C  N+  CA+
+// CA-  C-  N  CA
 real Residue::getOmega(bool strict) {
-  Residue* res1 = nextResidue();
+  Residue* res1 = previousResidue();
   if (res1 == NULL) return badDihedral;
-  Atom* A = findAtom("CA", false);
-  Atom* B = findAtom("C", false);
-  Atom* C = res1->findAtom("N", false);
-  Atom* D = res1->findAtom("CA", false);
+  Atom* A = res1->findAtom("CA", false);
+  Atom* B = res1->findAtom("C", false);
+  Atom* C = findAtom("N", false);
+  Atom* D = findAtom("CA", false);
   if ((A == NULL) || (B == NULL) || (C == NULL) || (D == NULL)) {
     if (strict) MstUtils::error("not all backbone atoms present to compute OMEGA for residue " + MstUtils::toString(*this), "Residue::getOmega");
     return badDihedral;
@@ -763,6 +764,14 @@ real Atom::operator[](int i) const {
   return 0.0; // just to silence the warning from some compilres; in reality, this is never reached
 }
 
+vector<real> Atom::getAltCoor(int altInd) {
+  if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
+  altInfo& targ = (*alternatives)[altInd];
+  vector<real> coor;
+  coor.push_back(targ.x); coor.push_back(targ.y); coor.push_back(targ.z);
+  return coor;
+}
+
 void Atom::setName(const char* _name) {
   if (name != NULL) delete[] name;
   name = new char[strlen(_name)+1];
@@ -776,7 +785,7 @@ void Atom::setName(string _name) {
 }
 
 void Atom::swapWithAlternative(int altInd) {
-  if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("specified alternative index out of bounds", "Atom::swapWithAlternative");
+  if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
   altInfo& targ = (*alternatives)[altInd];
   altInfo temp = targ;
   targ.x = x; targ.y = y; targ.z = z; targ.occ = occ; targ.B = B; targ.alt = alt;
@@ -784,7 +793,7 @@ void Atom::swapWithAlternative(int altInd) {
 }
 
 void Atom::makeAlternativeMain(int altInd) {
-  if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("specified alternative index out of bounds", "Atom::makeAlternativeMain");
+  if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
   altInfo& targ = (*alternatives)[altInd];
   x = targ.x; y = targ.y; z = targ.z; occ = targ.occ; B = targ.B; alt = targ.alt;
 }
@@ -1481,6 +1490,13 @@ void ProximitySearch::addPoint(CartesianPoint _p, int tag) {
   buckets[i][j][k].push_back(pointList.size());
   pointList.push_back(p);
   pointTags.push_back(tag);
+}
+
+void ProximitySearch::addAtoms(AtomPointerVector& apv, vector<int>* tags) {
+  if ((tags != NULL) && (apv.size() != tags->size())) MstUtils::error("different number of atoms and tags specified!", "ProximitySearch::addAtoms");
+  for (int i = 0; i < apv.size(); i++) {
+    addPoint(apv[i], (tags == NULL) ? i : (*tags)[i]);
+  }
 }
 
 bool ProximitySearch::isPointWithinGrid(CartesianPoint _p) {

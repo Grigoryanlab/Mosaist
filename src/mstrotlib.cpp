@@ -196,7 +196,7 @@ void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, Residue
       dest.appendAtoms(newAtoms); // first the side-chain
       for (int i = 0; i < res.atomSize(); i++) {
         Atom& a = res[i];
-        if (!isBackboneAtom(a.getName()) || ((aa.compare("PRO") == 0) && a.isNamed("H"))) {
+        if (isBackboneAtom(a.getName()) && !((aa.compare("PRO") == 0) && a.isNamed("H"))) {
           dest.appendAtom(new Atom(a));
         }
       }
@@ -205,6 +205,7 @@ void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, Residue
       for (int i = 0; i < newAtoms.size(); i++) {
         if (!dest[i].isNamed(newAtoms[i]->getNameC())) MstUtils::error("specified destination residue is neither empty nor does it contain a rotamer of the same amino acid", "RotamerLibrary::placeRotamer");
         dest[i].setCoor(newAtoms[i]->getCoor());
+        delete newAtoms[i];
       }
     }
   }
@@ -218,7 +219,7 @@ void RotamerLibrary::transformRotamerAtoms(Transform& T, Residue& rots, int rotI
       MstUtils::error("rotamer library contains " + MstUtils::toString(a.numAlternatives() + 1) + " rotamers for amino-acid, but rotamer number " + MstUtils::toString(rotIndex+1) + "was requested", "RotamerLibrary::placeRotamer");
     }
     if (rotIndex > 0) a.swapWithAlternative(rotIndex-1);
-    Atom* newAtom = new Atom(a);
+    Atom* newAtom = new Atom(a, false);
     T.apply(newAtom);
     newAtoms[i] = newAtom;
     if (rotIndex > 0) a.swapWithAlternative(rotIndex-1);

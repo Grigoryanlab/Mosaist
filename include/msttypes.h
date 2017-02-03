@@ -202,7 +202,7 @@ class Residue {
     Residue* iPlusDelta(int off);
     real getPhi(bool strict = true);
     real getPsi(bool strict = true);
-    real getOmega(bool strict = true); // TODO: ???? CHECK THE MSL NOMENCLATURE ABOUT WHICH RESIDUE THE OMEGA BELONGS TO!
+    real getOmega(bool strict = true);
 
     static const real badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
@@ -241,6 +241,7 @@ class Atom {
     real getZ() const{ return z; }
     real operator[](int i) const;
     vector<real> getCoor() { vector<real> coor; coor.push_back(x); coor.push_back(y); coor.push_back(z); return coor; }
+    vector<real> getAltCoor(int altInd);
     real getB() { return B; }
     real getOcc() { return occ; }
     string getName() { return string(name); }
@@ -450,6 +451,7 @@ class ProximitySearch {
 
     void reinitBuckets(int _N);
     void addPoint(CartesianPoint _p, int tag);
+    void addAtoms(AtomPointerVector& apv, vector<int>* tags = NULL);
     bool isPointWithinGrid(CartesianPoint _p);
     void pointBucket(CartesianPoint* p, int* i, int* j, int* k) { pointBucket(p->getX(), p->getY(), p->getZ(), i, j, k); }
     void pointBucket(CartesianPoint p, int* i, int* j, int* k) { pointBucket(p.getX(), p.getY(), p.getZ(), i, j, k); }
@@ -564,6 +566,8 @@ class MstUtils {
     static vector<int> sortIndices(vector<T>& vec, bool descending = false);
     template <class T1, class T2>
     static vector<T1> keys(map<T1, T2>& _map);
+    template <class T>
+    static string vecToString(vector<T>& vec, string del = " ");
 };
 
 template <class T>
@@ -593,6 +597,16 @@ vector<T1> MstUtils::keys(map<T1, T2>& _map) {
     K[k] = it->first;
   }
   return K;
+}
+
+template <class T>
+string MstUtils::vecToString(vector<T>& vec, string del) {
+  string str;
+  for (int i = 0; i < vec.size(); i++) {
+    str += MstUtils::toString(vec[i]);
+    if (i != vec.size() - 1) str += del;
+  }
+  return str;
 }
 
 #endif

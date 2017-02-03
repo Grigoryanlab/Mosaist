@@ -165,7 +165,7 @@ contactList ConFind::getContacts(Residue* res, real cdcut) {
       real pi = aaRots.rotProb(ri);
       map<Residue*, map<int, bool> > conRots; // collection of rotamers at other positions that this rotamer contacts
       for (int ai = 0; ai < aaRots.atomSize(); ai++) {
-        vector<rotamerAtomInfo> conts = rotamerHeavySC->getPointsWithin(aaRots.rotamerAtom(ri, ai), 0, contDist);
+        vector<rotamerAtomInfo> conts = rotamerHeavySC->getPointsWithin(aaRots.rotamerAtomCoor(ri, ai), 0, contDist);
         for (int ci = 0; ci < conts.size(); ci++) {
           Residue* cres = conts[ci].position();
           if (cres == res) continue; // clashes with rotamers at the same position do not count

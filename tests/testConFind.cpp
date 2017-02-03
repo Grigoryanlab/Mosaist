@@ -275,7 +275,6 @@ int main(int argc, char *argv[]) {
     // } else {
     //   residues = S.getResidues();
     // }
-cout << "got here" << endl;
     C.cache(S);
 
     // --- compute contact degrees

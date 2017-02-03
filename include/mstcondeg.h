@@ -49,9 +49,8 @@ class aaRotamers {
       Residue ret(*rotamers, false);
       return ret;
     }
-    Atom& rotamerAtom(int ri, int ai) {
-      rotamers->makeAlternativeMain(ri);
-      return (*rotamers)[ai];
+    CartesianPoint rotamerAtomCoor(int ri, int ai) {
+      return (*rotamers)[ai].getAltCoor(ri);
     }
     string aaName() { return rotamers->getName(); }
     void addRotamer(Residue& res, int _rID, double _rP) {
@@ -63,20 +62,23 @@ class aaRotamers {
         for (int i = 0; i < res.atomSize(); i++) {
           Atom& a = res[i];
           if (RotamerLibrary::isHydrogen(a)) continue;
-cout << a << endl << (*rotamers)[k] << endl << i << endl << k << endl << endl;
           if (isempty) {
-            rotamers->appendAtom(new Atom(a)); // the first time into the main set (new atoms)
+            rotamers->appendAtom(new Atom(a, false)); // the first time into the main set (new atoms)
           } else {
             if ((k >= rotamers->atomSize()) || (!(*rotamers)[k].isNamed(a.getName())))
               MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
+//cout << "adding alternatives to " << a << " (" << (*rotamers)[k].numAlternatives() << ")" << endl;
             (*rotamers)[k].addAlternative(a.getX(), a.getY(), a.getZ(), 0.0, 1.0); // the into alternatives
             k++;
           }
         }
-        if (k != rotamers->atomSize()) MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
-        if (isempty) isempty = false;
-        else break;
+        if (isempty) { isempty = false; }
+        else {
+          if (k != rotamers->atomSize()) MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
+          break;
+        }
       }
+//cout << "--------------------------" << endl;
       rID.push_back(_rID);
       rP.push_back(_rP);
     }

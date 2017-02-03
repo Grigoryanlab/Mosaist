@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
 
   // place some rotamers
   printf("placing a bunch of rotamers randomly...\n");
-  for (int i = 0; i < 20; i++) {
+  for (int i = 0; i < 100; i++) {
     Chain& chain = S[MstUtils::randInt(S.chainSize())];
     Residue& res = chain[MstUtils::randInt(chain.residueSize())];
     string aa = aas[MstUtils::randInt(aas.size())];
