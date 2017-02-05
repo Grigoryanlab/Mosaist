@@ -153,6 +153,8 @@ bool ConFind::cache(Structure& S) {
 
 contactList ConFind::getContacts(Residue* res, real cdcut) {
   vector<Residue*> neighborhood = getNeighbors(res);
+cout << "found " << neighborhood.size() << " neighbors of " << *res << ":" << endl;
+for (int i = 0; i < neighborhood.size(); i++) cout << *(neighborhood[i]) << endl;
   cache(neighborhood);
   map<Residue*, real> conDegNum;
 

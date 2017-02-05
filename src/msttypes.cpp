@@ -971,7 +971,7 @@ real CartesianPoint::distance(CartesianPoint& another) {
   for (int i = 0; i < this->size(); i++) {
     d += ((*this)[i] - another[i])*((*this)[i] - another[i]);
   }
-  return d;
+  return sqrt(d);
 }
 
 real CartesianPoint::distance2(CartesianPoint& another) {
@@ -980,7 +980,7 @@ real CartesianPoint::distance2(CartesianPoint& another) {
   for (int i = 0; i < this->size(); i++) {
     d += ((*this)[i] - another[i])*((*this)[i] - another[i]);
   }
-  return sqrt(d);
+  return d;
 }
 
 /* --------- CartesianGeometry --------- */
