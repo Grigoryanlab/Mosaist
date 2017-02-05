@@ -17,6 +17,7 @@ void ConFind::setParams() {
   dcut = 25.0;
   clashDist = 2.0;
   contDist = 3.0;
+  doNotCountCB = true;
   aaNames = {"ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "HIS", "ILE", "LEU",
              "LYS", "MET", "PHE", "SER", "THR", "TRP", "TYR", "VAL", "ALA"}; // all but GLY and PRO
   aaProp["ALA"] = 7.73; aaProp["CYS"] = 1.84; aaProp["ASP"] = 5.82; aaProp["GLU"] = 6.61; aaProp["PHE"] = 4.05;
@@ -54,9 +55,8 @@ void ConFind::init(Structure& S) {
   rotamerHeavySC = new DecoratedProximitySearch<rotamerAtomInfo>(atoms, contDist/2, 50.0);
 }
 
-bool ConFind::cache(Residue* res) {
+bool ConFind::cache(Residue* res, fstream* rotOut) {
   if (rotamers.find(res) != rotamers.end()) return true;
-  bool doNotCountCB = true; // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
@@ -100,7 +100,8 @@ bool ConFind::cache(Residue* res) {
         freeVolumeDen += aaP*rotP;
 
         // shuld the rotamer be pruned?
-        if (doNotCountCB && !rot.isNamed("ALA") && a.isNamed("CB")) continue;
+        if (!countsAsSidechain(a)) continue;
+//        if (doNotCountCB && !rot.isNamed("ALA") && a.isNamed("CB")) continue;
         closeOnes.clear();
         bbNN->pointsWithin(a.getCoor(), 0.0, clashDist, &closeOnes);
         for (int ci = 0; ci < closeOnes.size(); ci++) {
@@ -115,17 +116,15 @@ bool ConFind::cache(Residue* res) {
         if (prune) break;
       }
       if (prune) continue;
+      if (rotOut != NULL) { Structure S(rot); S.writePDB(*rotOut); }
 
       // if not pruned, cache info about it
       aaRots.addRotamer(rot, ri, rotP);
-      for (int ai = 0; ai < rot.atomSize(); ai++) {
-        if (!RotamerLibrary::isHydrogen(rot[ai])) {
-          Atom& a = rot[ai];
-          if (RotamerLibrary::isBackboneAtom(a)) continue;
-          if (doNotCountCB && a.isNamed("CB") && !rot.isNamed("ALA")) continue;
-          rotamerAtomInfo rotAtom(&aaRots, aaRots.numberOfRotamers(), ai);
-          rotamerHeavySC->addPoint(a, rotAtom);
-        }
+      int intRi = aaRots.numberOfRotamers() - 1; // index among surviving rotamers
+      for (int ai = 0; ai < aaRots.atomSize(); ai++) {
+        if (!countsAsSidechain(aaRots[ai])) continue;
+        rotamerAtomInfo rotAtom(&aaRots, intRi, ai);
+        rotamerHeavySC->addPoint(aaRots[ai].getAltCoor(intRi), rotAtom);
       }
       numRemRotsInPosition++;
     }
@@ -138,25 +137,29 @@ bool ConFind::cache(Residue* res) {
   return true;
 }
 
-bool ConFind::cache(vector<Residue*>& residues) {
+bool ConFind::countsAsSidechain(Atom& a) {
+  if (RotamerLibrary::isHydrogen(a) || RotamerLibrary::isBackboneAtom(a)) return false;
+  if (doNotCountCB && a.isNamed("CB") && !(a.getResidue()->isNamed("ALA"))) return false;
+  return true;
+}
+bool ConFind::cache(vector<Residue*>& residues, fstream* rotOut) {
   bool ret = true;
   for (int i = 0; i < residues.size(); i++) {
-    ret = ret && cache(residues[i]);
+    ret = ret && cache(residues[i], rotOut);
   }
   return ret;
 }
 
-bool ConFind::cache(Structure& S) {
+bool ConFind::cache(Structure& S, fstream* rotOut) {
   vector<Residue*> residues = S.getResidues();
-  return cache(residues);
+  return cache(residues, rotOut);
 }
 
 contactList ConFind::getContacts(Residue* res, real cdcut) {
   vector<Residue*> neighborhood = getNeighbors(res);
-cout << "found " << neighborhood.size() << " neighbors of " << *res << ":" << endl;
-for (int i = 0; i < neighborhood.size(); i++) cout << *(neighborhood[i]) << endl;
   cache(neighborhood);
   map<Residue*, real> conDegNum;
+  Residue* cres;
 
   // go over all the rotamers at the current residue and see what they contact
   vector<aaRotamers*>& posRots = rotamers[res];
@@ -165,23 +168,31 @@ for (int i = 0; i < neighborhood.size(); i++) cout << *(neighborhood[i]) << endl
     string aani = aaRots.aaName();
     for (int ri = 0; ri < aaRots.numberOfRotamers(); ri++) {
       real pi = aaRots.rotProb(ri);
-      map<Residue*, map<int, bool> > conRots; // collection of rotamers at other positions that this rotamer contacts
+      map<aaRotamers*, map<int, bool> > conRots; // collection of rotamers at other positions that this rotamer contacts
       for (int ai = 0; ai < aaRots.atomSize(); ai++) {
+        if (!countsAsSidechain(aaRots[ai])) continue;
+//CartesianPoint pointA = aaRots.rotamerAtomCoor(ri, ai); bool something = false;
         vector<rotamerAtomInfo> conts = rotamerHeavySC->getPointsWithin(aaRots.rotamerAtomCoor(ri, ai), 0, contDist);
         for (int ci = 0; ci < conts.size(); ci++) {
-          Residue* cres = conts[ci].position();
-          if (cres == res) continue; // clashes with rotamers at the same position do not count
-          int rotInd = conts[ci].rotIndex();
-          if (conRots.find(cres) == conRots.end()) conRots[cres] = map<int, bool>();
-          if (conRots[cres].find(rotInd) == conRots[cres].end()) {
+          rotamerAtomInfo& rInfo = conts[ci];
+          if (rInfo.position() == res) continue; // clashes with rotamers at the same position do not count
+          int rotInd = rInfo.rotIndex();
+          if (conRots[rInfo.getAA()].find(rotInd) == conRots[rInfo.getAA()].end()) {
             // a new contact detected, add its contribution
+            cres = rInfo.position();
             string aanj = conts[ci].aaName();
             real pj = conts[ci].rotProb();
+/*CartesianPoint pointB = conts[ci].coor();
+real d = pointA.distance(pointB);
+cout << *res << ", " << aani << ", " << ri << " [" << aaProp[aani] << ", " << pi << "] " << aaRots[ai].getName() << " " << pointA << " x ";
+cout << *cres << ", " << aanj << ", " << rotInd << " [" << aaProp[aanj] << ", " << pj << "] " << conts[ci].name() << " " << pointB << " (" << d << ")" << endl;
+something = true;*/
             if (conDegNum.find(cres) == conDegNum.end()) conDegNum[cres] = 0.0;
             conDegNum[cres] += aaProp[aani] * aaProp[aanj] * pi * pj;
+            conRots[rInfo.getAA()][rotInd] = true;
           }
-          conRots[cres][rotInd] = true;
         }
+//if (!something) cout << *res << ", " << aani << ", " << ri << " [" << aaProp[aani] << ", " << pi << "] " << aaRots[ai].getName() << " " << pointA << " x NOTHING" << endl;
       }
     }
   }
@@ -198,16 +209,17 @@ for (int i = 0; i < neighborhood.size(); i++) cout << *(neighborhood[i]) << endl
 }
 
 real ConFind::weightOfAvailableRotamers(Residue* res) {
-  real weightAA = 0; real weightRot = 0;
+  real weight = 0;
   if (rotamers.find(res) == rotamers.end()) MstUtils::error("residue not cached: " + MstUtils::toString(*res), "ConFind::weightOfAvailableRotamers");
   for (int i = 0; i < rotamers[res].size(); i++) {
     aaRotamers& aaRots = *(rotamers[res][i]);
+    real weightRot = 0;
     for (int ri = 0; ri < aaRots.numberOfRotamers(); ri++) {
       weightRot += aaRots.rotProb(ri);
-      weightAA += aaProp[aaRots.aaName()];
     }
+    weight += aaProp[aaRots.aaName()] * weightRot;
   }
-  return weightAA * weightRot;
+  return weight;
 }
 
 vector<Residue*> ConFind::getNeighbors(Residue* residue) {

@@ -232,10 +232,12 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
 // ---- Main Program
 int main(int argc, char *argv[]) {
   int ii, jj; double d;
+  fstream rotOut, *rotOutPtr = NULL;
 
   // process input arguments
   options iopts;
   parseCommandLine(argc, argv, iopts);
+  if (!iopts.rotOutFile.empty()) { MstUtils::openFile(rotOut, iopts.rotOutFile, fstream::out); rotOutPtr = &rotOut; }
 
   // legal residue names that are considered "protein" here
   vector<string> legalNames;
@@ -275,7 +277,7 @@ int main(int argc, char *argv[]) {
     // } else {
     //   residues = S.getResidues();
     // }
-    C.cache(S);
+    C.cache(S, rotOutPtr);
 
     // --- compute contact degrees
     contactList L;
@@ -372,6 +374,7 @@ int main(int argc, char *argv[]) {
     if (!iopts.opdbfs.empty()) S.writePDB(iopts.opdbfs[si]);
 
   }
+  if (!iopts.rotOutFile.empty()) rotOut.close();
 
 }
 

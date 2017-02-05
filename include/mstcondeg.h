@@ -44,6 +44,7 @@ class aaRotamers {
     real rotProb(int ri) { return rP[ri]; }
     int rotID(int ri) { return rID[ri]; }
     int atomSize() { return rotamers->atomSize(); }
+    Atom& operator[](int i) const { return (*rotamers)[i]; }
     Residue rotamer(int ri) {
       rotamers->makeAlternativeMain(ri);
       Residue ret(*rotamers, false);
@@ -67,7 +68,6 @@ class aaRotamers {
           } else {
             if ((k >= rotamers->atomSize()) || (!(*rotamers)[k].isNamed(a.getName())))
               MstUtils::error("the new rotamer not consistent with previous ones", "aaRotamers::addRotamer(Residue*)");
-//cout << "adding alternatives to " << a << " (" << (*rotamers)[k].numAlternatives() << ")" << endl;
             (*rotamers)[k].addAlternative(a.getX(), a.getY(), a.getZ(), 0.0, 1.0); // the into alternatives
             k++;
           }
@@ -78,7 +78,6 @@ class aaRotamers {
           break;
         }
       }
-//cout << "--------------------------" << endl;
       rID.push_back(_rID);
       rP.push_back(_rP);
     }
@@ -101,13 +100,17 @@ class ConFind {
     ~ConFind();
 
     // precomputes all necessary info and data structures for computing on this Structure
-    bool cache(Structure& S);
-    bool cache(vector<Residue*>& residues);
-    bool cache(Residue* res);
+    bool cache(Structure& S, fstream* rotOut = NULL);
+    bool cache(vector<Residue*>& residues, fstream* rotOut = NULL);
+    bool cache(Residue* res, fstream* rotOut = NULL);
 
     // find those residues that are close enough to affect the passed residue(s)
     vector<Residue*> getNeighbors(Residue* residue);
     vector<Residue*> getNeighbors(vector<Residue*>& residues);
+
+    /* this function encodes whether a given atom counts as "side-chain" for the
+     * purposes of finding sidechain-to-sidechain contacts. */
+    bool countsAsSidechain(Atom& a);
 
     contactList getContacts(Residue* res, real cdcut = 0.0);
     // vector<contactList> getContacts(vector<Residue*> res, real cdcut = 0.0);
@@ -146,7 +149,10 @@ class ConFind {
         int atomIndex() { return atomInd; }
         Residue* position() { return aa->position(); }
         string aaName() { return aa->aaName(); }
+        string name() { return (*aa)[atomInd].getName(); }
+        CartesianPoint coor() { return (*aa)[atomInd].getAltCoor(rotInd); }
         real rotProb() { return aa->rotProb(rotInd); }
+        aaRotamers* getAA() { return aa; }
 
       private:
         aaRotamers* aa;
@@ -160,6 +166,7 @@ class ConFind {
     real dcut;                  // CA-AC distance cutoff beyond which we do not consider pairwise interactions
     real clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively
     map<string, double> aaProp; // amino-acid propensities (in percent)
+    bool doNotCountCB;          // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
 };
 
 

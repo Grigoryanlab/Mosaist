@@ -25,6 +25,17 @@ Structure::Structure(Structure& S) {
   }
 }
 
+Structure::Structure(Chain& C) {
+  numResidues = numAtoms = 0;
+  appendChain(new Chain(C));
+}
+
+Structure::Structure(Residue& R) {
+  numResidues = numAtoms = 0;
+  Chain* newChain = appendChain("A", true);
+  newChain->appendResidue(new Residue(R));
+}
+
 /* The assumption is that if a Structure is deleted, all
  * of its children objects are no longer needed and should
  * go away. If a user needs to hold on to these, they
@@ -362,7 +373,7 @@ void Structure::renumber() {
 }
 
 void Structure::addAtom(Atom* A) {
-  if ((A->getParent() == NULL) || (A->getParent()->getParent() == NULL)) MstUtils::error("cannot add a disembodies Atom", "Structure::addAtom");
+  if ((A->getParent() == NULL) || (A->getParent()->getParent() == NULL)) MstUtils::error("cannot add a disembodied Atom", "Structure::addAtom");
   Residue* oldResidue = A->getParent();
   Chain* oldChain = oldResidue->getParent();
   Chain* newChain; Residue* newResidue; Atom* newAtom;
@@ -399,7 +410,7 @@ Chain::Chain() {
 
 Chain::Chain(Chain& C) {
   numAtoms = C.numAtoms;
-  parent = C.parent;
+  parent = NULL;
   for (int i = 0; i < C.residueSize(); i++) {
     residues.push_back(new Residue(C[i]));
     residues.back()->setParent(this);
@@ -511,7 +522,7 @@ Residue::Residue() {
 }
 
 Residue::Residue(Residue& R, bool copyAlt) {
-  parent = R.parent;
+  parent = NULL;
   for (int i = 0; i < R.atomSize(); i++) {
     atoms.push_back(new Atom(R[i], copyAlt));
     atoms.back()->setParent(this);

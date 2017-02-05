@@ -37,6 +37,8 @@ class Structure {
     Structure();
     Structure(string pdbFile, string options = "");
     Structure(Structure& S);
+    Structure(Chain& C);
+    Structure(Residue& R);
     ~Structure();
 
     void readPDB(string pdbFile, string options = "");
@@ -509,11 +511,10 @@ class DecoratedProximitySearch : public ProximitySearch {
       tags.push_back(tag);
     }
 
-    bool pointsWithin(CartesianPoint c, real dmin, real dmax) { return this->ProximitySearch::pointsWithin(c, dmin, dmax); }
     vector<T> getPointsWithin(CartesianPoint c, real dmin, real dmax) {
       vector<int> inds = this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
       vector<T> ret(inds.size());
-      for (int i = 0; i < inds.size(); i++) ret[i] = tags[i];
+      for (int i = 0; i < inds.size(); i++) ret[i] = tags[inds[i]];
       return ret;
     }
     vector<int> getPointsWithinIndices(CartesianPoint c, real dmin, real dmax) {
