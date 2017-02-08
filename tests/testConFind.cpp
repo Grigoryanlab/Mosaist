@@ -277,7 +277,9 @@ int main(int argc, char *argv[]) {
     // } else {
     //   residues = S.getResidues();
     // }
+/*    cout << "caching..." << endl;
     C.cache(S, rotOutPtr);
+    cout << "done caching" << endl;*/
 
     // --- compute contact degrees
     contactList L;

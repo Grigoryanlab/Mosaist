@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
   S.writePDB(outBase + ".out.pdb");
 
   // memory test (sort of)
-  int n = 1000;
+  int n = 100;
   printf("reading %d Structure objects into memory...\n", n);
   vector<Structure> many(n);
   for (int i = 0; i < n; i++) {

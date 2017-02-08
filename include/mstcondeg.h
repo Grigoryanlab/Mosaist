@@ -116,7 +116,7 @@ class ConFind {
     // vector<contactList> getContacts(vector<Residue*> res, real cdcut = 0.0);
     // vector<Residue*> getContactingResidues(Residue* res, real cdcut = 0.0);
     // vector<Residue*> getContactingResidues(vector<Residue*> res, real cdcut = 0.0);
-    // vector<contactList> getAllContacts(Structure& S, real cdcut = 0.0);
+    // vector<contactList> getContacts(Structure& S, real cdcut = 0.0);
     // vector<real> getFreeVolume(Residue* res, real cdcut = 0.0);
     // vector<real> getFreeVolume(vector<Residue*> res, real cdcut = 0.0);
     // vector<real> getFreedom(Residue* res, real cdcut = 0.0);

@@ -171,7 +171,6 @@ contactList ConFind::getContacts(Residue* res, real cdcut) {
       map<aaRotamers*, map<int, bool> > conRots; // collection of rotamers at other positions that this rotamer contacts
       for (int ai = 0; ai < aaRots.atomSize(); ai++) {
         if (!countsAsSidechain(aaRots[ai])) continue;
-//CartesianPoint pointA = aaRots.rotamerAtomCoor(ri, ai); bool something = false;
         vector<rotamerAtomInfo> conts = rotamerHeavySC->getPointsWithin(aaRots.rotamerAtomCoor(ri, ai), 0, contDist);
         for (int ci = 0; ci < conts.size(); ci++) {
           rotamerAtomInfo& rInfo = conts[ci];
@@ -182,17 +181,11 @@ contactList ConFind::getContacts(Residue* res, real cdcut) {
             cres = rInfo.position();
             string aanj = conts[ci].aaName();
             real pj = conts[ci].rotProb();
-/*CartesianPoint pointB = conts[ci].coor();
-real d = pointA.distance(pointB);
-cout << *res << ", " << aani << ", " << ri << " [" << aaProp[aani] << ", " << pi << "] " << aaRots[ai].getName() << " " << pointA << " x ";
-cout << *cres << ", " << aanj << ", " << rotInd << " [" << aaProp[aanj] << ", " << pj << "] " << conts[ci].name() << " " << pointB << " (" << d << ")" << endl;
-something = true;*/
             if (conDegNum.find(cres) == conDegNum.end()) conDegNum[cres] = 0.0;
             conDegNum[cres] += aaProp[aani] * aaProp[aanj] * pi * pj;
             conRots[rInfo.getAA()][rotInd] = true;
           }
         }
-//if (!something) cout << *res << ", " << aani << ", " << ri << " [" << aaProp[aani] << ", " << pi << "] " << aaRots[ai].getName() << " " << pointA << " x NOTHING" << endl;
       }
     }
   }

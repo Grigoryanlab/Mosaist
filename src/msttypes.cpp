@@ -216,6 +216,7 @@ void Structure::writePDB(fstream& ofs, string options) {
     Chain& chain = (*this)[ci];
     for (int ri = 0; ri < chain.residueSize(); ri++) {
       Residue residue = chain[ri]; // NOTE: using a copy constructor here, in case residue details will be changed for formatting reasons upon writing
+      residue.setParent(&chain);   // by default, objects are copied as being disembodied (so as not to create inconsistent states)
       for (int ai = 0; ai < residue.atomSize(); ai++) {
         Atom& atom = residue[ai]; // NOTE: no need to copy atom, since residue copying does a deep copy
         atomIndex++;
@@ -576,7 +577,6 @@ void Residue::copyAtoms(Residue& R, bool copyAlt) {
 
 void Residue::makeAlternativeMain(int altInd) {
   for (int i = 0; i < atomSize(); i++) {
-cout << "making alternative " << altInd << " the main; " << (*this)[i].numAlternatives() << " alternatives; " << (*this)[i].getName() << "; " << getName() << endl;
     (*this)[i].makeAlternativeMain(altInd);
   }
 }
