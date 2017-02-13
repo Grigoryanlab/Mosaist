@@ -402,6 +402,26 @@ void Structure::addAtoms(vector<Atom*>* atoms) {
   for (int i = 0; i < atoms->size(); i++) addAtom((*atoms)[i]);
 }
 
+int Structure::getResidueIndex(Residue* res) {
+  Chain* parentChain = res->getParent();
+  if (parentChain == NULL)
+    MstUtils::error("cannot find index of a disembodied residue '" + MstUtils::toString(res) + "'", "Structure::getResidueIndex(Residue*)");
+
+  int n = 0;
+  bool found = false;
+  for (int i = 0; i < chainSize(); i++) {
+    Chain& chain = (*this)[i];
+    if (&chain  == parentChain) {
+      n += chain.getResidueIndex(res);
+      found = true;
+      break;
+    }
+    n += chain.residueSize();
+  }
+  if (!found) MstUtils::error("residue not from Structure '" + MstUtils::toString(res) + "'", "Structure::getResidueIndex(Residue*)");
+
+  return n;
+}
 
 /* --------- Chain --------- */
 Chain::Chain() {

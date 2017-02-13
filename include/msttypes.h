@@ -78,6 +78,8 @@ class Structure {
     void addAtoms(vector<Atom*>* atoms);
     /* ----- functions that grow/shrink structure ----- */
 
+    int getResidueIndex(Residue* res);
+
   protected:
     void incrementNumAtoms(int delta = 1) { numAtoms += delta; }
     void incrementNumResidues(int delta = 1) { numResidues += delta; }
