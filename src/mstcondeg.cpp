@@ -28,14 +28,16 @@ void ConFind::setParams() {
 
 ConFind::~ConFind() {
   if (isRotLibLocal) delete rotLib;
-  for (map<Residue*, vector<aaRotamers*> >::iterator it = rotamers.begin(); it != rotamers.end(); ++it) {
-    vector<aaRotamers*>& aaRots = it->second;
-    for (int i = 0; i < aaRots.size(); i++) delete(aaRots[i]);
-  }
   delete bbNN;
   delete nonHydNN;
   delete caNN;
-  delete rotamerHeavySC;
+  for (map<Residue*, vector<rotamerID*> >::iterator it = survivingRotamers.begin(); it != survivingRotamers.end(); ++it) {
+    vector<rotamerID*>& rots = it->second;
+    for (int i = 0; i < rots.size(); i++) delete(rots[i]);
+  }
+  for (map<Residue*, DecoratedProximitySearch<rotamerID*>* >::iterator it = rotamerHeavySC.begin(); it != rotamerHeavySC.end(); ++it) {
+    delete it->second;
+  }
 }
 
 void ConFind::init(Structure& S) {
@@ -50,13 +52,12 @@ void ConFind::init(Structure& S) {
   bbNN = new ProximitySearch(backbone, clashDist/2);
   nonHydNN = new ProximitySearch(nonHyd, clashDist/2);
   caNN = new ProximitySearch(ca, dcut/2);
-
-  // add a padding of 50 A to the structure to cover all future rotamer atoms
-  rotamerHeavySC = new DecoratedProximitySearch<rotamerAtomInfo>(atoms, contDist/2, 50.0);
 }
 
 bool ConFind::cache(Residue* res, fstream* rotOut) {
-  if (rotamers.find(res) != rotamers.end()) return true;
+  if (rotamerHeavySC.find(res) != rotamerHeavySC.end()) return true;
+  AtomPointerVector pointCloud;      // side-chain atoms of surviving rotames
+  vector<rotamerID*> pointCloudTags; // corresponding tags (i.e.,  rotamer identity)
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
@@ -74,10 +75,8 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
     double aaP = aaProp[aa];
     int nr = rotLib->numberOfRotamers(aa, phi, psi);
     Residue rot;
-    rotamers[res].push_back(new aaRotamers(aa, res));
-    aaRotamers& aaRots = *(rotamers[res].back());
     for (int ri = 0; ri < nr; ri++) {
-      rotLib->placeRotamer(*res, aa, ri, &rot);
+      rotamerID rID = rotLib->placeRotamer(*res, aa, ri, &rot);
       double rotP = rotLib->rotamerProbability(aa, ri, phi, psi);
 
       // see if the rotamer needs to be pruned (clash with the backbone).
@@ -101,7 +100,6 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
 
         // shuld the rotamer be pruned?
         if (!countsAsSidechain(a)) continue;
-//        if (doNotCountCB && !rot.isNamed("ALA") && a.isNamed("CB")) continue;
         closeOnes.clear();
         bbNN->pointsWithin(a.getCoor(), 0.0, clashDist, &closeOnes);
         for (int ci = 0; ci < closeOnes.size(); ci++) {
@@ -118,13 +116,13 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
       if (prune) continue;
       if (rotOut != NULL) { Structure S(rot); S.writePDB(*rotOut); }
 
-      // if not pruned, cache info about it
-      aaRots.addRotamer(rot, ri, rotP);
-      int intRi = aaRots.numberOfRotamers() - 1; // index among surviving rotamers
-      for (int ai = 0; ai < aaRots.atomSize(); ai++) {
-        if (!countsAsSidechain(aaRots[ai])) continue;
-        rotamerAtomInfo rotAtom(&aaRots, intRi, ai);
-        rotamerHeavySC->addPoint(aaRots[ai].getAltCoor(intRi), rotAtom);
+      // if not pruned, collect atoms needed later
+      rotamerID* rotTag = new rotamerID(rID);
+      survivingRotamers[res].push_back(rotTag);
+      for (int ai = 0; ai < rot.atomSize(); ai++) {
+        if (!countsAsSidechain(rot[ai])) continue;
+        pointCloud.push_back(new Atom(rot[ai]));
+        pointCloudTags.push_back(rotTag);
       }
       numRemRotsInPosition++;
     }
@@ -133,6 +131,10 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
   fractionPruned[res] = (totNumRotsInPosition - numRemRotsInPosition)*1.0/totNumRotsInPosition;
   origNumRots[res] = totNumRotsInPosition;
   freeVolume[res] = 1 - freeVolumeNum/freeVolumeDen;
+
+  // cash all atoms for faster distance-based searches
+  rotamerHeavySC[res] = new DecoratedProximitySearch<rotamerID*>(pointCloud, contDist/2, pointCloudTags);
+  pointCloud.deletePointers();
 
   return true;
 }
@@ -155,62 +157,83 @@ bool ConFind::cache(Structure& S, fstream* rotOut) {
   return cache(residues, rotOut);
 }
 
+real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache) {
+  if (!doNotCache) { cache(resA); cache(resB); }
+  DecoratedProximitySearch<rotamerID*>& cloudA = *(rotamerHeavySC[resA]);
+  DecoratedProximitySearch<rotamerID*>& cloudB = *(rotamerHeavySC[resB]);
+
+  /* find rotamer pairs that clash (could account for how many times and
+   * with which atoms, if we wanted) */
+  map<rotamerID*, map<rotamerID*, bool> > clashing;
+  for (int ai = 0; ai < cloudA.pointSize(); ai++) {
+    vector<rotamerID*> p = cloudB.getPointsWithin(cloudA.getPoint(ai), 0, contDist);
+    if (p.size() == 0) continue;
+    rotamerID* rID = cloudA.getPointTag(ai);
+    for (int i = 0; i < p.size(); i++) clashing[rID][p[i]] = true;
+  }
+
+  // compute contact degree
+  real cd = 0;
+  for (map<rotamerID*, map<rotamerID*, bool> >::iterator itA = clashing.begin(); itA != clashing.end(); ++itA) {
+    rotamerID& rotA = *(itA->first);
+    real rotProbA = rotLib->rotamerProbability(rotA);
+    real aaPropA = aaProp[rotA.aminoAcid()];
+    for (map<rotamerID*, bool>::iterator itB = itA->second.begin(); itB != itA->second.end(); ++itB) {
+      rotamerID& rotB = *(itB->first);
+      real rotProbB = rotLib->rotamerProbability(rotB);
+      real aaPropB = aaProp[rotB.aminoAcid()];
+      cd +=  aaPropA * aaPropB * rotProbA * rotProbB;
+    }
+  }
+  cd /= weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB);
+  return cd;
+}
+
 contactList ConFind::getContacts(Residue* res, real cdcut) {
   vector<Residue*> neighborhood = getNeighbors(res);
   cache(neighborhood);
-  map<Residue*, real> conDegNum;
-  Residue* cres;
 
-  // go over all the rotamers at the current residue and see what they contact
-  vector<aaRotamers*>& posRots = rotamers[res];
-  for (int aai = 0; aai < posRots.size(); aai++) {
-    aaRotamers& aaRots = *(posRots[aai]);
-    string aani = aaRots.aaName();
-    for (int ri = 0; ri < aaRots.numberOfRotamers(); ri++) {
-      real pi = aaRots.rotProb(ri);
-      map<aaRotamers*, map<int, bool> > conRots; // collection of rotamers at other positions that this rotamer contacts
-      for (int ai = 0; ai < aaRots.atomSize(); ai++) {
-        if (!countsAsSidechain(aaRots[ai])) continue;
-        vector<rotamerAtomInfo> conts = rotamerHeavySC->getPointsWithin(aaRots.rotamerAtomCoor(ri, ai), 0, contDist);
-        for (int ci = 0; ci < conts.size(); ci++) {
-          rotamerAtomInfo& rInfo = conts[ci];
-          if (rInfo.position() == res) continue; // clashes with rotamers at the same position do not count
-          int rotInd = rInfo.rotIndex();
-          if (conRots[rInfo.getAA()].find(rotInd) == conRots[rInfo.getAA()].end()) {
-            // a new contact detected, add its contribution
-            cres = rInfo.position();
-            string aanj = conts[ci].aaName();
-            real pj = conts[ci].rotProb();
-            if (conDegNum.find(cres) == conDegNum.end()) conDegNum[cres] = 0.0;
-            conDegNum[cres] += aaProp[aani] * aaProp[aanj] * pi * pj;
-            conRots[rInfo.getAA()][rotInd] = true;
-          }
+  // compute contact degree between this residue and every one of its neighbors
+  contactList L;
+  for (int i = 0; i < neighborhood.size(); i++) {
+    if (res == neighborhood[i]) continue;
+    real cd = contactDegree(res, neighborhood[i], true);
+    if (cd > cdcut) L.addContact(res, neighborhood[i], cd);
+  }
+  return L;
+}
+
+contactList ConFind::getContacts(Structure& S, real cdcut) {
+  cache(S);
+  vector<Residue*> allRes = S.getResidues();
+  map<Residue*, map<Residue*, bool> > checked;
+
+  contactList L;
+  for (int i = 0; i < allRes.size(); i++) {
+    Residue* resi = allRes[i];
+    vector<Residue*> neighborhood = getNeighbors(resi);
+    for (int j = 0; j < neighborhood.size(); j++) {
+      Residue* resj = neighborhood[j];
+      if (checked[resi].find(resj) == checked[resi].end()) {
+        checked[resi][resj] = true;
+        real cd = contactDegree(resi, resj);
+        if (cd > cdcut) {
+          L.addContact(resi, resj, cd);
         }
       }
     }
   }
 
-  // go over all contacting residues and finish contact degree calculation
-  contactList L(res);
-  real wi = weightOfAvailableRotamers(res);
-  for (map<Residue*, real>::iterator it = conDegNum.begin(); it != conDegNum.end(); ++it) {
-    Residue* cres = it->first;
-    real cd = it->second / (wi * weightOfAvailableRotamers(cres));
-    if (cd > cdcut) L.addContact(cres, cd);
-  }
   return L;
 }
 
 real ConFind::weightOfAvailableRotamers(Residue* res) {
   real weight = 0;
-  if (rotamers.find(res) == rotamers.end()) MstUtils::error("residue not cached: " + MstUtils::toString(*res), "ConFind::weightOfAvailableRotamers");
-  for (int i = 0; i < rotamers[res].size(); i++) {
-    aaRotamers& aaRots = *(rotamers[res][i]);
-    real weightRot = 0;
-    for (int ri = 0; ri < aaRots.numberOfRotamers(); ri++) {
-      weightRot += aaRots.rotProb(ri);
-    }
-    weight += aaProp[aaRots.aaName()] * weightRot;
+  if (survivingRotamers.find(res) == survivingRotamers.end()) MstUtils::error("residue not cached: " + MstUtils::toString(*res), "ConFind::weightOfAvailableRotamers");
+  vector<rotamerID*>& rots = survivingRotamers[res];
+  for (int i = 0; i < rots.size(); i++) {
+    rotamerID& rot = *(rots[i]);
+    weight += aaProp[rot.aminoAcid()] * rotLib->rotamerProbability(rot);
   }
   return weight;
 }
@@ -251,4 +274,10 @@ vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
     neighborhood[i] = it->first;
   }
   return neighborhood;
+}
+
+real contactList::degree(Residue* _resi, Residue* _resj) {
+  if (inContact.find(_resi) == inContact.end()) return 0;
+  if (inContact[_resi].find(_resj) == inContact[_resi].end()) return 0;
+  return degrees[inContact[_resi][_resj]];
 }

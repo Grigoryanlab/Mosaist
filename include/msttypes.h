@@ -394,6 +394,7 @@ class AtomPointerVector : public vector<Atom*> {
 
     CartesianPoint getGeometricCenter();
     real radiusOfGyration();
+    void deletePointers();
 
     friend ostream & operator<<(ostream &_os, AtomPointerVector& _atoms) {
       for (int i = 0; i < _atoms.size(); i++) {

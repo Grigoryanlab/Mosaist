@@ -149,7 +149,22 @@ real RotamerLibrary::rotamerProbability(string aa, int ri, real phi, real psi, b
   return prob[aa][bi][ri];
 }
 
-void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, Residue* dest_ptr, bool strict) {
+real RotamerLibrary::rotamerProbability(rotamerID* rot) {
+  return prob[rot->aminoAcid()][rot->binIndex()][rot->rotIndex()];
+}
+
+rotamerID RotamerLibrary::getRotamer(Residue& res, string aa, int rotIndex, bool strict) {
+  double phi = res.getPhi();
+  double psi = res.getPsi();
+  int binInd = getBackboneBin(aa, phi, psi, !strict);
+  if (rotamers.find(aa) == rotamers.end()) MstUtils::error("rotamer library does not contain amino acid '" + aa + "'", "RotamerLibrary::placeRotamer");
+  if (rotamers[aa].size() <= binInd) {
+    MstUtils::error("rotamer library has " + MstUtils::toString(rotamers[aa].size()) + " backbone bins for amino acid '" + aa + "', but bin number " + MstUtils::toString(binInd+1) + " was requested", "RotamerLibrary::placeRotamer");
+  }
+  return rotamerID(aa, binInd, rotIndex);
+}
+
+rotamerID RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, Residue* dest_ptr, bool strict) {
   double phi = res.getPhi();
   double psi = res.getPsi();
   int binInd = getBackboneBin(aa, phi, psi, !strict);
@@ -209,6 +224,7 @@ void RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, Residue
       }
     }
   }
+  return rotamerID(aa, binInd, rotIndex);
 }
 
 void RotamerLibrary::transformRotamerAtoms(Transform& T, Residue& rots, int rotIndex, vector<Atom*>& newAtoms) {

@@ -7,6 +7,20 @@
 
 namespace MST {
 
+class rotamerID {
+  public:
+    rotamerID(string& _aa, int _bi, int _ri) { aa = _aa; bi = _bi; ri = _ri; }
+    rotamerID(const rotamerID& other) { aa = other.aa; bi = other.bi; ri = other.ri; }
+
+    string aminoAcid() { return aa; }
+    int binIndex() { return bi; }
+    int rotIndex() { return ri; }
+
+  private:
+    string aa;
+    int bi, ri;
+};
+
 class RotamerLibrary {
   public:
     RotamerLibrary() {}
@@ -31,7 +45,8 @@ class RotamerLibrary {
      * will be filled with precisely the correct atoms for the amino acid. The latter
      * corresponds to the case when the destination residue was already previously built
      * by this function, with perhaps a different rotamer; this case is for efficiency. */
-    void placeRotamer(Residue& res, string aa, int rotIndex, Residue* dest_ptr = NULL, bool strict = false);
+    rotamerID placeRotamer(Residue& res, string aa, int rotIndex, Residue* dest_ptr = NULL, bool strict = false);
+    rotamerID getRotamer(Residue& res, string aa, int rotIndex, bool strict = false);
 
     /* decides whether the atom is a backbone atom basded on the name */
     static bool isBackboneAtom(string atomName);
@@ -43,6 +58,8 @@ class RotamerLibrary {
 
     int numberOfRotamers(string aa, real phi = Residue::badDihedral, real psi = Residue::badDihedral, bool strict = false);
     real rotamerProbability(string aa, int ri, real phi = Residue::badDihedral, real psi = Residue::badDihedral, bool strict = false);
+    real rotamerProbability(rotamerID& rot) { return rotamerProbability(&rot); }
+    real rotamerProbability(rotamerID* rot);
     vector<string> availableAminoAcids() { return keys(rotamers); }
 
   protected:

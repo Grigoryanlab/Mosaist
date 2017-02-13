@@ -877,6 +877,11 @@ real AtomPointerVector::radiusOfGyration() {
   return sqrt(s / size());
 }
 
+void AtomPointerVector::deletePointers() {
+  for (int i = 0; i < size(); i++) delete (*this)[i];
+  resize(0);
+}
+
 /* --------- CartesianPoint --------- */
 
 CartesianPoint::CartesianPoint(const Atom& A) {

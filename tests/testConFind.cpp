@@ -288,7 +288,7 @@ int main(int argc, char *argv[]) {
       for (int j = 0; j < chain.residueSize(); j++) {
         L = C.getContacts(&(chain[j]));
         for (int k = 0; k < L.size(); k++) {
-          cout << chain[j] << " - " << *(L.contResidue(k)) << " " << L.degree(k) << endl;
+          cout << *(L.residueA(k)) << " - " << *(L.residueB(k)) << " " << L.degree(k) << endl;
         }
       }
     }
