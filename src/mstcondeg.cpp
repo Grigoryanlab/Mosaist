@@ -205,6 +205,20 @@ contactList ConFind::getContacts(Residue* res, real cdcut) {
   return L;
 }
 
+vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
+  vector<Residue*> neighborhood = getNeighbors(res);
+  cache(neighborhood);
+
+  // compute contact degree between this residue and every one of its neighbors
+  vector<Residue*> partners;
+  for (int i = 0; i < neighborhood.size(); i++) {
+    if (res == neighborhood[i]) continue;
+    real cd = contactDegree(res, neighborhood[i], true);
+    if (cd > cdcut) partners.push_back(neighborhood[i]);
+  }
+  return partners;
+}
+
 contactList ConFind::getContacts(Structure& S, real cdcut) {
   cache(S);
   vector<Residue*> allRes = S.getResidues();
