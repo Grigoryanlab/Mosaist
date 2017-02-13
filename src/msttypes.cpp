@@ -1601,6 +1601,12 @@ vector<int> ProximitySearch::getPointsWithin(CartesianPoint c, real dmin, real d
   return closeOnes;
 }
 
+bool ProximitySearch::overlaps(ProximitySearch& other, real pad) {
+  if ((other.xlo > xhi + pad) || (xlo > other.xhi + pad) || (other.ylo > yhi + pad) || (ylo > other.yhi + pad) || (other.zlo > zhi + pad) || (zlo > other.zhi + pad)) {
+    return false;
+  }
+  return true;
+}
 
 /* --------- MstUtils --------- */
 void MstUtils::openFile (fstream& fs, string filename, ios_base::openmode mode, string from) {

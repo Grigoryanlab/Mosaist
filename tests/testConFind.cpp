@@ -271,26 +271,10 @@ int main(int argc, char *argv[]) {
     }
     ostream out(buf);
 
-    // --- pre-load data for calculating properties at residues of interest (a little faster than doing one at a time)
-    // if (!iopts.focus.empty()) {
-    //   residues = S.selectByRes(iopts.focus); // ?? NEEDS TO BE IMPLEMENTED!
-    // } else {
-    //   residues = S.getResidues();
-    // }
-/*    cout << "caching..." << endl;
-    C.cache(S, rotOutPtr);
-    cout << "done caching" << endl;*/
-
     // --- compute contact degrees
-    contactList L;
-    for (int i = 0; i < S.chainSize(); i++) {
-      Chain& chain = S[i];
-      for (int j = 0; j < chain.residueSize(); j++) {
-        L = C.getContacts(&(chain[j]));
-        for (int k = 0; k < L.size(); k++) {
-          cout << *(L.residueA(k)) << " - " << *(L.residueB(k)) << " " << L.degree(k) << endl;
-        }
-      }
+    contactList L = C.getContacts(S);
+    for (int k = 0; k < L.size(); k++) {
+      cout << *(L.residueA(k)) << " - " << *(L.residueB(k)) << " " << L.degree(k) << endl;
     }
     //
     //   // --- write contact degree information

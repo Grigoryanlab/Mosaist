@@ -469,6 +469,10 @@ class ProximitySearch {
     bool pointsWithin(CartesianPoint c, real dmin, real dmax, vector<int>* list = NULL, bool byTag = false);
     vector<int> getPointsWithin(CartesianPoint c, real dmin, real dmax, bool byTag = false);
 
+    // Returns true if the grid of the current ProximitySearch object overlaps
+    // that of the ProximitySearch specified by more than the padding given
+    bool overlaps(ProximitySearch& other, real pad = 0);
+
   protected:
     void setBinWidths();
     void calculateExtent(AtomPointerVector& _atoms) { ProximitySearch::calculateExtent(_atoms, xlo, ylo, zlo, xhi, yhi, zhi); }

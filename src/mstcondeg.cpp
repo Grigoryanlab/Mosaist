@@ -162,8 +162,10 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache) {
   DecoratedProximitySearch<rotamerID*>& cloudA = *(rotamerHeavySC[resA]);
   DecoratedProximitySearch<rotamerID*>& cloudB = *(rotamerHeavySC[resB]);
 
-  /* find rotamer pairs that clash (could account for how many times and
-   * with which atoms, if we wanted) */
+  // check if the point clouds representing to two rotamer trees even overlap
+  if (!cloudA.overlaps(cloudB)) return 0;
+
+  // if so, find rotamer pairs that clash
   map<rotamerID*, map<rotamerID*, bool> > clashing;
   for (int ai = 0; ai < cloudA.pointSize(); ai++) {
     vector<rotamerID*> p = cloudB.getPointsWithin(cloudA.getPoint(ai), 0, contDist);
@@ -214,9 +216,10 @@ contactList ConFind::getContacts(Structure& S, real cdcut) {
     vector<Residue*> neighborhood = getNeighbors(resi);
     for (int j = 0; j < neighborhood.size(); j++) {
       Residue* resj = neighborhood[j];
+      if (resi == resj) continue;
       if (checked[resi].find(resj) == checked[resi].end()) {
-        checked[resi][resj] = true;
-        real cd = contactDegree(resi, resj);
+        checked[resj][resi] = true;
+        real cd = contactDegree(resi, resj, true);
         if (cd > cdcut) {
           L.addContact(resi, resj, cd);
         }
