@@ -191,18 +191,19 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache) {
   return cd;
 }
 
-contactList ConFind::getContacts(Residue* res, real cdcut) {
+contactList ConFind::getContacts(Residue* res, real cdcut, contactList* list) {
   vector<Residue*> neighborhood = getNeighbors(res);
   cache(neighborhood);
+  contactList L;
 
   // compute contact degree between this residue and every one of its neighbors
-  contactList L;
+  if (list == NULL) list = &L;
   for (int i = 0; i < neighborhood.size(); i++) {
     if (res == neighborhood[i]) continue;
     real cd = contactDegree(res, neighborhood[i], true);
-    if (cd > cdcut) L.addContact(res, neighborhood[i], cd);
+    if (cd > cdcut) list->addContact(res, neighborhood[i], cd);
   }
-  return L;
+  return *list;
 }
 
 vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
@@ -219,14 +220,14 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
   return partners;
 }
 
-contactList ConFind::getContacts(Structure& S, real cdcut) {
-  cache(S);
-  vector<Residue*> allRes = S.getResidues();
+contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contactList* list) {
+  cache(residues);
   map<Residue*, map<Residue*, bool> > checked;
 
   contactList L;
-  for (int i = 0; i < allRes.size(); i++) {
-    Residue* resi = allRes[i];
+  if (list == NULL) list = &L;
+  for (int i = 0; i < residues.size(); i++) {
+    Residue* resi = residues[i];
     vector<Residue*> neighborhood = getNeighbors(resi);
     for (int j = 0; j < neighborhood.size(); j++) {
       Residue* resj = neighborhood[j];
@@ -235,13 +236,22 @@ contactList ConFind::getContacts(Structure& S, real cdcut) {
         checked[resj][resi] = true;
         real cd = contactDegree(resi, resj, true);
         if (cd > cdcut) {
-          L.addContact(resi, resj, cd);
+          list->addContact(resi, resj, cd);
         }
       }
     }
   }
 
-  return L;
+  return *list;
+}
+
+contactList ConFind::getContacts(Structure& S, real cdcut, contactList* list) {
+  contactList L;
+  if (list == NULL) list = &L;
+  vector<Residue*> allRes = S.getResidues();
+  getContacts(allRes, cdcut, list);
+
+  return *list;
 }
 
 real ConFind::weightOfAvailableRotamers(Residue* res) {

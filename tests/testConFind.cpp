@@ -272,7 +272,8 @@ int main(int argc, char *argv[]) {
     ostream out(buf);
 
     // --- compute contact degrees
-    contactList L = C.getContacts(S);
+    contactList L;
+    C.getContacts(S, 0, &L);
     for (int k = 0; k < L.size(); k++) {
       cout << *(L.residueA(k)) << " - " << *(L.residueB(k)) << " " << L.degree(k) << endl;
     }

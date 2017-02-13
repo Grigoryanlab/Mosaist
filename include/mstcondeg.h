@@ -65,9 +65,10 @@ class ConFind {
     bool countsAsSidechain(Atom& a);
 
     real contactDegree(Residue* resA, Residue* resB, bool doNotCache = false);
-    contactList getContacts(Residue* res, real cdcut = 0.0);
+    contactList getContacts(Residue* res, real cdcut = 0.0, contactList* list = NULL);
+    contactList getContacts(Structure& S, real cdcut = 0.0, contactList* list = NULL);
+    contactList getContacts(vector<Residue*>& residues, real cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, real cdcut = 0.0);
-    contactList getContacts(Structure& S, real cdcut = 0.0);
     // vector<real> getFreeVolume(Residue* res, real cdcut = 0.0);
     // vector<real> getFreeVolume(vector<Residue*> res, real cdcut = 0.0);
     // vector<real> getFreedom(Residue* res, real cdcut = 0.0);
