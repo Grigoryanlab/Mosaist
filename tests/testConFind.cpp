@@ -16,7 +16,7 @@
 using namespace std;
 using namespace MST;
 
-// ---- Utility Functions
+// ---- utility functions
 void proteinOnly(System& S, System& So, vector<string>& legalNames);
 
 class options {
@@ -32,7 +32,7 @@ class options {
     }
     vector<string> pdbfs, omapfs, opdbfs;
     bool verbose, renumPDB, phi_psi, printFileNames, omega, calcContacts;
-    string selection, focus, rotLibFile, beblFile, rotOutFile, rotLevel;
+    string focus, rotLibFile, beblFile, rotOutFile, rotLevel;
     double dcut, clashDist, contDist;
     map<string, double> aaProp; // amino-acid propensities (in percent)
 };
@@ -68,8 +68,7 @@ void usage() {
   cout << option("--opdbL", "optional: a file with a list of file names for post-processed PDBs, one per input structure.", w, p1, p2) << endl;
   cout << option("--rLib", "a path to an MSL-formatter rotamer library, with WEIGHTS information. If a file, will be treated as a backbone-independent library. If a directory, will look for files EBL.out and BEBL.out in it to read a backbone-dependent library.", w, p1, p2) << endl;
   cout << option("--rout", "name of a file into which to place PDB-formated coordinates of rotamers that ended up surviving at each considered position.", w, p1, p2) << endl;
-  cout << option("--psel", "optional: pre-selection string to apply before doing anything (only the selected part of structure will be considered). Will select a residue if its CA atom is included in the given selection. E.g., 'NAME CA WITHIN 25 OF CHAIN A'.", w, p1, p2) << endl;
-  cout << option("--sel", "optional: selection string for defining which residues to compute properties for. This is different from --psel. For example, one could pre-select a certain chain with --psel, but only be concerned with data about specific resdues within that chain, by defining --sel. The entire chain would be preserved in the structure, so that (for example) backbone rotameric collisions are properly detected. However, time would not be wasted on analyzing residues not in the --sel set. E.g., 'RESID 20-30'. Again, a residue is included if its CA is in the selection. NOTE: typically, values for some of the residues in --sel will be wrong (e.g., sum contact degree or crowdedness; because relevant neighboring residues will be missing from --sel). Thus, in practice --sel will need to include both residues of interest AND important surrounding residues, for which values will be wrong, but they will assure that values for the set of interest are correct.", w, p1, p2) << endl;
+  cout << option("--sel", "optional: a selection string for limiting the residues for which properties will be computed.", w, p1, p2) << endl;
   cout << option("--pp", "optional: print phi/psi angles for each residue (will print next to all positional scores score).", w, p1, p2) << endl;
   cout << option("--omg", "optional: print omega angles for each residue (will print next to all positional scores score). Omega for the current position is defined as the -CA, C, N, CA dihedral angle.", w, p1, p2) << endl;
   cout << option("--verb", "optional: generate lots of detailed output (i.e., print the details of which rotamer pairs are in contact).", w, p1, p2) << endl;
@@ -90,7 +89,6 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
       {"pL", 1, 0, 10},
       {"oL", 1, 0, 11},
       {"opdbL", 1, 0, 12},
-      {"psel", 1, 0, 18},
       {"sel", 1, 0, 24},
       {"rLib", 1, 0, 19},
       {"pp", 0, 0, 23},
@@ -140,11 +138,6 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
       case 12:
         if (iopts.opdbfs.size() > 0) { usage(); exit(-1); }
         MstUtils::fileToArray(optarg, iopts.opdbfs);
-        spec[string(opts[oind].name)] = true;
-        break;
-
-      case 18:
-        iopts.selection = string(optarg);
         spec[string(opts[oind].name)] = true;
         break;
 
@@ -231,7 +224,6 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
 
 // ---- Main Program
 int main(int argc, char *argv[]) {
-  int ii, jj; double d;
   fstream rotOut, *rotOutPtr = NULL;
 
   // process input arguments
@@ -258,6 +250,7 @@ int main(int argc, char *argv[]) {
     proteinOnly(S, So, legalNames);
     if (iopts.renumPDB) S.renumber();
     ConFind C(&RL, S); // this structure will be used for computing contact degrees
+    vector<Residue*> allRes = S.getResidues(iopts.focus);
 
     // open output file and write header
     fstream of;
@@ -271,88 +264,44 @@ int main(int argc, char *argv[]) {
     }
     ostream out(buf);
 
-    // --- compute contact degrees
+    // print degrees
     contactList L;
-    C.getContacts(S, 0, &L);
+    C.getContacts(allRes, 0, &L);
     for (int k = 0; k < L.size(); k++) {
-      cout << *(L.residueA(k)) << " - " << *(L.residueB(k)) << " " << L.degree(k) << endl;
+      Residue* resA = L.residueA(k);
+      Residue* resB = L.residueB(k);
+      out << "contact\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
+      out << "\t" << std::setprecision(6) << std::fixed << L.degree(k);
+      out << "\t" << resA->getName() << "\t" << resB->getName() << endl;
     }
-    //
-    //   // --- write contact degree information
-    //   vector<double> sumContDeg(resIndex.size(), 0);
-    //   for (int i = 0; i < conts.size(); i++) {
-    //     ii = conts[i].resi;
-    //     jj = conts[i].resj;
-    //     d = conts[i].degree;
-    //     sumContDeg[ii] += d;
-    //     sumContDeg[jj] += d;
-    //     out << contactString(S, resIndex[ii], resIndex[jj], d) << endl;
-    //     if (iopts.verbose) { printf("%s", conts[i].info.c_str()); }
-    //   }
-    //
-    //   // -- write out sum contact degrees
-    //   for (int i = 0; i < sumContDeg.size(); i++) {
-    //     out << "sumcond\t" << S.getPosition(resIndex[i]).getPositionId() << "\t" << std::setprecision(6) << std::fixed << sumContDeg[i];
-    //     if (iopts.phi_psi) out << "\t" << pp[i].first << "\t" << pp[i].second;
-    //     if (iopts.omega) out << "\t" << pp[i].third;
-    //     out << "\t" << (S.getPosition(resIndex[i])).getResidueName();
-    //     if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
-    //     out << endl;
-    //   }
-    //
-    //   // -- write out the freedom parameter
-    //   for (int i = 0; i < freedom.size(); i++) {
-    //     out << "freedom\t" << S.getPosition(resIndex[i]).getPositionId() << "\t" << std::setprecision(6) << std::fixed << freedom[i];
-    //     if (iopts.phi_psi) out << "\t" << pp[i].first << "\t" << pp[i].second;
-    //     if (iopts.omega) out << "\t" << pp[i].third;
-    //     out << "\t" << (S.getPosition(resIndex[i])).getResidueName();
-    //     if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
-    //     out << endl;
-    //   }
-    // }
-    //
-    // // -- write out permanent contacts
-    // for (int i = 0; i < permanentContacts.size(); i++) {
-    //   for (set<int>::iterator it = permanentContacts[i].begin(); it != permanentContacts[i].end(); ++it) {
-    //     out << contactString(S, resIndex[i], resIndex[*it], -1, true) << endl;
-    //   }
-    // }
-    //
-    // // -- write out the crowdedness parameter
-    // for (int i = 0; i < fractionPruned.size(); i++) {
-    //   out << "crwdnes\t" << S.getPosition(resIndex[i]).getPositionId() << "\t" << std::setprecision(6) << std::fixed << fractionPruned[i];
-    //   if (iopts.phi_psi) out << "\t" << pp[i].first << "\t" << pp[i].second;
-    //   if (iopts.omega) out << "\t" << pp[i].third;
-    //   out << "\t" << (S.getPosition(resIndex[i])).getResidueName();
-    //   if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
-    //   out << endl;
-    // }
-    //
-    // // -- write out free volume parameter
-    // for (int i = 0; i < freeVolume.size(); i++) {
-    //   out << "freevol\t" << S.getPosition(resIndex[i]).getPositionId() << "\t" << std::setprecision(6) << std::fixed << freeVolume[i];
-    //   if (iopts.phi_psi) out << "\t" << pp[i].first << "\t" << pp[i].second;
-    //   if (iopts.omega) out << "\t" << pp[i].third;
-    //   out << "\t" << (S.getPosition(resIndex[i])).getResidueName();
-    //   if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
-    //   out << endl;
-    // }
-    //
-    // // --- free near-neighbor structures if was dealing with contact probability maps
-    // for (int i = 0; i < rotamers.size(); i++) {
-    //   for (int j = 0; j < rotamers[i].size(); j++) {
-    //     delete(rotamers[i][j].gridSC());
-    //     delete(rotamers[i][j].gridBB());
-    //   }
-    // }
-    //
-    // // write sequence information
-    // out << "SEQUENCE:";
-    // for (int i = 0; i < resIndex.size(); i++) {
-    //   Position &p = S.getPosition(resIndex[i]);
-    //   out << " " << p.getResidueName();
-    // }
-    // out << endl;
+
+    // print crowdedness
+    for (int k = 0; k < allRes.size(); k++) {
+      Residue* res = allRes[k];
+      out << "crwdnes\t" << res->getChainID() << "," << res->getNum() << "\t";
+      out << std::setprecision(6) << std::fixed << C.getCrowdedness(res) << "\t";
+      if (iopts.phi_psi) out << res->getPhi() << "\t" << res->getPsi() << "\t";
+      if (iopts.omega) out << res->getOmega() << "\t";
+      out << res->getName() << endl;
+    }
+
+    // print freedoms
+    vector<real> freedoms = C.getFreedom(allRes);
+    for (int k = 0; k < allRes.size(); k++) {
+      Residue* res = allRes[k];
+      out << "freedom\t" << res->getChainID() << "," << res->getNum() << "\t";
+      out << std::setprecision(6) << std::fixed << freedoms[k] << "\t";
+      if (iopts.phi_psi) out << res->getPhi() << "\t" << res->getPsi() << "\t";
+      if (iopts.omega) out << res->getOmega() << "\t";
+      out << res->getName() << endl;
+    }
+
+    // print sequence
+    out << "SEQUENCE: ";
+    for (int k = 0; k < allRes.size(); k++) {
+      out << allRes[k]->getName() << " ";
+    }
+    out << endl;
 
     // close output file
     if (!iopts.omapfs.empty()) of.close();
@@ -366,7 +315,6 @@ int main(int argc, char *argv[]) {
 }
 
 
-// ---- utility functions definitions
 void proteinOnly(System& S, System& So, vector<string>& legalNames) {
   AtomPointerVector A;
   for (int i = 0; i < So.chainSize(); i++) {

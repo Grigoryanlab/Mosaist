@@ -29,7 +29,6 @@ void ConFind::setParams() {
 ConFind::~ConFind() {
   if (isRotLibLocal) delete rotLib;
   delete bbNN;
-  delete nonHydNN;
   delete caNN;
   for (map<Residue*, vector<rotamerID*> >::iterator it = survivingRotamers.begin(); it != survivingRotamers.end(); ++it) {
     vector<rotamerID*>& rots = it->second;
@@ -46,11 +45,9 @@ void ConFind::init(Structure& S) {
     Atom* a = atoms[i];
     if (a->isNamed("H")) continue;
     if (RotamerLibrary::isBackboneAtom(a)) backbone.push_back(a);
-    nonHyd.push_back(a);
     if (a->isNamed("CA")) ca.push_back(a);
   }
   bbNN = new ProximitySearch(backbone, clashDist/2);
-  nonHydNN = new ProximitySearch(nonHyd, clashDist/2);
   caNN = new ProximitySearch(ca, dcut/2);
 }
 
@@ -68,7 +65,6 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
 
   // load rotamers of each amino acid
   int numRemRotsInPosition = 0; int totNumRotsInPosition = 0;
-  double freeVolumeNum = 0; double freeVolumeDen = 0;
   for (int j = 0; j < aaNames.size(); j++) {
     string aa = aaNames[j];
     if (aaProp.find(aa) == aaProp.end()) MstUtils::error("no propensity defined for amino acid " + aa);
@@ -80,26 +76,13 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
       double rotP = rotLib->rotamerProbability(aa, ri, phi, psi);
 
       // see if the rotamer needs to be pruned (clash with the backbone).
-      // also measure contribution to the free volume
       bool prune = false;
       vector<int> closeOnes;
       for (int k = 0; k < rot.atomSize(); k++) {
         Atom& a = rot[k];
-        if (RotamerLibrary::isBackboneAtom(a)) continue;
-        // free volume contributions
-        closeOnes.clear();
-        nonHydNN->pointsWithin(a.getCoor(), 0.0, contDist, &closeOnes);
-        for (int ci = 0; ci < closeOnes.size(); ci++) {
-          // self clashes do not count (the rotamer library should not allow true clashes with own backbone or own side-chain)
-          if (nonHyd[closeOnes[ci]]->getResidue() != res) {
-            freeVolumeNum += aaP*rotP;
-            break;
-          }
-        }
-        freeVolumeDen += aaP*rotP;
-
-        // shuld the rotamer be pruned?
         if (!countsAsSidechain(a)) continue;
+
+        // shuld the rotamer be pruned based on this atom's clash(es)?
         closeOnes.clear();
         bbNN->pointsWithin(a.getCoor(), 0.0, clashDist, &closeOnes);
         for (int ci = 0; ci < closeOnes.size(); ci++) {
@@ -129,8 +112,7 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
     totNumRotsInPosition += nr;
   }
   fractionPruned[res] = (totNumRotsInPosition - numRemRotsInPosition)*1.0/totNumRotsInPosition;
-  origNumRots[res] = totNumRotsInPosition;
-  freeVolume[res] = 1 - freeVolumeNum/freeVolumeDen;
+  numLibraryRotamers[res] = totNumRotsInPosition;
 
   // cash all atoms for faster distance-based searches
   rotamerHeavySC[res] = new DecoratedProximitySearch<rotamerID*>(pointCloud, contDist/2, pointCloudTags);
@@ -158,6 +140,7 @@ bool ConFind::cache(Structure& S, fstream* rotOut) {
 }
 
 real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache) {
+  if ((degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end())) return degrees[resA][resB];
   if (!doNotCache) { cache(resA); cache(resB); }
   DecoratedProximitySearch<rotamerID*>& cloudA = *(rotamerHeavySC[resA]);
   DecoratedProximitySearch<rotamerID*>& cloudB = *(rotamerHeavySC[resB]);
@@ -177,17 +160,22 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache) {
   // compute contact degree
   real cd = 0;
   for (map<rotamerID*, map<rotamerID*, bool> >::iterator itA = clashing.begin(); itA != clashing.end(); ++itA) {
-    rotamerID& rotA = *(itA->first);
+    rotamerID* rotA = itA->first;
     real rotProbA = rotLib->rotamerProbability(rotA);
-    real aaPropA = aaProp[rotA.aminoAcid()];
+    real aaPropA = aaProp[rotA->aminoAcid()];
     for (map<rotamerID*, bool>::iterator itB = itA->second.begin(); itB != itA->second.end(); ++itB) {
-      rotamerID& rotB = *(itB->first);
+      rotamerID* rotB = itB->first;
       real rotProbB = rotLib->rotamerProbability(rotB);
-      real aaPropB = aaProp[rotB.aminoAcid()];
+      real aaPropB = aaProp[rotB->aminoAcid()];
       cd +=  aaPropA * aaPropB * rotProbA * rotProbB;
+      collProb[resA][rotA] += aaPropA * rotProbA;
+      collProb[resB][rotB] += aaPropB * rotProbB;
     }
   }
   cd /= weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB);
+  degrees[resA][resB] = cd;
+  degrees[resB][resA] = cd;
+
   return cd;
 }
 
@@ -203,6 +191,8 @@ contactList ConFind::getContacts(Residue* res, real cdcut, contactList* list) {
     real cd = contactDegree(res, neighborhood[i], true);
     if (cd > cdcut) list->addContact(res, neighborhood[i], cd);
   }
+  computeFreedom(res); // since all contacts for this residue have been visited
+
   return *list;
 }
 
@@ -217,6 +207,8 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
     real cd = contactDegree(res, neighborhood[i], true);
     if (cd > cdcut) partners.push_back(neighborhood[i]);
   }
+  computeFreedom(res); // since all contacts for this residue have been visited
+
   return partners;
 }
 
@@ -231,8 +223,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
     vector<Residue*> neighborhood = getNeighbors(resi);
     for (int j = 0; j < neighborhood.size(); j++) {
       Residue* resj = neighborhood[j];
-      if (resi == resj) continue;
-      if (checked[resi].find(resj) == checked[resi].end()) {
+      if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
         checked[resj][resi] = true;
         real cd = contactDegree(resi, resj, true);
         if (cd > cdcut) {
@@ -240,6 +231,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
         }
       }
     }
+    computeFreedom(resi); // since all contacts for this residue have been visited
   }
 
   return *list;
@@ -254,6 +246,17 @@ contactList ConFind::getContacts(Structure& S, real cdcut, contactList* list) {
   return *list;
 }
 
+real ConFind::getCrowdedness(Residue* res) {
+  cache(res);
+  return fractionPruned[res];
+}
+
+vector<real> ConFind::getCrowdedness(vector<Residue*>& residues) {
+  vector<real> crowdedness(residues.size());
+  for (int i = 0; i < residues.size(); i++) crowdedness[i] = getCrowdedness(residues[i]);
+  return crowdedness;
+}
+
 real ConFind::weightOfAvailableRotamers(Residue* res) {
   real weight = 0;
   if (survivingRotamers.find(res) == survivingRotamers.end()) MstUtils::error("residue not cached: " + MstUtils::toString(*res), "ConFind::weightOfAvailableRotamers");
@@ -264,6 +267,51 @@ real ConFind::weightOfAvailableRotamers(Residue* res) {
   }
   return weight;
 }
+
+real ConFind::getFreedom(Residue* res) {
+  if (freedom.find(res) == freedom.end()) getContacts(res);
+  return freedom[res];
+}
+
+vector<real> ConFind::getFreedom(vector<Residue*>& residues) {
+  vector<real> freedoms(residues.size());
+  for (int i = 0; i < residues.size(); i++) freedoms[i] = getFreedom(residues[i]);
+  return freedoms;
+}
+
+real ConFind::computeFreedom(Residue* res) {
+  if (freedom.find(res) != freedom.end()) return freedom[res];
+  if (collProb.find(res) == collProb.end())
+    MstUtils::error("residue not cached " + MstUtils::toString(*res), "ConFind::computeFreedom");
+
+  int type = 2;
+  map<rotamerID*, real>& cp = collProb[res];
+  switch (type) {
+    case 1: {
+      // number of rotamers with < 0.5 collision probability mass
+      real n = 0;
+      for (map<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
+        if (it->second/100 < 0.5) n += 1;
+      }
+      freedom[res] = n/numLibraryRotamers[res];
+      break;
+    }
+    case 2: {
+      // a combination of the number of rotamers with < 0.5 and < 2.0 collision probability masses
+      real n1 = 0; real n2 = 0;
+      for (map<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
+        if (it->second/100 < 0.5) n1 += 1;
+        if (it->second/100 < 2.0) n2 += 1;
+      }
+      freedom[res] = sqrt((n1*n1 + n2*n2)/2)/numLibraryRotamers[res];
+      break;
+    }
+    default:
+      MstUtils::error("unknown freedom type '" + MstUtils::toString(type) + "'", "ConFind::computeFreedom");
+  }
+  return freedom[res];
+}
+
 
 vector<Residue*> ConFind::getNeighbors(Residue* residue) {
   // find all residues around this one that are within cutoff distance and can affects it

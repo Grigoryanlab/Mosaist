@@ -76,6 +76,10 @@ class Structure {
     void addAtom(Atom& A) { addAtom(&A); }
     void addAtoms(vector<Atom*> atoms) { addAtoms(&atoms); }
     void addAtoms(vector<Atom*>* atoms);
+
+    /* makes a copy of the residue, then decides where it is supposed to go and
+     * inserts it into the Structure, creating a new Chain as needed. */
+    void addResidue(Residue* res);
     /* ----- functions that grow/shrink structure ----- */
 
     int getResidueIndex(Residue* res);
@@ -212,7 +216,7 @@ class Residue {
 
     friend ostream & operator<<(ostream &_os, Residue& _res) {
       if (_res.getParent() != NULL) {
-        _os << _res.getParent()->getID();
+        _os << _res.getParent()->getID() << ",";
       }
       _os << _res.getNum() << " " << _res.getName();
       return _os;

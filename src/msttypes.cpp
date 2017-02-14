@@ -402,6 +402,23 @@ void Structure::addAtoms(vector<Atom*>* atoms) {
   for (int i = 0; i < atoms->size(); i++) addAtom((*atoms)[i]);
 }
 
+void Structure::addResidue(Residue* res) {
+  if (res->getParent() == NULL) MstUtils::error("cannot add a disembodied Residue", "Structure::addResidue");
+  Chain* oldChain = res->getParent();
+
+
+  // is there a chain matching the Residue's parent chain? If not, create one.
+  Chain* newChain = getChainByID(oldChain->getID());
+  if (newChain == NULL) {
+    newChain = new Chain(oldChain->getID(), oldChain->getSegID());
+    this->appendChain(newChain);
+  }
+
+  // append a copy of the given residue into the correct chain
+  Residue* newResidue = new Residue(*res);
+  newChain->appendResidue(newResidue);
+}
+
 int Structure::getResidueIndex(Residue* res) {
   Chain* parentChain = res->getParent();
   if (parentChain == NULL)

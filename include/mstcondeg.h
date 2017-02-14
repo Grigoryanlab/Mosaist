@@ -69,28 +69,36 @@ class ConFind {
     contactList getContacts(Structure& S, real cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(vector<Residue*>& residues, real cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, real cdcut = 0.0);
-    // vector<real> getFreeVolume(Residue* res, real cdcut = 0.0);
-    // vector<real> getFreeVolume(vector<Residue*> res, real cdcut = 0.0);
-    // vector<real> getFreedom(Residue* res, real cdcut = 0.0);
-    // vector<real> getFreedom(vector<Residue*> res, real cdcut = 0.0);
+
+    real getCrowdedness(Residue* res);
+    vector<real> getCrowdedness(vector<Residue*>& residues);
+
+    real getFreedom(Residue* res);
+    vector<real> getFreedom(vector<Residue*>& residues);
+
     // ???? TODO: permanent contacts!!!
 
   protected:
     real weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
     void init(Structure& S);
     void setParams();
+    /* given pre-computed collision probabilities, sums up freedom scores. NOTE,
+     * does not check whether all the relevant contacting residues have been
+     * visited, so must be called only at the right times (that's why protected) */
+    real computeFreedom(Residue* res);
 
   private:
     RotamerLibrary* rotLib;
     bool isRotLibLocal;
-    AtomPointerVector backbone, nonHyd, ca;
-    ProximitySearch *bbNN, *nonHydNN, *caNN;
+    AtomPointerVector backbone, ca;
+    ProximitySearch *bbNN, *caNN;
     map<Residue*, set<int> > permanentContacts;
-    map<Residue*, double> fractionPruned;
-    map<Residue*, double> freeVolume;
-    map<Residue*, int> origNumRots;
-    map<Residue*, double> freedom;
+    map<Residue*, real> fractionPruned;
+    map<Residue*, real> freedom;
+    map<Residue*, int> numLibraryRotamers;
     map<Residue*, vector<rotamerID*> > survivingRotamers;
+    map<Residue*, map<Residue*, real> > degrees;
+    map<Residue*, map<rotamerID*, real> > collProb;
     map<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
 
 //    DecoratedProximitySearch<rotamerAtomInfo> *rotamerHeavySC; // point cloud of rotamer atoms from ALL rotamers
