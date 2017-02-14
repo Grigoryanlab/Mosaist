@@ -8,10 +8,6 @@
 using namespace std;
 using namespace MST;
 
-class cdPartner {
-
-};
-
 class contactList {
   public:
     contactList() { }
@@ -29,6 +25,7 @@ class contactList {
       infos.push_back(_info);
       inContact[_resi][_resj] = resi.size() - 1;
       inContact[_resj][_resi] = resi.size() - 1;
+      orderedContacts.insert(pair<Residue*, Residue*>(_resi, _resj));
     }
     int size() { return resi.size(); }
     Residue* residueA(int i) { return resi[i]; }
@@ -36,13 +33,28 @@ class contactList {
     real degree(int i) { return degrees[i]; }
     real degree(Residue* _resi, Residue* _resj);
     string info(int i) { return infos[i]; }
+    vector<pair<Residue*, Residue*> > getOrderedContacts();
+
 
   private:
+    struct contComp {
+      bool operator() (const pair<Residue*, Residue*>& lhs, const pair<Residue*, Residue*>& rhs) const {
+        int lhsI = Residue::getResidueIndex(lhs.first);
+        int rhsI = Residue::getResidueIndex(rhs.first);
+        if (lhsI == rhsI) {
+          lhsI = Residue::getResidueIndex(lhs.second);
+          rhsI = Residue::getResidueIndex(rhs.second);
+        }
+        return lhsI < rhsI;
+      }
+    };
+
     vector<Residue*> resi;
     vector<Residue*> resj;
     vector<real> degrees;
     vector<string> infos;
     map<Residue*, map<Residue*, int> > inContact;
+    set<pair<Residue*, Residue*>, contComp> orderedContacts;
 };
 
 class ConFind {
@@ -76,8 +88,6 @@ class ConFind {
     real getFreedom(Residue* res);
     vector<real> getFreedom(vector<Residue*>& residues);
 
-    // ???? TODO: permanent contacts!!!
-
   protected:
     real weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
     void init(Structure& S);
@@ -100,8 +110,6 @@ class ConFind {
     map<Residue*, map<Residue*, real> > degrees;
     map<Residue*, map<rotamerID*, real> > collProb;
     map<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
-
-//    DecoratedProximitySearch<rotamerAtomInfo> *rotamerHeavySC; // point cloud of rotamer atoms from ALL rotamers
 
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
     real dcut;                  // CA-AC distance cutoff beyond which we do not consider pairwise interactions

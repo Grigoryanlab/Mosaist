@@ -747,6 +747,29 @@ string Residue::getChainID(bool strict) {
   return parent->getID();
 }
 
+int Residue::getResidueIndex(Residue* res) {
+  Chain* parentChain = NULL; Structure* parentStructure = NULL;
+  parentChain = res->getParent();
+  if (parentChain != NULL) parentStructure = parentChain->getParent();
+  if ((parentChain == NULL) || (parentStructure == NULL))
+    MstUtils::error("cannot find index of a disembodied residue '" + MstUtils::toString(res) + "'", "Residue::getResidueIndex(Residue*)");
+
+  int n = 0;
+  bool found = false;
+  for (int i = 0; i < parentStructure->chainSize(); i++) {
+    Chain& chain = (*parentStructure)[i];
+    if (&chain  == parentChain) {
+      n += chain.getResidueIndex(res);
+      found = true;
+      break;
+    }
+    n += chain.residueSize();
+  }
+  if (!found) MstUtils::error("residue not from Structure '" + MstUtils::toString(res) + "'", "Structure::getResidueIndex(Residue*)");
+
+  return n;
+}
+
 /* --------- Atom --------- */
 Atom::Atom() {
   parent = NULL;

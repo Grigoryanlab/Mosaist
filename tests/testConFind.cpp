@@ -24,14 +24,14 @@ class options {
     options() {
       dcut = 25.0;
       clashDist = 2.0; contDist = 3.0; rotLibFile = ""; beblFile = ""; rotOutFile = ""; rotLevel = "";
-      verbose = renumPDB = phi_psi = omega = printFileNames = false; calcContacts = true;
+      verbose = renumPDB = phi_psi = omega = printFileNames = false;
       aaProp["ALA"] = 7.73; aaProp["CYS"] = 1.84; aaProp["ASP"] = 5.82; aaProp["GLU"] = 6.61; aaProp["PHE"] = 4.05;
       aaProp["GLY"] = 7.11; aaProp["HIS"] = 2.35; aaProp["HSD"] = 2.35; aaProp["ILE"] = 5.66; aaProp["LYS"] = 6.27;
       aaProp["LEU"] = 8.83; aaProp["MET"] = 2.08; aaProp["ASN"] = 4.50; aaProp["PRO"] = 4.52; aaProp["GLN"] = 3.94;
       aaProp["ARG"] = 5.03; aaProp["SER"] = 6.13; aaProp["THR"] = 5.53; aaProp["VAL"] = 6.91; aaProp["TRP"] = 1.51; aaProp["TYR"] = 3.54;
     }
     vector<string> pdbfs, omapfs, opdbfs;
-    bool verbose, renumPDB, phi_psi, printFileNames, omega, calcContacts;
+    bool verbose, renumPDB, phi_psi, printFileNames, omega;
     string focus, rotLibFile, beblFile, rotOutFile, rotLevel;
     double dcut, clashDist, contDist;
     map<string, double> aaProp; // amino-acid propensities (in percent)
@@ -74,7 +74,6 @@ void usage() {
   cout << option("--verb", "optional: generate lots of detailed output (i.e., print the details of which rotamer pairs are in contact).", w, p1, p2) << endl;
   cout << option("--pf", "optional: if flag specified, will print the name of the PDB file being analyzed next to all positional scores. This is especially convenient when a list of PDB file is specified as input and the output goes to a single file.", w, p1, p2) << endl;
   cout << option("--ren", "optional: if flag specified, will renumber the structure before output. Useful for keeping track of residues in the output list of contacts if the input PDB file is strangely numbered.", w, p1, p2) << endl;
-  cout << option("--nc", "optional: if flag specified, contact information will not be calculated/printed and only self information will.", w, p1, p2) << endl;
 }
 
 void parseCommandLine(int argc, char** argv, options& iopts) {
@@ -97,7 +96,6 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
       {"rout", 1, 0, 21},
       {"ren", 0, 0, 22},
       {"pf", 0, 0, 25},
-      {"nc", 0, 0, 27},
       {0, 0, 0, 0}
     };
 
@@ -186,11 +184,6 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
         spec[string(opts[oind].name)] = true;
         break;
 
-      case 27:
-        iopts.calcContacts = false;
-        spec[string(opts[oind].name)] = true;
-        break;
-
       case '?':
         break;
 
@@ -250,7 +243,7 @@ int main(int argc, char *argv[]) {
     proteinOnly(S, So, legalNames);
     if (iopts.renumPDB) S.renumber();
     ConFind C(&RL, S); // this structure will be used for computing contact degrees
-    vector<Residue*> allRes = S.getResidues(iopts.focus);
+    vector<Residue*> allRes = S.getResidues();
 
     // open output file and write header
     fstream of;
@@ -267,11 +260,12 @@ int main(int argc, char *argv[]) {
     // print degrees
     contactList L;
     C.getContacts(allRes, 0, &L);
-    for (int k = 0; k < L.size(); k++) {
-      Residue* resA = L.residueA(k);
-      Residue* resB = L.residueB(k);
+    vector<pair<Residue*, Residue*> > list = L.getOrderedContacts();
+    for (int k = 0; k < list.size(); k++) {
+      Residue* resA = list[k].first;
+      Residue* resB = list[k].second;
       out << "contact\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
-      out << "\t" << std::setprecision(6) << std::fixed << L.degree(k);
+      out << "\t" << std::setprecision(6) << std::fixed << L.degree(resA, resB);
       out << "\t" << resA->getName() << "\t" << resB->getName() << endl;
     }
 
@@ -282,7 +276,9 @@ int main(int argc, char *argv[]) {
       out << std::setprecision(6) << std::fixed << C.getCrowdedness(res) << "\t";
       if (iopts.phi_psi) out << res->getPhi() << "\t" << res->getPsi() << "\t";
       if (iopts.omega) out << res->getOmega() << "\t";
-      out << res->getName() << endl;
+      out << res->getName();
+      if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
+      out << endl;
     }
 
     // print freedoms
@@ -293,7 +289,9 @@ int main(int argc, char *argv[]) {
       out << std::setprecision(6) << std::fixed << freedoms[k] << "\t";
       if (iopts.phi_psi) out << res->getPhi() << "\t" << res->getPsi() << "\t";
       if (iopts.omega) out << res->getOmega() << "\t";
-      out << res->getName() << endl;
+      out << res->getName();
+      if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
+      out << endl;
     }
 
     // print sequence

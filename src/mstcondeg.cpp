@@ -1,5 +1,14 @@
 #include "mstcondeg.h"
 
+vector<pair<Residue*, Residue*> > contactList::getOrderedContacts() {
+  vector<pair<Residue*, Residue*> > conts(orderedContacts.size());
+  int i = 0;
+  for (set<pair<Residue*, Residue*>, contComp>::iterator it = orderedContacts.begin(); it != orderedContacts.end(); ++it, i++) {
+    conts[i] = *it;
+  }
+  return conts;
+}
+
 ConFind::ConFind(string rotLibFile, Structure& S) {
   setParams();
   rotLib = new RotamerLibrary(rotLibFile);
