@@ -1097,6 +1097,248 @@ real CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoin
   return dihedralRadians(*_p1, *_p2, *_p3, *_p4)*180/M_PI;
 }
 
+/* --------- selector --------------- */
+
+selector::selector(Structure& S) {
+  atoms = S.getAtoms();
+  residues.resize(atoms.size());
+  chains.resize(atoms.size());
+  for (int i = 0; i < atoms.size(); i++) {
+    residues[i] = atoms[i]->getParent();
+    if (residues[i] != NULL) chains[i] = residues[i]->getParent();
+    if ((residues[i] == NULL) || (chains[i] == NULL)) MstUtils::error("internally inconsistent Structure given", "selector::selector");
+  }
+}
+
+AtomPointerVector selector::select(string selStr) {
+  expressionTree* tree = buildExpressionTree(selStr);
+  AtomPointerVector sel;
+  select(tree, sel);
+  return sel;
+}
+
+void selector::select(expressionTree* tree, AtomPointerVector& sel) {
+  if (tree->numChildren() == 0) {
+    // this is a terminal node, so just do the selection
+    for (int i = 0; i < atoms.size(); i++) {
+      switch(tree->getProperty()) {
+        case (expressionTree::selProperty::RESID):
+          if (residues[i]->getNum() == tree->getNum()) sel.push_back(atoms[i]);
+          break;
+        case (expressionTree::selProperty::RESNAME):
+          if (residues[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
+          break;
+        case (expressionTree::selProperty::CHAIN):
+          if (chains[i]->getID() == tree->getString()) sel.push_back(atoms[i]);
+          break;
+        case (expressionTree::selProperty::SEGID):
+          if (chains[i]->getSegID() == tree->getString()) sel.push_back(atoms[i]);
+          break;
+        case (expressionTree::selProperty::NAME):
+          if (atoms[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
+          break;
+        case (expressionTree::selProperty::AROUND):
+          MstUtils::error("not implemented yet", "selector::select");
+          break;
+        default:
+          MstUtils::error("uknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
+      }
+    }
+  } else {
+    AtomPointerVector sel, selA, selB;
+    switch(tree->getLogicalOperator()) {
+      case (expressionTree::logicalOp::AND):
+        if (tree->numChildren() != 2)
+          MstUtils::error("poorly parsed expressoin: expected two operands for AND", "selector::select(expressionTree* )");
+        select(tree->getChild(0), selA);
+        select(tree->getChild(1), selB);
+        sel = intersect(selA, selB);
+        break;
+      case (expressionTree::logicalOp::OR):
+        if (tree->numChildren() != 2)
+          MstUtils::error("poorly parsed expressoin: expected two operands for OR", "selector::select(expressionTree* )");
+        select(tree->getChild(0), selA);
+        select(tree->getChild(1), selB);
+        sel = combine(selA, selB);
+        break;
+      case (expressionTree::logicalOp::NOT):
+        if (tree->numChildren() != 1)
+          MstUtils::error("poorly parsed expressoin: expected one operand for NOT", "selector::select(expressionTree* )");
+        select(tree->getChild(0), selA);
+        sel = invert(selA);
+        break;
+      case (expressionTree::logicalOp::BYRES):
+        if (tree->numChildren() != 1)
+          MstUtils::error("poorly parsed expressoin: expected one operand for BYRES", "selector::select(expressionTree* )");
+        select(tree->getChild(0), selA);
+        sel = byRes(selA);
+        break;
+      case (expressionTree::logicalOp::BYCHAIN):
+        if (tree->numChildren() != 1)
+          MstUtils::error("poorly parsed expressoin: expected one operand for BYCHAIN", "selector::select(expressionTree* )");
+        select(tree->getChild(0), selA);
+        sel = byChain(selA);
+        break;
+      case (expressionTree::logicalOp::IS):
+        if (tree->numChildren() != 1)
+          MstUtils::error("poorly parsed expressoin: expected one operand for IS", "selector::select(expressionTree* )");
+        select(tree->getChild(0), sel);
+        break;
+      default:
+        MstUtils::error("uknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
+    }
+  }
+  delete tree;
+}
+
+expressionTree* selector::buildExpressionTree(string selStr) {
+  expressionTree* tree = new expressionTree();
+  string token = getNextSelectionToken(selStr); // either something in () or the next space-separated word
+
+  if (MstUtils::stringsEqual(token, "not")) {
+    tree->setLogicalOperator(expressionTree::logicalOp::NOT);
+    tree->addChild(buildExpressionTree(selStr));
+    return tree;
+  } else if (MstUtils::stringsEqual(token, "byres")) {
+    tree->setLogicalOperator(expressionTree::logicalOp::BYRES);
+    tree->addChild(buildExpressionTree(selStr));
+    return tree;
+  } else if (MstUtils::stringsEqual(token, "bychain")) {
+    tree->setLogicalOperator(expressionTree::logicalOp::BYCHAIN);
+    tree->addChild(buildExpressionTree(selStr));
+    return tree;
+  } else if (MstUtils::stringsEqual(token, "resid")) {
+    string str = getNextSelectionToken(selStr);
+    if (!MstUtils::isInt(str)) MstUtils::error("bad selection, expected number when saw " + str, "selector::buildExpressionTree(string)");
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->setProperty(expressionTree::selProperty::RESID);
+    tree->setNum(MstUtils::toInt(str));
+  } else if (MstUtils::stringsEqual(token, "resname")) {
+    string str = getNextSelectionToken(selStr);
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->setProperty(expressionTree::selProperty::RESNAME);
+    tree->setString(str);
+  } else if (MstUtils::stringsEqual(token, "chain")) {
+    string str = getNextSelectionToken(selStr);
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->setProperty(expressionTree::selProperty::CHAIN);
+    tree->setString(str);
+  } else if (MstUtils::stringsEqual(token, "segid")) {
+    string str = getNextSelectionToken(selStr);
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->setProperty(expressionTree::selProperty::SEGID);
+    tree->setString(str);
+  } else if (MstUtils::stringsEqual(token, "name")) {
+    string str = getNextSelectionToken(selStr);
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->setProperty(expressionTree::selProperty::NAME);
+    tree->setString(str);
+  } else if (token[0] == '(') {
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->addChild(buildExpressionTree(selStr));
+  }
+
+  string connector = getNextSelectionToken(selStr);
+  if (connector.empty()) {
+    return tree;
+  }
+  expressionTree* root = new expressionTree();
+  root->addChild(tree);
+  if (MstUtils::stringsEqual(connector, "and")) {
+    root->setLogicalOperator(expressionTree::logicalOp::AND);
+  } else if (MstUtils::stringsEqual(connector, "or")) {
+    root->setLogicalOperator(expressionTree::logicalOp::OR);
+  } else {
+    MstUtils::error("bad selection, unrecognized connector keyword '" + connector + "'", "selector::buildExpressionTree(string)");
+  }
+
+  root->addChild(buildExpressionTree(selStr));
+  return root;
+}
+
+string selector::getNextSelectionToken(string& selStr) {
+  selStr = MstUtils::trim(selStr);
+  if (selStr.empty()) { return ""; }
+
+  if (selStr[0] == '(') { // if parenthetical, find matching paren
+    // find matching closing paren
+    int n = 1; int i;
+    for (i = 1; i < selStr.size(); i++) {
+      if (selStr[i] == '(') n++;
+      if (selStr[i] == ')') n--;
+      if (n == 0) break;
+    }
+    if (n != 0) MstUtils::error("ill-formed selection expression '" + selStr + "'", "Structure::getNextSelectionToken");
+    string token = selStr.substr(0, i); // keep trailing ()
+    selStr = selStr.substr(i+1);
+    return token;
+  }
+
+  // otherwise, just get the next space-delimited token
+  string token = MstUtils::nextToken(selStr);
+  return token;
+}
+
+AtomPointerVector selector::invert(AtomPointerVector& selAtoms) {
+  map<Atom*, bool> in;
+  AtomPointerVector notIn;
+  for (int i = 0; i < selAtoms.size(); i++) in[selAtoms[i]] = true;
+  for (int i = 0; i < atoms.size(); i++) {
+    if (in.find(atoms[i]) == in.end()) notIn.push_back(atoms[i]);
+  }
+  return notIn;
+}
+
+AtomPointerVector selector::intersect(AtomPointerVector& selA, AtomPointerVector& selB) {
+  map<Atom*, bool> inA;
+  for (int i = 0; i < selA.size(); i++) inA[selA[i]] = true;
+
+  AtomPointerVector common;
+  for (int i = 0; i < selB.size(); i++) {
+    if (inA.find(selB[i]) == inA.end()) common.push_back(selB[i]);
+  }
+  return common;
+}
+
+AtomPointerVector selector::combine(AtomPointerVector& selA, AtomPointerVector& selB) {
+  map<Atom*, bool> inBothMap;
+  for (int i = 0; i < selA.size(); i++) inBothMap[selA[i]] = true;
+  for (int i = 0; i < selB.size(); i++) inBothMap[selB[i]] = true;
+  AtomPointerVector inBoth(inBothMap.size(), NULL);
+  int i = 0;
+  for (map<Atom*, bool>::iterator it = inBothMap.begin(); it != inBothMap.end(); ++it, i++)
+    inBoth[i] = it->first;
+  return inBoth;
+}
+
+AtomPointerVector selector::byRes(AtomPointerVector& selAtoms) {
+  map<Residue*, bool> added;
+  AtomPointerVector expanded;
+  for (int i = 0; i < selAtoms.size(); i++) {
+    Residue* res = selAtoms[i]->getParent();
+    if (res == NULL) MstUtils::error("some atoms in selection are parentless", "selector::byRes");
+    if (added.find(res) != added.end()) continue;
+    for (int j = 0; j < res->atomSize(); j++) expanded.push_back(&(res->getAtom(i)));
+    added[res] = true;
+  }
+  return expanded;
+}
+
+AtomPointerVector selector::byChain(AtomPointerVector& selAtoms) {
+  map<Chain*, bool> added;
+  AtomPointerVector expanded;
+  for (int i = 0; i < selAtoms.size(); i++) {
+    Chain* chain = selAtoms[i]->getChain();
+    if (chain == NULL) MstUtils::error("some atoms in selection are parentless", "selector::byChain");
+    if (added.find(chain) != added.end()) continue;
+    for (int j = 0; j < chain->residueSize(); j++) {
+      Residue& res = chain->getResidue(j);
+      for (int k = 0; k < res.atomSize(); k++) expanded.push_back(&(res[k]));
+    }
+    added[chain] = true;
+  }
+  return expanded;
+}
 
 /* --------- RMSDCalculator --------- */
 
@@ -1705,6 +1947,20 @@ bool MstUtils::isDir(const char *filename) {
   return (buffer.st_mode & S_IFDIR);
 }
 
+string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDelims) {
+  string ret;
+  if (skipTrailingDelims) str = trim(str, delimiters);
+  int i = str.find_first_of(delimiters);
+  if (i == string::npos) {
+    ret = str;
+    str = "";
+    return ret;
+  }
+  ret = str.substr(0, i);
+  str = str.substr(i);
+  return ret;
+}
+
 FILE* MstUtils::openFileC (const char* filename, const char* mode, string from) {
   FILE * fp;
   fp = fopen (filename, mode);
@@ -1723,20 +1979,16 @@ string MstUtils::uc(string& str){
   return ret;
 }
 
-string MstUtils::trim(string str) {
-  if (str.empty()) return str;
+bool MstUtils::stringsEqual(const string& A, const string& B, bool caseInsensitive) {
+  if (caseInsensitive) return (strcasecmp(A.c_str(), B.c_str()) == 0);
+  return (strcmp(A.c_str(), B.c_str()) == 0);
+}
 
-  int b = 0; int e = str.length();
-  for (int i = 0; i < str.length(); i++) {
-    if (!isspace(str[i])) break;
-    b = i + 1;
-  }
-  if (b == str.length()) return "";
-  for (int i = str.length()-1; i >= 0; i--) {
-    if (!isspace(str[i])) break;
-    e = i;
-  }
-  return str.substr(b, e - b);
+string MstUtils::trim(string str, string delimiters) {
+  int i = str.find_first_not_of(delimiters);
+  if (i == string::npos) return "";
+  int j = str.find_last_not_of(delimiters);
+  return str.substr(i, j - i + 1);
 }
 
 void MstUtils::warn(string message, string from) {
@@ -1788,6 +2040,11 @@ int MstUtils::toInt(string num, bool strict) {
   int ret;
   if ((sscanf(num.c_str(), "%d", &ret) == 0) && strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
   return ret;
+}
+
+bool MstUtils::isInt(string num) {
+  int ret;
+  return (sscanf(num.c_str(), "%d", &ret) != 0);
 }
 
 MST::real MstUtils::toReal(string num, bool strict) {

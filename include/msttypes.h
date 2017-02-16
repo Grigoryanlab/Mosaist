@@ -27,8 +27,6 @@ class Structure;
 
 typedef double real;
 typedef Structure System;                // for interchangability with MSL
-typedef int residueID[2];
-typedef int atomID[3];
 
 class Structure {
   friend class Chain;
@@ -420,6 +418,55 @@ class AtomPointerVector : public vector<Atom*> {
     }
 };
 
+class expressionTree {
+  public:
+    enum selProperty { RESID = 1, RESNAME, CHAIN, SEGID, NAME, AROUND }; // selectable properties
+    enum logicalOp { AND = 1, OR, NOT, BYRES, BYCHAIN, IS };             // logical operators
+
+    expressionTree(logicalOp _op = logicalOp::IS) { op = _op; }
+    ~expressionTree() {
+      for (int i = 0; i < children.size(); i++) delete children[i];
+    }
+
+    void setLogicalOperator(logicalOp _op) { op = _op; }
+    void setProperty(selProperty _type) { type = _type; }
+    void setNum(int _num) { num = _num; }
+    void setString(string _str) { str = _str; }
+    void addChild(expressionTree* subtree) { children.push_back(subtree); }
+    logicalOp getLogicalOperator() { return op; }
+    selProperty getProperty() { return type; }
+    int getNum() { return num; }
+    string getString() { return str; }
+    int numChildren() { return children.size(); }
+    expressionTree* getChild(int i) { return children[i]; }
+
+  private:
+    logicalOp op;
+    selProperty type;
+    int num;
+    string str;
+    vector<expressionTree*> children;
+};
+
+class selector {
+  public:
+    selector(Structure& S);
+    AtomPointerVector select(string selStr);
+    void select(expressionTree* tree, AtomPointerVector& sel);
+    expressionTree* buildExpressionTree(string selStr);
+    AtomPointerVector byRes(AtomPointerVector& selAtoms);
+    AtomPointerVector byChain(AtomPointerVector& selAtoms);
+    AtomPointerVector invert(AtomPointerVector& selAtoms);
+    AtomPointerVector intersect(AtomPointerVector& selA, AtomPointerVector& selB);
+    AtomPointerVector combine(AtomPointerVector& selA, AtomPointerVector& selB);
+
+  private:
+    string getNextSelectionToken(string& selStr);
+    vector<Atom*> atoms;
+    vector<Residue*> residues;
+    vector<Chain*> chains;
+};
+
 class RMSDCalculator {
  public:
     RMSDCalculator() {}
@@ -558,20 +605,23 @@ class MstUtils {
     static void fileToArray(string _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
     static vector<string> fileToArray(string _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
     static FILE* openFileC (const char* filename, const char* mode, string from = "");
-    static string trim(string str);
+    static string trim(string str, string delimiters = " \t\n\v\f\r");
     static void warn(string message, string from = "");
     static void error(string message, string from = "", int code = -1);
     static void assert(bool condition, string message = "error: assertion failed", string from = "", int exitCode = -1);
     static string uc(string& str);                        // returns an upper-case copy of the input string
+    static bool stringsEqual(const string& A, const string& B, bool caseInsensitive = true);
     static string wrapText(string message, int width, int leftSkip = 0, int startingOffset = 0);
     static char* copyStringC(const char* str);
     static int toInt(string num, bool strict = true);
+    static bool isInt(string num);
     static MST::real toReal(string num, bool strict = true);
     static MST::real mod(MST::real num, MST::real den);
     static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string pathBase(string fn); // gets the base name of the path (removes the extension)
     static bool fileExists(const char *filename);
     static bool isDir(const char *filename);
+    static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
 
     static string readNullTerminatedString(fstream& ifs);
 

@@ -60,15 +60,14 @@ void ConFind::init(Structure& S) {
   caNN = new ProximitySearch(ca, dcut/2);
 }
 
-bool ConFind::cache(Residue* res, fstream* rotOut) {
-  if (rotamerHeavySC.find(res) != rotamerHeavySC.end()) return true;
+void ConFind::cache(Residue* res, fstream* rotOut) {
+  if (rotamerHeavySC.find(res) != rotamerHeavySC.end()) return;
   AtomPointerVector pointCloud;      // side-chain atoms of surviving rotames
   vector<rotamerID*> pointCloudTags; // corresponding tags (i.e.,  rotamer identity)
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
-    MstUtils::warn("cannot build rotamers at position " + MstUtils::toString(*res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
-    return false;
+    MstUtils::error("cannot build rotamers at position " + MstUtils::toString(*res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
   }
   real phi = res->getPhi(); real psi = res->getPsi();
 
@@ -126,8 +125,6 @@ bool ConFind::cache(Residue* res, fstream* rotOut) {
   // cash all atoms for faster distance-based searches
   rotamerHeavySC[res] = new DecoratedProximitySearch<rotamerID*>(pointCloud, contDist/2, pointCloudTags);
   pointCloud.deletePointers();
-
-  return true;
 }
 
 bool ConFind::countsAsSidechain(Atom& a) {
@@ -135,22 +132,20 @@ bool ConFind::countsAsSidechain(Atom& a) {
   if (doNotCountCB && a.isNamed("CB") && !(a.getResidue()->isNamed("ALA"))) return false;
   return true;
 }
-bool ConFind::cache(vector<Residue*>& residues, fstream* rotOut) {
-  bool ret = true;
-  for (int i = 0; i < residues.size(); i++) {
-    ret = ret && cache(residues[i], rotOut);
-  }
-  return ret;
+
+void ConFind::cache(vector<Residue*>& residues, fstream* rotOut) {
+  for (int i = 0; i < residues.size(); i++) cache(residues[i], rotOut);
 }
 
-bool ConFind::cache(Structure& S, fstream* rotOut) {
+void ConFind::cache(Structure& S, fstream* rotOut) {
   vector<Residue*> residues = S.getResidues();
-  return cache(residues, rotOut);
+  cache(residues, rotOut);
 }
 
-real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache) {
+real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache, bool checkNeighbors) {
   if ((degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end())) return degrees[resA][resB];
   if (!doNotCache) { cache(resA); cache(resB); }
+  if (checkNeighbors && !areNeighbors(resA, resB)) return 0;
   DecoratedProximitySearch<rotamerID*>& cloudA = *(rotamerHeavySC[resA]);
   DecoratedProximitySearch<rotamerID*>& cloudB = *(rotamerHeavySC[resB]);
 
@@ -197,7 +192,7 @@ contactList ConFind::getContacts(Residue* res, real cdcut, contactList* list) {
   if (list == NULL) list = &L;
   for (int i = 0; i < neighborhood.size(); i++) {
     if (res == neighborhood[i]) continue;
-    real cd = contactDegree(res, neighborhood[i], true);
+    real cd = contactDegree(res, neighborhood[i], true, false);
     if (cd > cdcut) list->addContact(res, neighborhood[i], cd);
   }
   computeFreedom(res); // since all contacts for this residue have been visited
@@ -213,7 +208,7 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
   vector<Residue*> partners;
   for (int i = 0; i < neighborhood.size(); i++) {
     if (res == neighborhood[i]) continue;
-    real cd = contactDegree(res, neighborhood[i], true);
+    real cd = contactDegree(res, neighborhood[i], true, false);
     if (cd > cdcut) partners.push_back(neighborhood[i]);
   }
   computeFreedom(res); // since all contacts for this residue have been visited
@@ -234,7 +229,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
       Residue* resj = neighborhood[j];
       if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
         checked[resj][resi] = true;
-        real cd = contactDegree(resi, resj, true);
+        real cd = contactDegree(resi, resj, true, false);
         if (cd > cdcut) {
           list->addContact(resi, resj, cd);
         }
@@ -358,6 +353,12 @@ vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
     neighborhood[i] = it->first;
   }
   return neighborhood;
+}
+
+bool ConFind::areNeighbors(Residue* resA, Residue* resB) {
+  Atom* CAA = resA->findAtom("CA");
+  Atom* CAB = resB->findAtom("CA");
+  return (CAA->distance(*CAB) <= dcut);
 }
 
 real contactList::degree(Residue* _resi, Residue* _resj) {

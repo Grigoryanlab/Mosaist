@@ -244,6 +244,14 @@ int main(int argc, char *argv[]) {
     if (iopts.renumPDB) S.renumber();
     ConFind C(&RL, S); // this structure will be used for computing contact degrees
     vector<Residue*> allRes = S.getResidues();
+    if (!iopts.focus.empty()) {
+      selector sel(S);
+      AtomPointerVector focus = sel.select(iopts.focus);
+      Structure F; F.addAtoms(focus);
+if (!iopts.opdbfs.empty()) F.writePDB(iopts.opdbfs[si]);
+exit(-1);
+      S = F;
+    }
 
     // open output file and write header
     fstream of;

@@ -64,19 +64,20 @@ class ConFind {
     ~ConFind();
 
     // precomputes all necessary info and data structures for computing on this Structure
-    bool cache(Structure& S, fstream* rotOut = NULL);
-    bool cache(vector<Residue*>& residues, fstream* rotOut = NULL);
-    bool cache(Residue* res, fstream* rotOut = NULL);
+    void cache(Structure& S, fstream* rotOut = NULL);
+    void cache(vector<Residue*>& residues, fstream* rotOut = NULL);
+    void cache(Residue* res, fstream* rotOut = NULL);
 
     // find those residues that are close enough to affect the passed residue(s)
     vector<Residue*> getNeighbors(Residue* residue);
     vector<Residue*> getNeighbors(vector<Residue*>& residues);
+    bool areNeighbors(Residue* resA, Residue* resB);
 
     /* this function encodes whether a given atom counts as "side-chain" for the
      * purposes of finding sidechain-to-sidechain contacts. */
     bool countsAsSidechain(Atom& a);
 
-    real contactDegree(Residue* resA, Residue* resB, bool doNotCache = false);
+    real contactDegree(Residue* resA, Residue* resB, bool doNotCache = false, bool checkNeighbors = true);
     contactList getContacts(Residue* res, real cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(Structure& S, real cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(vector<Residue*>& residues, real cdcut = 0.0, contactList* list = NULL);
