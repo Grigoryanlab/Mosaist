@@ -1257,7 +1257,9 @@ expressionTree* selector::buildExpressionTree(string selStr) {
     tree->setString(str);
   } else if (token[0] == '(') {
     tree->setLogicalOperator(expressionTree::logicalOp::IS);
-    tree->addChild(buildExpressionTree(selStr));
+    tree->addChild(buildExpressionTree(token.substr(1, token.size()-2)));
+  } else {
+    MstUtils::error("do not know how to parse token '" + token + "'", "selector::buildExpressionTree");
   }
 
   string connector = getNextSelectionToken(selStr);
@@ -1271,7 +1273,7 @@ expressionTree* selector::buildExpressionTree(string selStr) {
   } else if (MstUtils::stringsEqual(connector, "or")) {
     root->setLogicalOperator(expressionTree::logicalOp::OR);
   } else {
-    MstUtils::error("bad selection, unrecognized connector keyword '" + connector + "'", "selector::buildExpressionTree(string)");
+    MstUtils::error("bad selection, unrecognized connector keyword '" + connector + "' after token '" + token + "'", "selector::buildExpressionTree(string)");
   }
 
   root->addChild(buildExpressionTree(selStr));
@@ -1291,7 +1293,7 @@ string selector::getNextSelectionToken(string& selStr) {
       if (n == 0) break;
     }
     if (n != 0) MstUtils::error("ill-formed selection expression '" + selStr + "'", "Structure::getNextSelectionToken");
-    string token = selStr.substr(0, i); // keep trailing ()
+    string token = selStr.substr(0, i+1); // keep trailing ()
     selStr = selStr.substr(i+1);
     return token;
   }
@@ -1317,7 +1319,7 @@ AtomPointerVector selector::intersect(AtomPointerVector& selA, AtomPointerVector
 
   AtomPointerVector common;
   for (int i = 0; i < selB.size(); i++) {
-    if (inA.find(selB[i]) == inA.end()) common.push_back(selB[i]);
+    if (inA.find(selB[i]) != inA.end()) common.push_back(selB[i]);
   }
   return common;
 }

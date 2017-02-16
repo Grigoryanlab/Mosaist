@@ -229,7 +229,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
       Residue* resj = neighborhood[j];
       if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
         checked[resj][resi] = true;
-        real cd = contactDegree(resi, resj, true, false);
+        real cd = contactDegree(resi, resj, false, false);
         if (cd > cdcut) {
           list->addContact(resi, resj, cd);
         }
