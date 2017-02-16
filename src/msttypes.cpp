@@ -14,6 +14,10 @@ Structure::Structure(string pdbFile, string options) {
 }
 
 Structure::Structure(Structure& S) {
+  copy(S);
+}
+
+void Structure::copy(const Structure& S) {
   name = S.name;
   numResidues = S.numResidues;
   numAtoms = S.numAtoms;
@@ -55,6 +59,12 @@ void Structure::reset() {
   chainsBySegID.clear();
   name = "";
   numResidues = numAtoms = 0;
+}
+
+Structure& Structure::operator=(const Structure& A) {
+  reset();
+  copy(A);
+  return *this;
 }
 
 void Structure::readPDB(string pdbFile, string options) {
@@ -1114,6 +1124,7 @@ AtomPointerVector selector::select(string selStr) {
   expressionTree* tree = buildExpressionTree(selStr);
   AtomPointerVector sel;
   select(tree, sel);
+  delete tree;
   return sel;
 }
 
@@ -1145,7 +1156,7 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
       }
     }
   } else {
-    AtomPointerVector sel, selA, selB;
+    AtomPointerVector selA, selB;
     switch(tree->getLogicalOperator()) {
       case (expressionTree::logicalOp::AND):
         if (tree->numChildren() != 2)
@@ -1188,7 +1199,6 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
         MstUtils::error("uknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
     }
   }
-  delete tree;
 }
 
 expressionTree* selector::buildExpressionTree(string selStr) {
@@ -1772,7 +1782,7 @@ void ProximitySearch::calculateExtent(Structure& S, real& _xlo, real& _ylo, real
 }
 
 void ProximitySearch::calculateExtent(AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
-  if (_atoms.size() == 0) { cout << "Error in nnclass::calculateExtent() -- empty atom vector passed!\n"; exit(-1); }
+  if (_atoms.size() == 0) { cout << "Error in ProximitySearch::calculateExtent() -- empty atom vector passed!\n"; exit(-1); }
   _xlo = _xhi = _atoms[0]->getX();
   _ylo = _yhi = _atoms[0]->getY();
   _zlo = _zhi = _atoms[0]->getZ();

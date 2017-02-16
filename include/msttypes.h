@@ -43,6 +43,7 @@ class Structure {
     void writePDB(string pdbFile, string options = "");
     void writePDB(fstream& ofs, string options = "");
     void reset();
+    Structure& operator=(const Structure& A);
 
     int chainSize() const { return chains.size(); }
     int residueSize() { return numResidues; }
@@ -86,6 +87,7 @@ class Structure {
     void incrementNumAtoms(int delta = 1) { numAtoms += delta; }
     void incrementNumResidues(int delta = 1) { numResidues += delta; }
     void deletePointers();
+    void copy(const Structure& S);
 
   private:
     vector<Chain*> chains;
