@@ -454,6 +454,7 @@ class selector {
   public:
     selector(Structure& S);
     AtomPointerVector select(string selStr);
+    vector<Residue*> selectRes(string selStr);
     void select(expressionTree* tree, AtomPointerVector& sel);
     expressionTree* buildExpressionTree(string selStr);
     AtomPointerVector byRes(AtomPointerVector& selAtoms);

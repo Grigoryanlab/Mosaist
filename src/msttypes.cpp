@@ -1128,6 +1128,18 @@ AtomPointerVector selector::select(string selStr) {
   return sel;
 }
 
+vector<Residue*> selector::selectRes(string selStr) {
+  AtomPointerVector sel = select(selStr);
+  map<Residue*, bool> selResMap;
+  for (int i = 0; i < sel.size(); i++) selResMap[sel[i]->getParent()] = true;
+  vector<Residue*> selRes(selResMap.size());
+  int i = 0;
+  for (map<Residue*, bool>::iterator it = selResMap.begin(); it != selResMap.end(); ++it, i++) {
+    selRes[i] = it->first;
+  }
+  return selRes;
+}
+
 void selector::select(expressionTree* tree, AtomPointerVector& sel) {
   if (tree->numChildren() == 0) {
     // this is a terminal node, so just do the selection

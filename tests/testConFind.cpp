@@ -242,13 +242,16 @@ int main(int argc, char *argv[]) {
     Structure S;                                         // just the region of the original structure corresponding to the map
     proteinOnly(S, So, legalNames);
     if (iopts.renumPDB) S.renumber();
-    vector<Residue*> allRes = S.getResidues();
+    ConFind C(&RL, S);
+
+    // optionally select the relevant residue subset
+    vector<Residue*> allRes;
     if (!iopts.focus.empty()) {
       selector sel(S);
-      AtomPointerVector focus = sel.select(iopts.focus);
-      Structure F; F.addAtoms(focus); S = F;
+      allRes = sel.selectRes(iopts.focus);
+    } else {
+      allRes = S.getResidues();
     }
-    ConFind C(&RL, S); // this structure will be used for computing contact degrees
 
     // open output file and write header
     fstream of;
