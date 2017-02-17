@@ -44,7 +44,7 @@ ConFind::~ConFind() {
     for (int i = 0; i < rots.size(); i++) delete(rots[i]);
   }
   for (map<Residue*, DecoratedProximitySearch<rotamerID*>* >::iterator it = rotamerHeavySC.begin(); it != rotamerHeavySC.end(); ++it) {
-    delete it->second;
+    if (it->second != NULL) delete it->second;
   }
 }
 
@@ -64,6 +64,8 @@ void ConFind::cache(Residue* res, fstream* rotOut) {
   if (rotamerHeavySC.find(res) != rotamerHeavySC.end()) return;
   AtomPointerVector pointCloud;      // side-chain atoms of surviving rotames
   vector<rotamerID*> pointCloudTags; // corresponding tags (i.e.,  rotamer identity)
+  survivingRotamers[res].resize(0);
+  rotamerHeavySC[res] = NULL;
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
@@ -123,7 +125,7 @@ void ConFind::cache(Residue* res, fstream* rotOut) {
   numLibraryRotamers[res] = totNumRotsInPosition;
 
   // cash all atoms for faster distance-based searches
-  rotamerHeavySC[res] = new DecoratedProximitySearch<rotamerID*>(pointCloud, contDist/2, pointCloudTags);
+  if (pointCloud.size() != 0) rotamerHeavySC[res] = new DecoratedProximitySearch<rotamerID*>(pointCloud, contDist/2, pointCloudTags);
   pointCloud.deletePointers();
 }
 
@@ -146,18 +148,21 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache, bool 
   if ((degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end())) return degrees[resA][resB];
   if (!doNotCache) { cache(resA); cache(resB); }
   if (checkNeighbors && !areNeighbors(resA, resB)) return 0;
-  DecoratedProximitySearch<rotamerID*>& cloudA = *(rotamerHeavySC[resA]);
-  DecoratedProximitySearch<rotamerID*>& cloudB = *(rotamerHeavySC[resB]);
+  DecoratedProximitySearch<rotamerID*>* cloudA = rotamerHeavySC[resA];
+  DecoratedProximitySearch<rotamerID*>* cloudB = rotamerHeavySC[resB];
+  if (cloudA == NULL) collProb[resA] = map<rotamerID*, real>();
+  if (cloudB == NULL) collProb[resB] = map<rotamerID*, real>();
+  if ((cloudA == NULL) || (cloudB == NULL)) return 0.0;
 
   // check if the point clouds representing to two rotamer trees even overlap
-  if (!cloudA.overlaps(cloudB)) return 0;
+  if (!cloudA->overlaps(*cloudB)) return 0;
 
   // if so, find rotamer pairs that clash
   map<rotamerID*, map<rotamerID*, bool> > clashing;
-  for (int ai = 0; ai < cloudA.pointSize(); ai++) {
-    vector<rotamerID*> p = cloudB.getPointsWithin(cloudA.getPoint(ai), 0, contDist);
+  for (int ai = 0; ai < cloudA->pointSize(); ai++) {
+    vector<rotamerID*> p = cloudB->getPointsWithin(cloudA->getPoint(ai), 0, contDist);
     if (p.size() == 0) continue;
-    rotamerID* rID = cloudA.getPointTag(ai);
+    rotamerID* rID = cloudA->getPointTag(ai);
     for (int i = 0; i < p.size(); i++) clashing[rID][p[i]] = true;
   }
 
