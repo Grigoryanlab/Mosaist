@@ -222,7 +222,6 @@ int main(int argc, char *argv[]) {
   // process input arguments
   options iopts;
   parseCommandLine(argc, argv, iopts);
-  if (!iopts.rotOutFile.empty()) { MstUtils::openFile(rotOut, iopts.rotOutFile, fstream::out); rotOutPtr = &rotOut; }
 
   // legal residue names that are considered "protein" here
   vector<string> legalNames;
@@ -243,6 +242,7 @@ int main(int argc, char *argv[]) {
     proteinOnly(S, So, legalNames);
     if (iopts.renumPDB) S.renumber();
     ConFind C(&RL, S);
+    if (!iopts.rotOutFile.empty()) C.openLogFile(iopts.rotOutFile);
 
     // optionally select the relevant residue subset
     vector<Residue*> allRes;
@@ -315,9 +315,8 @@ int main(int argc, char *argv[]) {
     // write out the parsed region of interest
     if (!iopts.opdbfs.empty()) S.writePDB(iopts.opdbfs[si]);
 
+    if (!iopts.rotOutFile.empty()) C.closeLogFile();
   }
-  if (!iopts.rotOutFile.empty()) rotOut.close();
-
 }
 
 

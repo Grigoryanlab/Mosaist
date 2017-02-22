@@ -64,9 +64,9 @@ class ConFind {
     ~ConFind();
 
     // precomputes all necessary info and data structures for computing on this Structure
-    void cache(Structure& S, fstream* rotOut = NULL);
-    void cache(vector<Residue*>& residues, fstream* rotOut = NULL);
-    void cache(Residue* res, fstream* rotOut = NULL);
+    void cache(Structure& S);
+    void cache(vector<Residue*>& residues);
+    void cache(Residue* res);
 
     // find those residues that are close enough to affect the passed residue(s)
     vector<Residue*> getNeighbors(Residue* residue);
@@ -88,6 +88,9 @@ class ConFind {
 
     real getFreedom(Residue* res);
     vector<real> getFreedom(vector<Residue*>& residues);
+
+    void openLogFile(string fname);
+    void closeLogFile();
 
   protected:
     real weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
@@ -117,6 +120,7 @@ class ConFind {
     real clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively
     map<string, double> aaProp; // amino-acid propensities (in percent)
     bool doNotCountCB;          // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
+    fstream rotOut;
 };
 
 

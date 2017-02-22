@@ -60,12 +60,13 @@ void ConFind::init(Structure& S) {
   caNN = new ProximitySearch(ca, dcut/2);
 }
 
-void ConFind::cache(Residue* res, fstream* rotOut) {
+void ConFind::cache(Residue* res) {
   if (rotamerHeavySC.find(res) != rotamerHeavySC.end()) return;
   AtomPointerVector pointCloud;      // side-chain atoms of surviving rotames
   vector<rotamerID*> pointCloudTags; // corresponding tags (i.e.,  rotamer identity)
   survivingRotamers[res].resize(0);
   rotamerHeavySC[res] = NULL;
+  bool writeLog = rotOut.is_open();
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
@@ -107,7 +108,7 @@ void ConFind::cache(Residue* res, fstream* rotOut) {
         if (prune) break;
       }
       if (prune) continue;
-      if (rotOut != NULL) { Structure S(rot); S.writePDB(*rotOut); }
+      if (writeLog) { Structure S(rot); S.writePDB(rotOut); }
 
       // if not pruned, collect atoms needed later
       rotamerID* rotTag = new rotamerID(rID);
@@ -135,13 +136,13 @@ bool ConFind::countsAsSidechain(Atom& a) {
   return true;
 }
 
-void ConFind::cache(vector<Residue*>& residues, fstream* rotOut) {
-  for (int i = 0; i < residues.size(); i++) cache(residues[i], rotOut);
+void ConFind::cache(vector<Residue*>& residues) {
+  for (int i = 0; i < residues.size(); i++) cache(residues[i]);
 }
 
-void ConFind::cache(Structure& S, fstream* rotOut) {
+void ConFind::cache(Structure& S) {
   vector<Residue*> residues = S.getResidues();
-  cache(residues, rotOut);
+  cache(residues);
 }
 
 real ConFind::contactDegree(Residue* resA, Residue* resB, bool doNotCache, bool checkNeighbors) {
@@ -364,6 +365,15 @@ bool ConFind::areNeighbors(Residue* resA, Residue* resB) {
   Atom* CAA = resA->findAtom("CA");
   Atom* CAB = resB->findAtom("CA");
   return (CAA->distance(*CAB) <= dcut);
+}
+
+void ConFind::openLogFile(string fname) {
+  if (rotOut.is_open()) rotOut.close();
+  MstUtils::openFile(rotOut, fname, fstream::app);
+}
+
+void ConFind::closeLogFile() {
+  rotOut.close();
 }
 
 real contactList::degree(Residue* _resi, Residue* _resj) {
