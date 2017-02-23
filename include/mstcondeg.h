@@ -89,7 +89,7 @@ class ConFind {
     real getFreedom(Residue* res);
     vector<real> getFreedom(vector<Residue*>& residues);
 
-    void openLogFile(string fname);
+    void openLogFile(string fname, bool append = false);
     void closeLogFile();
 
   protected:

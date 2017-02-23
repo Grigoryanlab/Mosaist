@@ -70,9 +70,10 @@ Structure& Structure::operator=(const Structure& A) {
 void Structure::readPDB(string pdbFile, string options) {
   name = pdbFile;
   int lastresnum = -999999;
-  string lastresname = "";
+  string lastresname = "XXXXXX";
   string lasticode = "";
   string lastchainID = "";
+  string lastalt = " ";
   Chain* chain = NULL;
   Residue* residue = NULL;
 
@@ -160,7 +161,14 @@ void Structure::readPDB(string pdbFile, string options) {
 
     // if necessary, make a new residue
     bool reallyNewAtom = true; // is this a truely new atom, as opposed to an alternative position?
-    if ((resnum != lastresnum) || (resname.compare(lastresname)) || (iCodesAsSepResidues && (icode.compare(lasticode))))  {
+    if ((resnum != lastresnum) || resname.compare(lastresname) || (iCodesAsSepResidues && (icode.compare(lasticode))))  {
+      // this corresponds to a case, where the alternative location flag is being used to
+      // designate two (or more) different possible amino acids at a particular position
+      // (e.g., where the density is not clear to assign one). In this case, we shall keep
+      // only the first option, because we don't know any better.
+      if ((resnum == lastresnum) && resname.compare(lastresname) && (alt != lastalt)) {
+        continue;
+      }
       residue = new Residue(resname, resnum, icode[0]);
       chain->appendResidue(residue);
     } else if (alt.compare(" ")) {
@@ -184,6 +192,7 @@ void Structure::readPDB(string pdbFile, string options) {
     lasticode = icode;
     lastresname = resname;
     lastchainID = chainID;
+    lastalt = alt;
   }
   ifh.close();
 }

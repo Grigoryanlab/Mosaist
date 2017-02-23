@@ -108,7 +108,10 @@ void ConFind::cache(Residue* res) {
         if (prune) break;
       }
       if (prune) continue;
-      if (writeLog) { Structure S(rot); S.writePDB(rotOut); }
+      if (writeLog) {
+        rotOut << "REM " << *res << " (" << rot.getName() << "), rotamer " << ri+1 << endl;
+        Structure S(rot); S.writePDB(rotOut, "RENUMBER");
+      }
 
       // if not pruned, collect atoms needed later
       rotamerID* rotTag = new rotamerID(rID);
@@ -367,9 +370,9 @@ bool ConFind::areNeighbors(Residue* resA, Residue* resB) {
   return (CAA->distance(*CAB) <= dcut);
 }
 
-void ConFind::openLogFile(string fname) {
+void ConFind::openLogFile(string fname, bool append) {
   if (rotOut.is_open()) rotOut.close();
-  MstUtils::openFile(rotOut, fname, fstream::app);
+  MstUtils::openFile(rotOut, fname, append ? fstream::app : fstream::out);
 }
 
 void ConFind::closeLogFile() {

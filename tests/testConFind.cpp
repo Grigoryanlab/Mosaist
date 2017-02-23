@@ -242,7 +242,7 @@ int main(int argc, char *argv[]) {
     proteinOnly(S, So, legalNames);
     if (iopts.renumPDB) S.renumber();
     ConFind C(&RL, S);
-    if (!iopts.rotOutFile.empty()) C.openLogFile(iopts.rotOutFile);
+    if (!iopts.rotOutFile.empty()) C.openLogFile(iopts.rotOutFile, si > 0);
 
     // optionally select the relevant residue subset
     vector<Residue*> allRes;
