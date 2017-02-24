@@ -334,6 +334,22 @@ Chain* Structure::appendChain(string cid, bool allowRename) {
   return newChain;
 }
 
+void Structure::deleteChain(Chain* chain) {
+  // make sure the chain is from this Structure
+  int i = 0;
+  for (int i = 0; i < chains.size(); i++) {
+    if (chains[i] == chain) break;
+  }
+  if (i == chains.size()) MstUtils::error("chain not from this structure", "Structure::deleteChain");
+
+  chains.erase(chains.begin() + i);
+  numResidues -= chain->residueSize();
+  numAtoms -= chain->atomSize();
+  if (chainsByID.find(chain->getID()) != chainsByID.end()) chainsByID.erase(chain->getID());
+  if (chainsBySegID.find(chain->getSegID()) != chainsBySegID.end()) chainsBySegID.erase(chain->getSegID());
+  delete chain;
+}
+
 Residue& Structure::getResidue(int i) {
   if ((i < 0) && (i >= residueSize()))
     MstUtils::error("residue index " + MstUtils::toString(i) + " out of range for Structure", "Structure::getResidue(int)");

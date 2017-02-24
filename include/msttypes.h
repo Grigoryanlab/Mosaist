@@ -68,6 +68,7 @@ class Structure {
      * segment names will still be unique. If it fails to find an even multi-character name, errors. */
     bool appendChain(Chain* C, bool allowRename = true);
     Chain* appendChain(string cid, bool allowRename = true);
+    void deleteChain(Chain* chain);
 
     /* makes a copy of the atom, then decides where it is supposed to go and inserts it
      * into the Structure, creating a new Chain and/or Residue as needed. */
