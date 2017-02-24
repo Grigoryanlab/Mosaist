@@ -77,7 +77,7 @@ class ConFind {
      * purposes of finding sidechain-to-sidechain contacts. */
     bool countsAsSidechain(Atom& a);
 
-    real contactDegree(Residue* resA, Residue* resB, bool doNotCache = false, bool checkNeighbors = true);
+    real contactDegree(Residue* resA, Residue* resB, bool cacheA = true, bool cacheB = true, bool checkNeighbors = true);
     contactList getContacts(Residue* res, real cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(Structure& S, real cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(vector<Residue*>& residues, real cdcut = 0.0, contactList* list = NULL);
@@ -100,6 +100,8 @@ class ConFind {
      * does not check whether all the relevant contacting residues have been
      * visited, so must be called only at the right times (that's why protected) */
     real computeFreedom(Residue* res);
+    void collProbUpdateOn(Residue* res) { updateCollProb[res] = true; }
+    void collProbUpdateOff(Residue* res) { updateCollProb[res] = false; }
 
   private:
     RotamerLibrary* rotLib;
@@ -121,6 +123,11 @@ class ConFind {
     map<string, double> aaProp; // amino-acid propensities (in percent)
     bool doNotCountCB;          // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
     fstream rotOut;
+    /* an internal flag that sets the state of the object with respect to
+     * uplading the collision probability mass table. In general, should be
+     * false, unless set internally as part of a relevant function (and then
+     * unset before returning). */
+    map<Residue*, bool> updateCollProb;
 };
 
 
