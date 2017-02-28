@@ -337,7 +337,7 @@ Chain* Structure::appendChain(string cid, bool allowRename) {
 void Structure::deleteChain(Chain* chain) {
   // make sure the chain is from this Structure
   int i = 0;
-  for (int i = 0; i < chains.size(); i++) {
+  for (i = 0; i < chains.size(); i++) {
     if (chains[i] == chain) break;
   }
   if (i == chains.size()) MstUtils::error("chain not from this structure", "Structure::deleteChain");
