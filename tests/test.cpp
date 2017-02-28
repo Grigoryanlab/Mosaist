@@ -38,4 +38,15 @@ int main(int argc, char** argv) {
       cout << res << ", phi = " << res.getPhi(false) << ", psi = " << res.getPsi(false) << endl;
     }
   }
+
+  // chains test
+  Structure s1(pdbFile);
+  Chain* c = s1.appendChain("Z");
+  Structure s2(pdbFile);
+  for (int i = 0; i < s2.residueSize(); i++) {
+      c->appendResidue(new Residue(s2.getResidue(i)));
+  }
+  s1.writePDB(outBase + ".ch1.out.pdb");
+  s1.deleteChain(c);
+  s1.writePDB(outBase + ".ch2.out.pdb");
 }

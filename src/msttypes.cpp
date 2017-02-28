@@ -84,7 +84,7 @@ void Structure::readPDB(string pdbFile, string options) {
   bool charmmFormat = false;         // the PDB file was written by CHARMM (slightly different format)
   bool charmm19Format = false;       // upon reading, convert from all-hydrogen topology (param22 and higher) to the CHARMM19 united-atom topology (matters for HIS protonation states)
   bool fixIleCD1 = true;             // rename CD1 in ILE to CD (as is standard in MM packages)
-  bool iCodesAsSepResidues = false;  // consequtive residues that differ only in their insertion code will be treated as separate residues
+  bool iCodesAsSepResidues = true;   // consequtive residues that differ only in their insertion code will be treated as separate residues
   bool uniqChainIDs = true;          // make sure chain IDs are unique, even if they are not unique in the read file
   bool ignoreTER = false;            // if true, will not pay attention to TER lines in deciding when chains end/begin
 
@@ -96,7 +96,7 @@ void Structure::readPDB(string pdbFile, string options) {
   if (options.find("CHARMM19") != string::npos) charmm19Format = true;
   if (options.find("ALLOW DUPLICATE CIDS") != string::npos) uniqChainIDs = false;
   if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
-  if (options.find("ICODES AS RESIDUES") != string::npos) iCodesAsSepResidues = true;
+  if (options.find("IGNORE-ICODES") != string::npos) iCodesAsSepResidues = true;
   if (options.find("IGNORE-TER") != string::npos) ignoreTER = true;
 
   // read line by line
