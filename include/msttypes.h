@@ -213,7 +213,7 @@ class Residue {
     real getPsi(bool strict = true);
     real getOmega(bool strict = true);
 
-    static int getResidueIndex(Residue* res);
+    int getResidueIndex();
 
     static const real badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
@@ -234,14 +234,6 @@ class Residue {
     int resnum;
     string resname;
     char icode;
-};
-
-/* A comparator class for Residues by order in Structure */
-class residueOrder {
-  public:
-    bool operator() (Residue* lhs, Residue* rhs) const {
-      return Residue::getResidueIndex(lhs) < Residue::getResidueIndex(rhs);
-    }
 };
 
 class Atom {

@@ -39,11 +39,11 @@ class contactList {
   private:
     struct contComp {
       bool operator() (const pair<Residue*, Residue*>& lhs, const pair<Residue*, Residue*>& rhs) const {
-        int lhsI = Residue::getResidueIndex(lhs.first);
-        int rhsI = Residue::getResidueIndex(rhs.first);
+        int lhsI = lhs.first->getResidueIndex();
+        int rhsI = rhs.first->getResidueIndex();
         if (lhsI == rhsI) {
-          lhsI = Residue::getResidueIndex(lhs.second);
-          rhsI = Residue::getResidueIndex(rhs.second);
+          lhsI = lhs.second->Residue::getResidueIndex();
+          rhsI = rhs.second->Residue::getResidueIndex();
         }
         return lhsI < rhsI;
       }
