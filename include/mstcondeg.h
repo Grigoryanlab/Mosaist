@@ -62,6 +62,7 @@ class ConFind {
     ConFind(string rotLibFile, Structure& S);
     ConFind(RotamerLibrary* _rotLib, Structure& S);
     ~ConFind();
+    void setFreedomParams(real _loCollProbCut, real _hiCollProbCut) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; }
 
     // precomputes all necessary info and data structures for computing on this Structure
     void cache(Structure& S);
@@ -128,6 +129,7 @@ class ConFind {
      * false, unless set internally as part of a relevant function (and then
      * unset before returning). */
     map<Residue*, bool> updateCollProb;
+    real loCollProbCut, hiCollProbCut; // low and high collision probability cutoffs for computing freedom
 };
 
 

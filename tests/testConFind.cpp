@@ -29,11 +29,13 @@ class options {
       aaProp["GLY"] = 7.11; aaProp["HIS"] = 2.35; aaProp["HSD"] = 2.35; aaProp["ILE"] = 5.66; aaProp["LYS"] = 6.27;
       aaProp["LEU"] = 8.83; aaProp["MET"] = 2.08; aaProp["ASN"] = 4.50; aaProp["PRO"] = 4.52; aaProp["GLN"] = 3.94;
       aaProp["ARG"] = 5.03; aaProp["SER"] = 6.13; aaProp["THR"] = 5.53; aaProp["VAL"] = 6.91; aaProp["TRP"] = 1.51; aaProp["TYR"] = 3.54;
+      lcp = 0.5; hcp = 2.0;
     }
     vector<string> pdbfs, omapfs, opdbfs;
     bool verbose, renumPDB, phi_psi, printFileNames, omega;
     string focus, rotLibFile, beblFile, rotOutFile, rotLevel;
     double dcut, clashDist, contDist;
+    real hcp, lcp;
     map<string, double> aaProp; // amino-acid propensities (in percent)
 };
 
@@ -74,6 +76,8 @@ void usage() {
   cout << option("--verb", "optional: generate lots of detailed output (i.e., print the details of which rotamer pairs are in contact).", w, p1, p2) << endl;
   cout << option("--pf", "optional: if flag specified, will print the name of the PDB file being analyzed next to all positional scores. This is especially convenient when a list of PDB file is specified as input and the output goes to a single file.", w, p1, p2) << endl;
   cout << option("--ren", "optional: if flag specified, will renumber the structure before output. Useful for keeping track of residues in the output list of contacts if the input PDB file is strangely numbered.", w, p1, p2) << endl;
+  cout << option("--lcp", "EXPERIMENTAL: low collision probability cutoff for computing freedom (must be a non-negative real).", w, p1, p2) << endl;
+  cout << option("--hcp", "EXPERIMENTAL: low collision probability cutoff for computing freedom (must be a non-negative real).", w, p1, p2) << endl;
 }
 
 void parseCommandLine(int argc, char** argv, options& iopts) {
@@ -96,6 +100,8 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
       {"rout", 1, 0, 21},
       {"ren", 0, 0, 22},
       {"pf", 0, 0, 25},
+      {"lcp", 0, 0, 31},
+      {"hcp", 0, 0, 32},
       {0, 0, 0, 0}
     };
 
@@ -184,6 +190,16 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
         spec[string(opts[oind].name)] = true;
         break;
 
+      case 31:
+        iopts.lcp = MstUtils::toReal(string(opts[oind].name));
+        spec[string(opts[oind].name)] = true;
+        break;
+
+      case 32:
+        iopts.hcp = MstUtils::toReal(string(opts[oind].name));
+        spec[string(opts[oind].name)] = true;
+        break;
+
       case '?':
         break;
 
@@ -242,6 +258,7 @@ int main(int argc, char *argv[]) {
     proteinOnly(S, So, legalNames);
     if (iopts.renumPDB) S.renumber();
     ConFind C(&RL, S);
+    C.setFreedomParams(iopts.lcp, iopts.hcp);
     if (!iopts.rotOutFile.empty()) C.openLogFile(iopts.rotOutFile, si > 0);
 
     // optionally select the relevant residue subset

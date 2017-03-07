@@ -33,6 +33,8 @@ void ConFind::setParams() {
   aaProp["GLY"] = 7.11; aaProp["HIS"] = 2.35; aaProp["HSD"] = 2.35; aaProp["ILE"] = 5.66; aaProp["LYS"] = 6.27;
   aaProp["LEU"] = 8.83; aaProp["MET"] = 2.08; aaProp["ASN"] = 4.50; aaProp["PRO"] = 4.52; aaProp["GLN"] = 3.94;
   aaProp["ARG"] = 5.03; aaProp["SER"] = 6.13; aaProp["THR"] = 5.53; aaProp["VAL"] = 6.91; aaProp["TRP"] = 1.51; aaProp["TYR"] = 3.54;
+  loCollProbCut = 0.5;
+  hiCollProbCut = 2.0;
 }
 
 ConFind::~ConFind() {
@@ -329,8 +331,8 @@ real ConFind::computeFreedom(Residue* res) {
       // a combination of the number of rotamers with < 0.5 and < 2.0 collision probability masses
       real n1 = survivingRotamers[res].size() - cp.size(); real n2 = n1;
       for (map<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
-        if (it->second/100 < 0.5) n1 += 1;
-        if (it->second/100 < 2.0) n2 += 1;
+        if (it->second/100 < loCollProbCut) n1 += 1;
+        if (it->second/100 < hiCollProbCut) n2 += 1;
       }
       freedom[res] = sqrt((n1*n1 + n2*n2)/2)/numLibraryRotamers[res];
       break;
