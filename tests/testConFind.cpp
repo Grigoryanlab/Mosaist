@@ -100,8 +100,8 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
       {"rout", 1, 0, 21},
       {"ren", 0, 0, 22},
       {"pf", 0, 0, 25},
-      {"lcp", 0, 0, 31},
-      {"hcp", 0, 0, 32},
+      {"lcp", 1, 0, 31},
+      {"hcp", 1, 0, 32},
       {0, 0, 0, 0}
     };
 
@@ -191,12 +191,12 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
         break;
 
       case 31:
-        iopts.lcp = MstUtils::toReal(string(optarg));
+        iopts.lcp = MstUtils::toReal(optarg);
         spec[string(opts[oind].name)] = true;
         break;
 
       case 32:
-        iopts.hcp = MstUtils::toReal(string(optarg));
+        iopts.hcp = MstUtils::toReal(optarg);
         spec[string(opts[oind].name)] = true;
         break;
 
