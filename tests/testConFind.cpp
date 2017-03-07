@@ -191,12 +191,12 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
         break;
 
       case 31:
-        iopts.lcp = MstUtils::toReal(string(opts[oind].name));
+        iopts.lcp = MstUtils::toReal(string(optarg));
         spec[string(opts[oind].name)] = true;
         break;
 
       case 32:
-        iopts.hcp = MstUtils::toReal(string(opts[oind].name));
+        iopts.hcp = MstUtils::toReal(string(optarg));
         spec[string(opts[oind].name)] = true;
         break;
 
