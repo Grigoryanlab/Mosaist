@@ -89,6 +89,7 @@ class ConFind {
 
     real getFreedom(Residue* res);
     vector<real> getFreedom(vector<Residue*>& residues);
+    void clearFreedom() { freedom.clear(); } // useful if one wants to force re-calculation (e.g., with new parameters)
 
     void openLogFile(string fname, bool append = false);
     void closeLogFile();

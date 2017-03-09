@@ -215,9 +215,40 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
   }
 }
 
+int maxIndex(map<string, int>& aaToIndex) {
+  int mi = 0;
+  for (map<string, int>::iterator it = aaToIndex.begin(); it != aaToIndex.end(); ++it) {
+    if (it->second > mi) mi = it->second;
+  }
+  return mi;
+}
+
+void addName(vector<string>& legalNames, map<string, int>& aaToIndex, vector<string> newNames) {
+  int newIdx = maxIndex(aaToIndex) + 1;
+  for (int i = 0; i < newNames.size(); i++) {
+    legalNames.push_back(newNames[i]);
+    aaToIndex[newNames[i]] = newIdx;
+  }
+}
+
 // ---- Main Program
 int main(int argc, char *argv[]) {
-  fstream rotOut, *rotOutPtr = NULL;
+  real lcpMin = 0.01;      // the lowest low collision probability (CP) cutoff value to consider
+  real lcpMax = 2.5;       // the highest low CP cutoff value to consider
+  real hcpMin = 0.01;      // the lowest high CP cutoff value to consider
+  real hcpMax = 2.5;       // the highest high CP cutoff value to consider
+  int N = 20;              // number of grid points between min and max in each parameter
+  int Nb = 50;             // number of freedom bins
+
+  vector<real> lcpVals(N), hcpVals(N);
+  vector<vector<vector<real > > > freedoms; // freedom value at each residue for each parameter combo
+  vector<int> AA;                           // aa at each position
+  freedoms.resize(N);
+  for (int i = 0; i < N; i++) freedoms[i].resize(N);
+  for (int i = 0; i < N; i++) {
+    lcpVals[i] = lcpMin + (lcpMax - lcpMin)/(N-1)*i;
+    hcpVals[i] = hcpMin + (hcpMax - hcpMin)/(N-1)*i;
+  }
 
   // process input arguments
   options iopts;
@@ -225,24 +256,28 @@ int main(int argc, char *argv[]) {
 
   // legal residue names that are considered "protein" here
   vector<string> legalNames;
-  legalNames.push_back("ALA"); legalNames.push_back("CYS"); legalNames.push_back("ASP"); legalNames.push_back("GLU"); legalNames.push_back("PHE"); legalNames.push_back("GLY");
-  legalNames.push_back("HIS"); legalNames.push_back("ILE"); legalNames.push_back("LYS"); legalNames.push_back("LEU"); legalNames.push_back("MET"); legalNames.push_back("ASN");
-  legalNames.push_back("PRO"); legalNames.push_back("GLN"); legalNames.push_back("ARG"); legalNames.push_back("SER"); legalNames.push_back("THR"); legalNames.push_back("VAL");
-  legalNames.push_back("TRP"); legalNames.push_back("TYR"); legalNames.push_back("HSD"); legalNames.push_back("HSE"); legalNames.push_back("HSC"); legalNames.push_back("HSP");
-  legalNames.push_back("MSE");
-  legalNames.push_back("CSO"); legalNames.push_back("HIP"); legalNames.push_back("SEC"); legalNames.push_back("SEP"); legalNames.push_back("TPO"); legalNames.push_back("PTR");
+  map<string, int> aaToIndex;
+  addName(legalNames, aaToIndex, {"ALA"}); addName(legalNames, aaToIndex, {"CYS", "CSO", "SEC"});
+  addName(legalNames, aaToIndex, {"ASP"}); addName(legalNames, aaToIndex, {"GLU"}); addName(legalNames, aaToIndex, {"PHE"});
+  addName(legalNames, aaToIndex, {"GLY"}); addName(legalNames, aaToIndex, {"HIS", "HIP", "HSE", "HSC", "HSP", "HSD"});
+  addName(legalNames, aaToIndex, {"ILE"}); addName(legalNames, aaToIndex, {"LYS"}); addName(legalNames, aaToIndex, {"LEU"});
+  addName(legalNames, aaToIndex, {"MET", "MSE"}); addName(legalNames, aaToIndex, {"ASN"}); addName(legalNames, aaToIndex, {"PRO"});
+  addName(legalNames, aaToIndex, {"GLN"}); addName(legalNames, aaToIndex, {"ARG"}); addName(legalNames, aaToIndex, {"SER", "SEP"});
+  addName(legalNames, aaToIndex, {"THR", "TPO"}); addName(legalNames, aaToIndex, {"VAL"}); addName(legalNames, aaToIndex, {"TRP"});
+  addName(legalNames, aaToIndex, {"TYR", "PTR"});
+  int NAATypes = maxIndex(aaToIndex) + 1;
 
   // pre-read rotamer library once
-  RotamerLibrary RL(iopts.rotLibFile);
+  RotamerLibrary* RL = new RotamerLibrary(iopts.rotLibFile);
 
   // go through all PDB files
   for (int si = 0; si < iopts.pdbfs.size(); si++) {
+    cout << iopts.pdbfs[si] << "..." << endl;
     Structure So(iopts.pdbfs[si]);                       // original input PDB structure
     Structure S;                                         // just the region of the original structure corresponding to the map
     proteinOnly(S, So, legalNames);
     if (iopts.renumPDB) S.renumber();
-    ConFind C(&RL, S);
-    if (!iopts.rotOutFile.empty()) C.openLogFile(iopts.rotOutFile, si > 0);
+    ConFind C(RL, S);
 
     // optionally select the relevant residue subset
     vector<Residue*> allRes;
@@ -252,71 +287,65 @@ int main(int argc, char *argv[]) {
     } else {
       allRes = S.getResidues();
     }
+    C.getContacts(allRes);
 
-    // open output file and write header
-    fstream of;
-    streambuf * buf;
-    if (!iopts.omapfs.empty()) {
-      MstUtils::openFile(of, iopts.omapfs[si], fstream::out);
-      buf = of.rdbuf();
-    } else {
-      cout << iopts.pdbfs[si] << endl;
-      buf = cout.rdbuf();
-    }
-    ostream out(buf);
-
-    // print degrees
-    contactList L;
-    C.getContacts(allRes, 0, &L);
-    vector<pair<Residue*, Residue*> > list = L.getOrderedContacts();
-    for (int k = 0; k < list.size(); k++) {
-      Residue* resA = list[k].first;
-      Residue* resB = list[k].second;
-      out << "contact\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
-      out << "\t" << std::setprecision(6) << std::fixed << L.degree(resA, resB);
-      out << "\t" << resA->getName() << "\t" << resB->getName() << endl;
+    // consider all parameter combinations
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        C.setFreedomParams(lcpVals[i], hcpVals[j]);
+        C.clearFreedom();
+        vector<real> structFreedoms = C.getFreedom(allRes);
+        freedoms[i][j].insert(freedoms[i][j].end(), structFreedoms.begin(), structFreedoms.end());
+      }
     }
 
-    // print crowdedness
+    // save amino-acid sequence
     for (int k = 0; k < allRes.size(); k++) {
-      Residue* res = allRes[k];
-      out << "crwdnes\t" << res->getChainID() << "," << res->getNum() << "\t";
-      out << std::setprecision(6) << std::fixed << C.getCrowdedness(res) << "\t";
-      if (iopts.phi_psi) out << res->getPhi() << "\t" << res->getPsi() << "\t";
-      if (iopts.omega) out << res->getOmega() << "\t";
-      out << res->getName();
-      if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
-      out << endl;
+      AA.push_back(aaToIndex[allRes[k]->getName()]);
     }
-
-    // print freedoms
-    vector<real> freedoms = C.getFreedom(allRes);
-    for (int k = 0; k < allRes.size(); k++) {
-      Residue* res = allRes[k];
-      out << "freedom\t" << res->getChainID() << "," << res->getNum() << "\t";
-      out << std::setprecision(6) << std::fixed << freedoms[k] << "\t";
-      if (iopts.phi_psi) out << res->getPhi() << "\t" << res->getPsi() << "\t";
-      if (iopts.omega) out << res->getOmega() << "\t";
-      out << res->getName();
-      if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
-      out << endl;
-    }
-
-    // print sequence
-    out << "SEQUENCE: ";
-    for (int k = 0; k < allRes.size(); k++) {
-      out << allRes[k]->getName() << " ";
-    }
-    out << endl;
-
-    // close output file
-    if (!iopts.omapfs.empty()) of.close();
-
-    // write out the parsed region of interest
-    if (!iopts.opdbfs.empty()) S.writePDB(iopts.opdbfs[si]);
-
-    if (!iopts.rotOutFile.empty()) C.closeLogFile();
   }
+  delete RL;
+
+  // now find the combination of parameters that maximizes the expected
+  // freedom-based sequence recovery and find the
+  real maxSeqRec = 0; int bestI = -1; int bestJ = -1;
+  int pc = 1;
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      vector<real>& F = freedoms[i][j];
+      vector<vector<int> > aaDist(Nb, vector<int>(NAATypes, 0));
+      for (int k = 0; k < F.size(); k++) {
+        int bi = int(min(F[k], 1 - 1.0/(2*Nb))*Nb); // since freedom is always [0, 1]
+        aaDist[bi][AA[k]]++;
+      }
+      real expSeqRec = 0; int Nall = 0;
+      for (int bi = 0; bi < Nb; bi++) {
+        int Ntot = 0;
+        for (int aai = 0; aai < NAATypes; aai++) Ntot += aaDist[bi][aai];
+        Nall += Ntot;
+        real binExpSeqRec = 0;
+        for (int aai = 0; aai < NAATypes; aai++) {
+          binExpSeqRec += ((aaDist[bi][aai] + pc) * 1.0 / (Ntot + pc*NAATypes)) * ((aaDist[bi][aai] + pc) * 1.0 / (Ntot + pc*NAATypes));
+        }
+        expSeqRec += binExpSeqRec * Ntot;
+      }
+      expSeqRec /= Nall;
+      cout << "--> expected sequence recovery is " << expSeqRec << " for parameter combo " << lcpVals[i] << " x " << hcpVals[j] << endl;
+      if (expSeqRec > maxSeqRec) {
+        maxSeqRec = expSeqRec;
+        bestI = i; bestJ = j;
+      }
+    }
+  }
+  cout << "BEST: expected sequence recovery is " << maxSeqRec << " for parameter combo " << lcpVals[bestI] << " x " << hcpVals[bestJ] << endl;
+  cout << "Histogram:" << endl;
+  vector<real>& F = freedoms[bestI][bestJ];
+  vector<int> hist(Nb, 0);
+  for (int k = 0; k < F.size(); k++) {
+    int bi = int(min(F[k], 1 - 1.0/(2*Nb))*Nb); // since freedom is always [0, 1]
+    hist[bi]++;
+  }
+  for (int bi = 0; bi < Nb; bi++) cout << hist[bi] << endl;
 }
 
 

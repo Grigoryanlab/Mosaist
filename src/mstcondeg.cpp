@@ -184,8 +184,8 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cach
       real rotProbB = rotLib->rotamerProbability(rotB);
       real aaPropB = aaProp[rotB->aminoAcid()];
       cd +=  aaPropA * aaPropB * rotProbA * rotProbB;
-      if (updateA) collProb[resA][rotA] += aaPropA * rotProbA;
-      if (updateB) collProb[resB][rotB] += aaPropB * rotProbB;
+      if (updateA) collProb[resA][rotA] += aaPropB * rotProbB;
+      if (updateB) collProb[resB][rotB] += aaPropA * rotProbA;
     }
   }
   cd /= weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB);
