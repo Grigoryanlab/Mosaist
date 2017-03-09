@@ -234,9 +234,9 @@ void addName(vector<string>& legalNames, map<string, int>& aaToIndex, vector<str
 // ---- Main Program
 int main(int argc, char *argv[]) {
   real lcpMin = 0.01;      // the lowest low collision probability (CP) cutoff value to consider
-  real lcpMax = 2.5;       // the highest low CP cutoff value to consider
-  real hcpMin = 0.01;      // the lowest high CP cutoff value to consider
-  real hcpMax = 2.5;       // the highest high CP cutoff value to consider
+  real lcpMax = 0.1;       // the highest low CP cutoff value to consider
+  real hcpMin = 0.5;       // the lowest high CP cutoff value to consider
+  real hcpMax = 1.5;       // the highest high CP cutoff value to consider
   int N = 20;              // number of grid points between min and max in each parameter
   int Nb = 50;             // number of freedom bins
 
