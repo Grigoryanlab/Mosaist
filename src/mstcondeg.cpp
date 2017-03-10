@@ -334,7 +334,9 @@ real ConFind::computeFreedom(Residue* res) {
         if (it->second/100 < loCollProbCut) n1 += 1;
         if (it->second/100 < hiCollProbCut) n2 += 1;
       }
-      freedom[res] = sqrt((n1*n1 + n2*n2)/2)/numLibraryRotamers[res];
+//      freedom[res] = sqrt((n1*n1 + n2*n2)/2)/numLibraryRotamers[res];
+//      freedom[res] = sqrt((n1*n1 + 0.2*n2*n2)/(1 + 0.2))/numLibraryRotamers[res];
+      n1 /= numLibraryRotamers[res]; n2 /= numLibraryRotamers[res]; freedom[res] = ((n2 + n2*n1)/2);
       break;
     }
     default:
