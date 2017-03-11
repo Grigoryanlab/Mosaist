@@ -13,7 +13,7 @@ Structure::Structure(string pdbFile, string options) {
   readPDB(pdbFile, options);
 }
 
-Structure::Structure(Structure& S) {
+Structure::Structure(const Structure& S) {
   copy(S);
 }
 
@@ -365,7 +365,7 @@ Residue& Structure::getResidue(int i) {
   return *(new Residue()); // just to make the compiler happy and not throw a warning; this is never reached
 }
 
-vector<Atom*> Structure::getAtoms() {
+vector<Atom*> Structure::getAtoms() const {
   vector<Atom*> vec;
 
   for (int i = 0; i < this->chainSize(); i++) {

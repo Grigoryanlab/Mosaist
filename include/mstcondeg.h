@@ -8,6 +8,9 @@
 using namespace std;
 using namespace MST;
 
+template<typename key, typename T>
+using fastmap = map<key, T>;
+
 class contactList {
   public:
     contactList() { }
@@ -53,7 +56,7 @@ class contactList {
     vector<Residue*> resj;
     vector<real> degrees;
     vector<string> infos;
-    map<Residue*, map<Residue*, int> > inContact;
+    fastmap<Residue*, fastmap<Residue*, int> > inContact;
     set<pair<Residue*, Residue*>, contComp> orderedContacts;
 };
 
@@ -110,26 +113,26 @@ class ConFind {
     bool isRotLibLocal;
     AtomPointerVector backbone, ca;
     ProximitySearch *bbNN, *caNN;
-    map<Residue*, set<int> > permanentContacts;
-    map<Residue*, real> fractionPruned;
-    map<Residue*, real> freedom;
-    map<Residue*, int> numLibraryRotamers;
-    map<Residue*, vector<rotamerID*> > survivingRotamers;
-    map<Residue*, map<Residue*, real> > degrees;
-    map<Residue*, map<rotamerID*, real> > collProb;
-    map<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
+    fastmap<Residue*, set<int> > permanentContacts;
+    fastmap<Residue*, real> fractionPruned;
+    fastmap<Residue*, real> freedom;
+    fastmap<Residue*, int> numLibraryRotamers;
+    fastmap<Residue*, vector<rotamerID*> > survivingRotamers;
+    fastmap<Residue*, fastmap<Residue*, real> > degrees;
+    fastmap<Residue*, fastmap<rotamerID*, real> > collProb;
+    fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
 
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
     real dcut;                  // CA-AC distance cutoff beyond which we do not consider pairwise interactions
     real clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively
-    map<string, double> aaProp; // amino-acid propensities (in percent)
+    fastmap<string, double> aaProp; // amino-acid propensities (in percent)
     bool doNotCountCB;          // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
     fstream rotOut;
     /* an internal flag that sets the state of the object with respect to
      * uplading the collision probability mass table. In general, should be
      * false, unless set internally as part of a relevant function (and then
      * unset before returning). */
-    map<Residue*, bool> updateCollProb;
+    fastmap<Residue*, bool> updateCollProb;
     real loCollProbCut, hiCollProbCut; // low and high collision probability cutoffs for computing freedom
 };
 

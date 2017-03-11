@@ -55,6 +55,9 @@ class Transform {
     const Transform operator*(const Transform& rhs) const;
     const CartesianPoint operator*(const CartesianPoint& rhs) const;
     Transform inverse();                   // return the einverse transform
+    Transform rotation();                  // extract the rotation component
+    Transform translation();               // extract the translation component
+
 
     CartesianPoint applyToCopy(CartesianPoint& p);
     void apply(CartesianPoint& p);
@@ -70,10 +73,10 @@ class Transform {
 
     friend ostream & operator<<(ostream &_os, Transform& _T) {
       for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-          _os << _T.M[i][j] << " ";
-        }
         _os << endl;
+        for (int j = 0; j < 4; j++) {
+          _os << std::setprecision(6) << std::fixed << _T.M[i][j] << "\t";
+        }
       }
       return _os;
     }
@@ -121,6 +124,26 @@ class TransformFactory {
 
     static const real degreesToRadians;
     static const real radiansToDegrees;
+};
+
+/* This class is for fast calculation of the RMSD between two transformations
+ * of a given structure. */
+class TransformRMSD {
+  public:
+    TransformRMSD();
+    TransformRMSD(Structure& S) { init(S); }
+    TransformRMSD(AtomPointerVector& atoms) { init(atoms); }
+    void init(const AtomPointerVector& atoms);
+    void init(const Structure& S);
+
+    real getRMSD(Transform& T1, Transform& T2);   // RMSD between two transforms
+    real getRMSD(Transform& T1);                  // RMSD between the given transform and the identity transform
+
+  protected:
+
+  private:
+    real C[3][3];  // co-variance matrix of structure in question
+    int N;         // number of atoms in the structure in question
 };
 
 }

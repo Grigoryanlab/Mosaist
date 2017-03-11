@@ -137,12 +137,12 @@ void Transform::makeIdentity() {
 }
 
 real& Transform::operator()(int i, int j) {
-  if ((i < 0) || (j < 0) || (i > 3) || (j > 3)) MstUtils::error("element " + MstUtils::toString(i) + " x " + MstUtils::toString(j) + " out of range", "Transform::perator()");
+  if ((i < 0) || (j < 0) || (i > 3) || (j > 3)) MstUtils::error("element " + MstUtils::toString(i) + " x " + MstUtils::toString(j) + " out of range", "Transform::operator()");
   return M[i][j];
 }
 
 real Transform::operator()(int i, int j) const {
-  if ((i < 0) || (j < 0) || (i > 3) || (j > 3)) MstUtils::error("element " + MstUtils::toString(i) + " x " + MstUtils::toString(j) + " out of range", "Transform::perator()");
+  if ((i < 0) || (j < 0) || (i > 3) || (j > 3)) MstUtils::error("element " + MstUtils::toString(i) + " x " + MstUtils::toString(j) + " out of range", "Transform::operator()");
   return M[i][j];
 }
 
@@ -206,6 +206,18 @@ Transform Transform::inverse() {
   Ti(3, 3) =  (T(0,0)*T(1,1)*T(2,2) - T(0,0)*T(1,2)*T(2,1) - T(0,1)*T(1,0)*T(2,2) + T(0,1)*T(1,2)*T(2,0) + T(0,2)*T(1,0)*T(2,1) - T(0,2)*T(1,1)*T(2,0))/det;
 
   return Ti;
+}
+
+Transform Transform::rotation() {
+  Transform T = *this;
+  for (int i = 0; i < 3; i++) T(i, 3) = 0; // zero out the translation part
+  return T;
+}
+
+Transform Transform::translation() {
+  Transform T; // initializes to identity
+  for (int i = 0; i < 3; i++) T(i, 3) = (*this)(i, 3);
+  return T;
 }
 
 CartesianPoint Transform::applyToCopy(CartesianPoint& p) {
@@ -407,4 +419,73 @@ Transform TransformFactory::switchFrames(Frame& _from, Frame& _to) {
   CartesianPoint ori = _from.getO() - _to.getO();
 
   return translate(ori) * (T2.inverse()) * T1;
+}
+
+
+/* --------- TransformRMSD --------- */
+TransformRMSD::TransformRMSD() {
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) C[i][j] = 0;
+  }
+  N = 0;
+}
+
+void TransformRMSD::init(const AtomPointerVector& atoms) {
+  // compute origin
+  real Tr[3];
+  Tr[0] = 0; Tr[1] = 0; Tr[2] = 0;
+  for (int i = 0; i < atoms.size(); i++) {
+    Atom& a = *(atoms[i]);
+    Tr[0] += a[0];
+    Tr[1] += a[1];
+    Tr[2] += a[2];
+  }
+  Tr[0] /= atoms.size();
+  Tr[1] /= atoms.size();
+  Tr[2] /= atoms.size();
+
+  // compute covariance matrix
+  for (int i = 0; i < 3; i++) {
+    for (int j = i; j < 3; j++) {
+      C[i][j] = 0;
+      for (int k = 0; k < atoms.size(); k++) {
+        Atom& a = *(atoms[k]);
+        C[i][j] += (a[i] - Tr[i]) * (a[j] - Tr[j]);
+      }
+      C[j][i] = C[i][j];
+    }
+  }
+
+  // number of atoms
+  N = atoms.size();
+}
+
+void TransformRMSD::init(const Structure& S) {
+  AtomPointerVector atoms = S.getAtoms();
+  init(atoms);
+}
+
+real TransformRMSD::getRMSD(Transform& T1, Transform& T2) {
+  real rot = 0;
+  // the translation component
+  for (int i = 0; i < 3; i++) {
+    rot += (T1(i, 3) - T2(i, 3)) * (T1(i, 3) - T2(i, 3));
+  }
+
+  // trace(R^{a,b} * C) (in the notation of Hildebrandt and co-workers, 10.1002/jcc.23513, eq. 3)
+  Transform T = T1.rotation().inverse() * T2.rotation();
+  real trace = C[0][0] + C[1][1] + C[2][2];
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      trace -= T(i, j)*C[i][j];
+    }
+  }
+  trace *= 2;
+
+  return sqrt(rot + trace/N);
+}
+
+real TransformRMSD::getRMSD(Transform& T1) {
+  Transform I;
+  return getRMSD(T1, I);
 }

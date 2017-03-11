@@ -41,11 +41,11 @@ ConFind::~ConFind() {
   if (isRotLibLocal) delete rotLib;
   delete bbNN;
   delete caNN;
-  for (map<Residue*, vector<rotamerID*> >::iterator it = survivingRotamers.begin(); it != survivingRotamers.end(); ++it) {
+  for (fastmap<Residue*, vector<rotamerID*> >::iterator it = survivingRotamers.begin(); it != survivingRotamers.end(); ++it) {
     vector<rotamerID*>& rots = it->second;
     for (int i = 0; i < rots.size(); i++) delete(rots[i]);
   }
-  for (map<Residue*, DecoratedProximitySearch<rotamerID*>* >::iterator it = rotamerHeavySC.begin(); it != rotamerHeavySC.end(); ++it) {
+  for (fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* >::iterator it = rotamerHeavySC.begin(); it != rotamerHeavySC.end(); ++it) {
     if (it->second != NULL) delete it->second;
   }
 }
@@ -163,7 +163,7 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cach
   if (!cloudA->overlaps(*cloudB)) return 0;
 
   // if so, find rotamer pairs that clash
-  map<rotamerID*, map<rotamerID*, bool> > clashing;
+  fastmap<rotamerID*, fastmap<rotamerID*, bool> > clashing;
   for (int ai = 0; ai < cloudA->pointSize(); ai++) {
     vector<rotamerID*> p = cloudB->getPointsWithin(cloudA->getPoint(ai), 0, contDist);
     if (p.size() == 0) continue;
@@ -175,11 +175,11 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cach
 
   // compute contact degree
   real cd = 0;
-  for (map<rotamerID*, map<rotamerID*, bool> >::iterator itA = clashing.begin(); itA != clashing.end(); ++itA) {
+  for (fastmap<rotamerID*, fastmap<rotamerID*, bool> >::iterator itA = clashing.begin(); itA != clashing.end(); ++itA) {
     rotamerID* rotA = itA->first;
     real rotProbA = rotLib->rotamerProbability(rotA);
     real aaPropA = aaProp[rotA->aminoAcid()];
-    for (map<rotamerID*, bool>::iterator itB = itA->second.begin(); itB != itA->second.end(); ++itB) {
+    for (fastmap<rotamerID*, bool>::iterator itB = itA->second.begin(); itB != itA->second.end(); ++itB) {
       rotamerID* rotB = itB->first;
       real rotProbB = rotLib->rotamerProbability(rotB);
       real aaPropB = aaProp[rotB->aminoAcid()];
@@ -234,7 +234,7 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
 
 contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contactList* list) {
   cache(residues);
-  map<Residue*, map<Residue*, bool> > checked;
+  fastmap<Residue*, fastmap<Residue*, bool> > checked;
 
   contactList L;
   if (list == NULL) list = &L;
@@ -259,7 +259,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
     // rotamers survive at the position but could be that some survive and never
     // clash), the collision probably map for this position will not exist, so
     // make it empty.
-    if (collProb.find(resi) == collProb.end()) collProb[resi] = map<rotamerID*, real>();
+    if (collProb.find(resi) == collProb.end()) collProb[resi] = fastmap<rotamerID*, real>();
     computeFreedom(resi);
   }
 
@@ -316,12 +316,12 @@ real ConFind::computeFreedom(Residue* res) {
   int type = 2;
   // rotamers are in this map only if they do actually collide, so those that
   // do not collide with anything thus can be assumed to have zero collision probability mass
-  map<rotamerID*, real>& cp = collProb[res];
+  fastmap<rotamerID*, real>& cp = collProb[res];
   switch (type) {
     case 1: {
       // number of rotamers with < 0.5 collision probability mass
       real n = survivingRotamers[res].size() - cp.size();
-      for (map<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
+      for (fastmap<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
         if (it->second/100 < 0.5) n += 1;
       }
       freedom[res] = n/numLibraryRotamers[res];
@@ -330,13 +330,14 @@ real ConFind::computeFreedom(Residue* res) {
     case 2: {
       // a combination of the number of rotamers with < 0.5 and < 2.0 collision probability masses
       real n1 = survivingRotamers[res].size() - cp.size(); real n2 = n1;
-      for (map<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
+      for (fastmap<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
         if (it->second/100 < loCollProbCut) n1 += 1;
         if (it->second/100 < hiCollProbCut) n2 += 1;
       }
 //      freedom[res] = sqrt((n1*n1 + n2*n2)/2)/numLibraryRotamers[res];
 //      freedom[res] = sqrt((n1*n1 + 0.2*n2*n2)/(1 + 0.2))/numLibraryRotamers[res];
-      n1 /= numLibraryRotamers[res]; n2 /= numLibraryRotamers[res]; freedom[res] = ((n2 + n2*n1)/2);
+      n1 /= numLibraryRotamers[res]; n2 /= numLibraryRotamers[res]; freedom[res] = ((n2 * n2 + n2*n1)/2);
+//cout << "REPORT: " << *res << " " << n1 << " " << n2 << endl;
       break;
     }
     default:
@@ -363,7 +364,7 @@ vector<Residue*> ConFind::getNeighbors(Residue* residue) {
 
 vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
   // find all residues that are within cutoff distance of the given list of residues
-  map<Residue*, bool> within;
+  fastmap<Residue*, bool> within;
   for (int k = 0; k < residues.size(); k++) {
     vector<int> close = caNN->getPointsWithin(residues[k]->findAtom("CA"), 0, dcut);
     bool foundSelf = false;
@@ -377,7 +378,7 @@ vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
     }
   }
   vector<Residue*> neighborhood(within.size(), NULL);
-  map<Residue*, bool>::iterator it; int i;
+  fastmap<Residue*, bool>::iterator it; int i;
   for (it = within.begin(), i = 0; it != within.end(); it++, i++) {
     neighborhood[i] = it->first;
   }

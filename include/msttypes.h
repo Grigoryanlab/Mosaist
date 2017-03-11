@@ -8,6 +8,7 @@
 #include <locale>
 #include <stdio.h>
 #include <string.h>
+#include <iomanip>
 #include <vector>
 #include <map>
 #include <math.h>
@@ -34,7 +35,7 @@ class Structure {
   public:
     Structure();
     Structure(string pdbFile, string options = "");
-    Structure(Structure& S);
+    Structure(const Structure& S);
     Structure(Chain& C);
     Structure(Residue& R);
     ~Structure();
@@ -54,7 +55,7 @@ class Structure {
     Chain& getChain(int i) { return (*this)[i]; }
     Residue& getResidue(int i);
     Chain& operator[](int i) const { return *(chains[i]); }
-    vector<Atom*> getAtoms();
+    vector<Atom*> getAtoms() const;
     vector<Residue*> getResidues();
     void setName(string _name) { name = _name; }
     void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout
