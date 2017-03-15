@@ -3,22 +3,6 @@
 
 using namespace MST;
 
-vector<vector<real> > covarianceMatrix(AtomPointerVector& A, bool normalize = false) {
-  vector<vector<real> > C(3, vector<real>(3, 0));
-  CartesianPoint c = A.getGeometricCenter();
-  for (int i = 0; i < 3; i++) {
-    for (int j = i; j < 3; j++) {
-      C[i][j] = 0;
-      for (int k = 0; k < A.size(); k++) {
-        C[i][j] += ((*A[k])[i] - c[i]) * ((*A[k])[j] - c[j]);
-      }
-      if (normalize) C[i][j] /= A.size();
-      C[j][i] = C[i][j];
-    }
-  }
-  return C;
-}
-
 int main(int argc, char** argv) {
 
   if (argc < 3) {
@@ -52,24 +36,31 @@ int main(int argc, char** argv) {
 
   // do a custom transform
   Transform rot2(CartesianPoint(0.492, -0.587, 0.643), CartesianPoint(0.870, 0.310, -0.383), CartesianPoint(0.025, 0.748, 0.663), Transform::byRow);
-  Transform tr = TransformFactory::translate(0.0, 0.0, 0.0);
+  Transform tr = TransformFactory::translate(10.0, 20.0, 30.0);
   Transform total = tr * rot2;
-  cout << "Rotation matrix:\n" << rot2 << "\ntranslation matrix:\n" << tr << "\nand total:\n" << total;
+  cout << "Rotation matrix:" << rot2 << "\ntranslation matrix:" << tr << "\nand total:" << total << endl;
   Structure So(pdbFile);
+  AtomPointerVector all = So.getAtoms();
+  all.center();
   Structure Sr = So;
   total.apply(Sr);
   cout << "resulting RMSD: " << RMSDCalculator::rmsd(So, Sr) << endl;
+  TransformRMSD rigidBodyRMSD(So);
+  double fastRMSD = rigidBodyRMSD.getRMSD(total);
+  cout << "computing the same via the fast method in TransformRMSD: " << fastRMSD << endl;
   Sr.writePDB(outBase + ".cust.pdb");
 
-  AtomPointerVector all = So.getAtoms();
-  vector<vector<real> > C = covarianceMatrix(all, true);
-  cout << "covariance matrix:\n" << endl;
-  for (int i = 0; i < C.size(); i++) {
-    for (int j = 0; j < C[i].size(); j++) {
-      cout << C[i][j] << " ";
+  // dome some simple matrix algebra
+  srand(time(NULL));
+  Matrix M(4, 4);
+  for (int i = 0; i < M.size(0); i++) {
+    for (int j = 0; j < M.size(1); j++) {
+      M[i][j] = ((double) rand() / (RAND_MAX));
     }
-    cout << endl;
   }
-
+  cout << "created random matrix: " << M << endl;
+  Matrix Mi = M.inverse();
+  cout << "the inverse of which is: " << Mi << endl;
+  cout << "product of the matrix by its inverse is:" << M*Mi << endl;
   printf("TEST DONE\n");
 }

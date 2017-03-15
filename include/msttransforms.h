@@ -43,8 +43,11 @@ class Transform {
     Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, fillOrder order);
     Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, CartesianPoint D, fillOrder order);
     Transform(vector<real> trans);
+    Transform(real* trans);
     Transform(vector<vector<real> > rot);
+    Transform(real** rot);
     Transform(vector<vector<real> > rot, vector<real> trans);
+    Transform(real** rot, real* trans);
     void makeIdentity();
     void fill(vector<real>& A, vector<real>& B, vector<real>& C, vector<real>& D, fillOrder order);
     void fill(vector<real>& A, vector<real>& B, vector<real>& C, fillOrder order);
@@ -127,7 +130,8 @@ class TransformFactory {
 };
 
 /* This class is for fast calculation of the RMSD between two transformations
- * of a given structure. */
+ * of a given structure. IMPORTANT: the transformations are interpreted as being
+ * applied to the structure after it is centered at the origin. */
 class TransformRMSD {
   public:
     TransformRMSD();
@@ -136,14 +140,63 @@ class TransformRMSD {
     void init(const AtomPointerVector& atoms);
     void init(const Structure& S);
 
+    /* IMPORTANT: the transformations are interpreted as being
+     * applied to the structure after it is centered at the origin. */
     real getRMSD(Transform& T1, Transform& T2);   // RMSD between two transforms
     real getRMSD(Transform& T1);                  // RMSD between the given transform and the identity transform
 
   protected:
 
   private:
-    real C[3][3];  // co-variance matrix of structure in question
-    int N;         // number of atoms in the structure in question
+    real C[3][3];  // co-variance matrix of structure in question (normalized by the number of atoms)
+};
+
+/* This elemetary matrix class is provided for completeness and is not really
+ * by other objects here. This class is not good for serious matrix algebra. */
+class Matrix {
+  public:
+    Matrix(int rows, int cols, real val = 0.0);
+    Matrix(const vector<vector<real> >& _M) { M = _M; }
+    Matrix(const Matrix& _M) { M = _M.M; }
+    Matrix(vector<real>& p, bool col = false); // by default makes row vectors
+
+    int size(bool dim) const;
+    int numRows() { return size(0); }
+    int numCols() { return size(1); }
+    real& operator()(int i, int j) { return M[i][j]; }
+
+    Matrix& operator/=(const real& s);
+    Matrix& operator*=(const real& s);
+    const Matrix operator/(const real& s) const;
+    const Matrix operator*(const real& s) const;
+    Matrix& operator*=(const Matrix& P);
+    const Matrix operator*(const Matrix& P) const;
+    Matrix& operator+=(const Matrix& P);
+    const Matrix operator+(const Matrix& P) const;
+    Matrix& operator-=(const Matrix& P);
+    const Matrix operator-(const Matrix& P) const;
+    const Matrix operator-() const;
+    vector<real> operator[](int i) const { return M[i]; }
+    vector<real>& operator[](int i) { return M[i]; }
+
+    Matrix inverse();
+    Matrix transpose();
+
+    real norm();   // Euclidean norm of the matrix
+    real norm2();  // Euclidean norm squared
+
+    friend ostream & operator<<(ostream &_os, const Matrix& _M) {
+      for (int i = 0; i < _M.size(0); i++) {
+        _os << endl;
+        for (int j = 0; j < _M.size(1); j++) {
+          _os << std::setprecision(6) << std::fixed << _M[i][j] << " ";
+        }
+      }
+      return _os;
+    }
+
+  private:
+    vector<vector<real> > M;
 };
 
 }

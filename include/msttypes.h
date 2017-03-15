@@ -38,6 +38,7 @@ class Structure {
     Structure(const Structure& S);
     Structure(Chain& C);
     Structure(Residue& R);
+    Structure(vector<Atom*>& atoms);
     ~Structure();
 
     void readPDB(string pdbFile, string options = "");
@@ -59,6 +60,10 @@ class Structure {
     vector<Residue*> getResidues();
     void setName(string _name) { name = _name; }
     void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout
+
+    // looks at the length of the peptide bond between adjacent residues to figure out where chains break
+    void reassignChainsByConnectivity(Structure& dest, real maxPeptideBond = 2.0);
+    Structure reassignChainsByConnectivity(real maxPeptideBond = 2.0);
 
     /* ----- functions that grow/shrink structure ----- */
     /* returns false if the chain name collides with existing chain names and no suitable single-letter
@@ -251,7 +256,7 @@ class Atom {
     real getX() const { return x; }
     real getY() const{ return y; }
     real getZ() const{ return z; }
-    real operator[](int i) const;
+    real& operator[](int i);
     vector<real> getCoor() { vector<real> coor; coor.push_back(x); coor.push_back(y); coor.push_back(z); return coor; }
     vector<real> getAltCoor(int altInd);
     real getB() { return B; }
@@ -403,6 +408,7 @@ class AtomPointerVector : public vector<Atom*> {
     AtomPointerVector(const vector<Atom*>& other) : vector<Atom*>(other) { }
 
     CartesianPoint getGeometricCenter();
+    void center();
     real radiusOfGyration();
     void deletePointers();
 
@@ -476,6 +482,7 @@ class RMSDCalculator {
 
     // calculate optimal superposition and the resulting RMSD, applying transformation to given atoms
     bool align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<Atom*>& _moveable);
+    bool align(vector<Atom*> &_align, vector<Atom*> &_ref, Structure& _moveable);
 
     // quickly calculate RMSD upon optimal superposition without generating the rotation matrix
     real bestRMSD(vector<Atom*> &_align, vector<Atom*> &_ref, bool* _suc = NULL, bool setTransRot = false);
@@ -598,7 +605,7 @@ class DecoratedProximitySearch : public ProximitySearch {
  */
 class MstUtils {
   public:
-    static void openFile (fstream& fs, string filename, ios_base::openmode mode, string from = "");
+    static void openFile (fstream& fs, string filename, ios_base::openmode mode = ios_base::in, string from = "");
     static void fileToArray(string _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
     static vector<string> fileToArray(string _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
     static FILE* openFileC (const char* filename, const char* mode, string from = "");
@@ -617,8 +624,10 @@ class MstUtils {
     static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string pathBase(string fn); // gets the base name of the path (removes the extension)
     static bool fileExists(const char *filename);
+    static bool fileExists(const string filename) { return fileExists(filename.c_str()); }
     static bool isDir(const char *filename);
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
+    static vector<string> split(string& str, string delimiters = " ", bool skipTrailingDelims = true);
 
     static string readNullTerminatedString(fstream& ifs);
 

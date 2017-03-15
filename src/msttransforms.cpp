@@ -114,9 +114,23 @@ Transform::Transform(vector<real> trans) {
   }
 }
 
+Transform::Transform(real* trans) {
+  makeIdentity();
+  for (int i = 0; i < 3; i++) (*this)(i, 3) = trans[i];
+}
+
 Transform::Transform(vector<vector<real> > rot) {
   if (rot.size() != 3) MstUtils::error("expected a 3x3 matrix!", "Transform::Transform(vector<vector<real> >)");
   fill(rot[0], rot[1], rot[2], byRow);
+}
+
+Transform::Transform(real** rot) {
+  makeIdentity();
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      (*this)(i, j) = rot[i][j];
+    }
+  }
 }
 
 Transform::Transform(vector<vector<real> > rot, vector<real> trans) {
@@ -126,6 +140,19 @@ Transform::Transform(vector<vector<real> > rot, vector<real> trans) {
   for (int i = 0; i < 3; i++) {
     (*this)(i, 3) = trans[i];
   }
+}
+
+Transform::Transform(real** rot, real* trans) {
+  for (int i = 0; i < 3; i++) {
+    (*this)(i, 3) = trans[i];
+    (*this)(3, i) = 0;
+  }
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      (*this)(i, j) = rot[i][j];
+    }
+  }
+  (*this)(3, 3) = 1;
 }
 
 void Transform::makeIdentity() {
@@ -183,27 +210,20 @@ Transform Transform::inverse() {
   Transform& T = *this;
   Transform Ti;
 
-  // hard-code a 4x4 inverse (taken from MATLAB)
-  real det = (T(0,0)*T(1,1)*T(2,2)*T(3,3) - T(0,0)*T(1,1)*T(2,3)*T(3,2) - T(0,0)*T(1,2)*T(2,1)*T(3,3) + T(0,0)*T(1,2)*T(2,3)*T(3,1) + T(0,0)*T(1,3)*T(2,1)*T(3,2) - T(0,0)*T(1,3)*T(2,2)*T(3,1) - T(0,1)*T(1,0)*T(2,2)*T(3,3) + T(0,1)*T(1,0)*T(2,3)*T(3,2) + T(0,1)*T(1,2)*T(2,0)*T(3,3) - T(0,1)*T(1,2)*T(2,3)*T(3,0) - T(0,1)*T(1,3)*T(2,0)*T(3,2) + T(0,1)*T(1,3)*T(2,2)*T(3,0) + T(0,2)*T(1,0)*T(2,1)*T(3,3) - T(0,2)*T(1,0)*T(2,3)*T(3,1) - T(0,2)*T(1,1)*T(2,0)*T(3,3) + T(0,2)*T(1,1)*T(2,3)*T(3,0) + T(0,2)*T(1,3)*T(2,0)*T(3,1) - T(0,2)*T(1,3)*T(2,1)*T(3,0) - T(0,3)*T(1,0)*T(2,1)*T(3,2) + T(0,3)*T(1,0)*T(2,2)*T(3,1) + T(0,3)*T(1,1)*T(2,0)*T(3,2) - T(0,3)*T(1,1)*T(2,2)*T(3,0) - T(0,3)*T(1,2)*T(2,0)*T(3,1) + T(0,3)*T(1,2)*T(2,1)*T(3,0));
-  if (fabs(det) < 10E-15) {
-    MstUtils::warn("matrix too close to singular, determinant near zero", "Transform::inverse()");
+  // invert the rotation part by taking the transpose
+  for (int i = 0; i < 3; i++) {
+    for (int j = i; j < 3; j++) {
+      Ti(i, j) = T(j, i);
+      Ti(j, i) = T(i, j);
+    }
   }
-  Ti(0, 0) =  (T(1,1)*T(2,2)*T(3,3) - T(1,1)*T(2,3)*T(3,2) - T(1,2)*T(2,1)*T(3,3) + T(1,2)*T(2,3)*T(3,1) + T(1,3)*T(2,1)*T(3,2) - T(1,3)*T(2,2)*T(3,1))/det;
-  Ti(0, 1) = -(T(0,1)*T(2,2)*T(3,3) - T(0,1)*T(2,3)*T(3,2) - T(0,2)*T(2,1)*T(3,3) + T(0,2)*T(2,3)*T(3,1) + T(0,3)*T(2,1)*T(3,2) - T(0,3)*T(2,2)*T(3,1))/det;
-  Ti(0, 2) =  (T(0,1)*T(1,2)*T(3,3) - T(0,1)*T(1,3)*T(3,2) - T(0,2)*T(1,1)*T(3,3) + T(0,2)*T(1,3)*T(3,1) + T(0,3)*T(1,1)*T(3,2) - T(0,3)*T(1,2)*T(3,1))/det;
-  Ti(0, 3) = -(T(0,1)*T(1,2)*T(2,3) - T(0,1)*T(1,3)*T(2,2) - T(0,2)*T(1,1)*T(2,3) + T(0,2)*T(1,3)*T(2,1) + T(0,3)*T(1,1)*T(2,2) - T(0,3)*T(1,2)*T(2,1))/det;
-  Ti(1, 0) = -(T(1,0)*T(2,2)*T(3,3) - T(1,0)*T(2,3)*T(3,2) - T(1,2)*T(2,0)*T(3,3) + T(1,2)*T(2,3)*T(3,0) + T(1,3)*T(2,0)*T(3,2) - T(1,3)*T(2,2)*T(3,0))/det;
-  Ti(1, 1) =  (T(0,0)*T(2,2)*T(3,3) - T(0,0)*T(2,3)*T(3,2) - T(0,2)*T(2,0)*T(3,3) + T(0,2)*T(2,3)*T(3,0) + T(0,3)*T(2,0)*T(3,2) - T(0,3)*T(2,2)*T(3,0))/det;
-  Ti(1, 2) = -(T(0,0)*T(1,2)*T(3,3) - T(0,0)*T(1,3)*T(3,2) - T(0,2)*T(1,0)*T(3,3) + T(0,2)*T(1,3)*T(3,0) + T(0,3)*T(1,0)*T(3,2) - T(0,3)*T(1,2)*T(3,0))/det;
-  Ti(1, 3) =  (T(0,0)*T(1,2)*T(2,3) - T(0,0)*T(1,3)*T(2,2) - T(0,2)*T(1,0)*T(2,3) + T(0,2)*T(1,3)*T(2,0) + T(0,3)*T(1,0)*T(2,2) - T(0,3)*T(1,2)*T(2,0))/det;
-  Ti(2, 0) =  (T(1,0)*T(2,1)*T(3,3) - T(1,0)*T(2,3)*T(3,1) - T(1,1)*T(2,0)*T(3,3) + T(1,1)*T(2,3)*T(3,0) + T(1,3)*T(2,0)*T(3,1) - T(1,3)*T(2,1)*T(3,0))/det;
-  Ti(2, 1) = -(T(0,0)*T(2,1)*T(3,3) - T(0,0)*T(2,3)*T(3,1) - T(0,1)*T(2,0)*T(3,3) + T(0,1)*T(2,3)*T(3,0) + T(0,3)*T(2,0)*T(3,1) - T(0,3)*T(2,1)*T(3,0))/det;
-  Ti(2, 2) =  (T(0,0)*T(1,1)*T(3,3) - T(0,0)*T(1,3)*T(3,1) - T(0,1)*T(1,0)*T(3,3) + T(0,1)*T(1,3)*T(3,0) + T(0,3)*T(1,0)*T(3,1) - T(0,3)*T(1,1)*T(3,0))/det;
-  Ti(2, 3) = -(T(0,0)*T(1,1)*T(2,3) - T(0,0)*T(1,3)*T(2,1) - T(0,1)*T(1,0)*T(2,3) + T(0,1)*T(1,3)*T(2,0) + T(0,3)*T(1,0)*T(2,1) - T(0,3)*T(1,1)*T(2,0))/det;
-  Ti(3, 0) = -(T(1,0)*T(2,1)*T(3,2) - T(1,0)*T(2,2)*T(3,1) - T(1,1)*T(2,0)*T(3,2) + T(1,1)*T(2,2)*T(3,0) + T(1,2)*T(2,0)*T(3,1) - T(1,2)*T(2,1)*T(3,0))/det;
-  Ti(3, 1) =  (T(0,0)*T(2,1)*T(3,2) - T(0,0)*T(2,2)*T(3,1) - T(0,1)*T(2,0)*T(3,2) + T(0,1)*T(2,2)*T(3,0) + T(0,2)*T(2,0)*T(3,1) - T(0,2)*T(2,1)*T(3,0))/det;
-  Ti(3, 2) = -(T(0,0)*T(1,1)*T(3,2) - T(0,0)*T(1,2)*T(3,1) - T(0,1)*T(1,0)*T(3,2) + T(0,1)*T(1,2)*T(3,0) + T(0,2)*T(1,0)*T(3,1) - T(0,2)*T(1,1)*T(3,0))/det;
-  Ti(3, 3) =  (T(0,0)*T(1,1)*T(2,2) - T(0,0)*T(1,2)*T(2,1) - T(0,1)*T(1,0)*T(2,2) + T(0,1)*T(1,2)*T(2,0) + T(0,2)*T(1,0)*T(2,1) - T(0,2)*T(1,1)*T(2,0))/det;
+
+  // if this is a pure rotation, then this will be enough; otherwise, invert the translation too
+  if ((T(0, 3) != 0) || (T(1, 3) != 0) || (T(2, 3) != 0)) {
+    Transform Tti;
+    for (int i = 0; i < 3; i++) Tti(i, 3) = -T(i, 3);
+    Ti =  Ti * Tti;
+  }
 
   return Ti;
 }
@@ -427,7 +447,6 @@ TransformRMSD::TransformRMSD() {
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) C[i][j] = 0;
   }
-  N = 0;
 }
 
 void TransformRMSD::init(const AtomPointerVector& atoms) {
@@ -452,12 +471,10 @@ void TransformRMSD::init(const AtomPointerVector& atoms) {
         Atom& a = *(atoms[k]);
         C[i][j] += (a[i] - Tr[i]) * (a[j] - Tr[j]);
       }
+      C[i][j] /= atoms.size();
       C[j][i] = C[i][j];
     }
   }
-
-  // number of atoms
-  N = atoms.size();
 }
 
 void TransformRMSD::init(const Structure& S) {
@@ -477,15 +494,225 @@ real TransformRMSD::getRMSD(Transform& T1, Transform& T2) {
   real trace = C[0][0] + C[1][1] + C[2][2];
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      trace -= T(i, j)*C[i][j];
+      trace -= T(i, j)*C[j][i];
     }
   }
   trace *= 2;
 
-  return sqrt(rot + trace/N);
+  return sqrt(rot + trace);
 }
 
 real TransformRMSD::getRMSD(Transform& T1) {
   Transform I;
   return getRMSD(T1, I);
+}
+
+/* --------- Matrix --------- */
+
+Matrix::Matrix(int rows, int cols, real val) {
+  if ((rows < 0) || (cols < 0)) MstUtils::error("invalid dimensions specified: " + MstUtils::toString(rows) + " x " + MstUtils::toString(cols), "Matrix::Matrix");
+  M.resize(rows, vector<real>(cols, val));
+}
+
+Matrix::Matrix(vector<real>& p, bool col) {
+  if (col) {
+    M.resize(p.size(), vector<real>(1));
+    for (int i = 0; i < p.size(); i++) M[i][0] = p[i];
+  } else {
+    M.resize(1, p);
+  }
+}
+
+int Matrix::size(bool dim) const {
+  if (dim) {
+    if (M.size() == 0) return 0;
+    return M[0].size();
+  }
+  return M.size();
+}
+
+Matrix& Matrix::operator/=(const real& s) {
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      M[i][j] /= s;
+    }
+  }
+  return *this;
+}
+
+Matrix& Matrix::operator*=(const real& s) {
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      M[i][j] *= s;
+    }
+  }
+  return *this;
+}
+
+const Matrix Matrix::operator/(const real& s) const {
+  Matrix R = *this;
+  R /= s;
+  return R;
+}
+
+const Matrix Matrix::operator*(const real& s) const {
+  Matrix R = *this;
+  R *= s;
+  return R;
+}
+
+Matrix& Matrix::operator*=(const Matrix& P) {
+  Matrix R = *this * P;
+  *this = R;
+  return *this;
+}
+
+const Matrix Matrix::operator*(const Matrix& P) const {
+  if (this->size(1) != P.size(0)) MstUtils::error("matrix dimensions do not agree", "Matrix::operator*(Matrix&)");
+  int n = this->size(0);
+  int m = P.size(1);
+  int p = this->size(1);
+  Matrix R(n, m, 0);
+
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < m; j++) {
+      for (int k = 0; k < p; k++) {
+        R[i][j] += (*this)[i][k] * P[k][j];
+      }
+    }
+  }
+  return R;
+}
+
+Matrix& Matrix::operator+=(const Matrix& P) {
+  if ((this->size(0) != P.size(0)) || (this->size(1) != P.size(1))) {
+    MstUtils::error("matrix dimensions do not agree", "Matrix::operator+=(Matrix&)");
+  }
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      M[i][j] += P[i][j];
+    }
+  }
+  return *this;
+}
+
+const Matrix Matrix::operator+(const Matrix& P) const {
+  Matrix R = *this;
+  R += P;
+  return R;
+}
+
+Matrix& Matrix::operator-=(const Matrix& P) {
+  if ((this->size(0) != P.size(0)) || (this->size(1) != P.size(1))) {
+    MstUtils::error("matrix dimensions do not agree", "Matrix::operator-=(Matrix&)");
+  }
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      M[i][j] -= P[i][j];
+    }
+  }
+  return *this;
+}
+
+const Matrix Matrix::operator-(const Matrix& P) const {
+  Matrix R = *this;
+  R -= P;
+  return R;
+}
+
+const Matrix Matrix::operator-() const {
+  Matrix R = *this;
+  R *= -1;
+  return R;
+}
+
+Matrix Matrix::inverse() {
+  if (size(0) != size(1)) MstUtils::error("inverse of non-square matrix requested", "Matrix::inverse()");
+  int N = size(0);
+  Matrix Mi = *this;
+  real det;
+
+  switch(N) {
+    case 0:
+      MstUtils::error("inverse of an empty matrix requested", "Matrix::inverse()");
+      break;
+
+    case 1:
+      Mi[0][0] = 1/M[0][0];
+      break;
+
+    case 2:
+      det = (M[0][0]*M[1][1] - M[0][1]*M[1][0]);
+      if (fabs(det) < 10E-15) MstUtils::warn("matrix too close to singular, determinant near zero", "Matrix::inverse()");
+      Mi[0][0] =  M[1][1]/det;
+      Mi[0][1] = -M[0][1]/det;
+      Mi[1][0] = -M[1][0]/det;
+      Mi[1][1] =  M[0][0]/det;
+      break;
+
+    case 3:
+      det = (M[0][0]*M[1][1]*M[2][2] - M[0][0]*M[1][2]*M[2][1] - M[0][1]*M[1][0]*M[2][2] + M[0][1]*M[1][2]*M[2][0] + M[0][2]*M[1][0]*M[2][1] - M[0][2]*M[1][1]*M[2][0]);
+      if (fabs(det) < 10E-15) MstUtils::warn("matrix too close to singular, determinant near zero", "Matrix::inverse()");
+      Mi[0][0] =  (M[1][1]*M[2][2] - M[1][2]*M[2][1])/det;
+      Mi[0][1] = -(M[0][1]*M[2][2] - M[0][2]*M[2][1])/det;
+      Mi[0][2] =  (M[0][1]*M[1][2] - M[0][2]*M[1][1])/det;
+      Mi[1][0] = -(M[1][0]*M[2][2] - M[1][2]*M[2][0])/det;
+      Mi[1][1] =  (M[0][0]*M[2][2] - M[0][2]*M[2][0])/det;
+      Mi[1][2] = -(M[0][0]*M[1][2] - M[0][2]*M[1][0])/det;
+      Mi[2][0] =  (M[1][0]*M[2][1] - M[1][1]*M[2][0])/det;
+      Mi[2][1] = -(M[0][0]*M[2][1] - M[0][1]*M[2][0])/det;
+      Mi[2][2] =  (M[0][0]*M[1][1] - M[0][1]*M[1][0])/det;
+      break;
+
+    case 4:
+      det = (M[0][0]*M[1][1]*M[2][2]*M[3][3] - M[0][0]*M[1][1]*M[2][3]*M[3][2] - M[0][0]*M[1][2]*M[2][1]*M[3][3] + M[0][0]*M[1][2]*M[2][3]*M[3][1] + M[0][0]*M[1][3]*M[2][1]*M[3][2] - M[0][0]*M[1][3]*M[2][2]*M[3][1] - M[0][1]*M[1][0]*M[2][2]*M[3][3] + M[0][1]*M[1][0]*M[2][3]*M[3][2] + M[0][1]*M[1][2]*M[2][0]*M[3][3] - M[0][1]*M[1][2]*M[2][3]*M[3][0] - M[0][1]*M[1][3]*M[2][0]*M[3][2] + M[0][1]*M[1][3]*M[2][2]*M[3][0] + M[0][2]*M[1][0]*M[2][1]*M[3][3] - M[0][2]*M[1][0]*M[2][3]*M[3][1] - M[0][2]*M[1][1]*M[2][0]*M[3][3] + M[0][2]*M[1][1]*M[2][3]*M[3][0] + M[0][2]*M[1][3]*M[2][0]*M[3][1] - M[0][2]*M[1][3]*M[2][1]*M[3][0] - M[0][3]*M[1][0]*M[2][1]*M[3][2] + M[0][3]*M[1][0]*M[2][2]*M[3][1] + M[0][3]*M[1][1]*M[2][0]*M[3][2] - M[0][3]*M[1][1]*M[2][2]*M[3][0] - M[0][3]*M[1][2]*M[2][0]*M[3][1] + M[0][3]*M[1][2]*M[2][1]*M[3][0]);
+      if (fabs(det) < 10E-15) MstUtils::warn("matrix too close to singular, determinant near zero", "Matrix::inverse()");
+      Mi[0][0] =  (M[1][1]*M[2][2]*M[3][3] - M[1][1]*M[2][3]*M[3][2] - M[1][2]*M[2][1]*M[3][3] + M[1][2]*M[2][3]*M[3][1] + M[1][3]*M[2][1]*M[3][2] - M[1][3]*M[2][2]*M[3][1])/det;
+      Mi[0][1] = -(M[0][1]*M[2][2]*M[3][3] - M[0][1]*M[2][3]*M[3][2] - M[0][2]*M[2][1]*M[3][3] + M[0][2]*M[2][3]*M[3][1] + M[0][3]*M[2][1]*M[3][2] - M[0][3]*M[2][2]*M[3][1])/det;
+      Mi[0][2] =  (M[0][1]*M[1][2]*M[3][3] - M[0][1]*M[1][3]*M[3][2] - M[0][2]*M[1][1]*M[3][3] + M[0][2]*M[1][3]*M[3][1] + M[0][3]*M[1][1]*M[3][2] - M[0][3]*M[1][2]*M[3][1])/det;
+      Mi[0][3] = -(M[0][1]*M[1][2]*M[2][3] - M[0][1]*M[1][3]*M[2][2] - M[0][2]*M[1][1]*M[2][3] + M[0][2]*M[1][3]*M[2][1] + M[0][3]*M[1][1]*M[2][2] - M[0][3]*M[1][2]*M[2][1])/det;
+      Mi[1][0] = -(M[1][0]*M[2][2]*M[3][3] - M[1][0]*M[2][3]*M[3][2] - M[1][2]*M[2][0]*M[3][3] + M[1][2]*M[2][3]*M[3][0] + M[1][3]*M[2][0]*M[3][2] - M[1][3]*M[2][2]*M[3][0])/det;
+      Mi[1][1] =  (M[0][0]*M[2][2]*M[3][3] - M[0][0]*M[2][3]*M[3][2] - M[0][2]*M[2][0]*M[3][3] + M[0][2]*M[2][3]*M[3][0] + M[0][3]*M[2][0]*M[3][2] - M[0][3]*M[2][2]*M[3][0])/det;
+      Mi[1][2] = -(M[0][0]*M[1][2]*M[3][3] - M[0][0]*M[1][3]*M[3][2] - M[0][2]*M[1][0]*M[3][3] + M[0][2]*M[1][3]*M[3][0] + M[0][3]*M[1][0]*M[3][2] - M[0][3]*M[1][2]*M[3][0])/det;
+      Mi[1][3] =  (M[0][0]*M[1][2]*M[2][3] - M[0][0]*M[1][3]*M[2][2] - M[0][2]*M[1][0]*M[2][3] + M[0][2]*M[1][3]*M[2][0] + M[0][3]*M[1][0]*M[2][2] - M[0][3]*M[1][2]*M[2][0])/det;
+      Mi[2][0] =  (M[1][0]*M[2][1]*M[3][3] - M[1][0]*M[2][3]*M[3][1] - M[1][1]*M[2][0]*M[3][3] + M[1][1]*M[2][3]*M[3][0] + M[1][3]*M[2][0]*M[3][1] - M[1][3]*M[2][1]*M[3][0])/det;
+      Mi[2][1] = -(M[0][0]*M[2][1]*M[3][3] - M[0][0]*M[2][3]*M[3][1] - M[0][1]*M[2][0]*M[3][3] + M[0][1]*M[2][3]*M[3][0] + M[0][3]*M[2][0]*M[3][1] - M[0][3]*M[2][1]*M[3][0])/det;
+      Mi[2][2] =  (M[0][0]*M[1][1]*M[3][3] - M[0][0]*M[1][3]*M[3][1] - M[0][1]*M[1][0]*M[3][3] + M[0][1]*M[1][3]*M[3][0] + M[0][3]*M[1][0]*M[3][1] - M[0][3]*M[1][1]*M[3][0])/det;
+      Mi[2][3] = -(M[0][0]*M[1][1]*M[2][3] - M[0][0]*M[1][3]*M[2][1] - M[0][1]*M[1][0]*M[2][3] + M[0][1]*M[1][3]*M[2][0] + M[0][3]*M[1][0]*M[2][1] - M[0][3]*M[1][1]*M[2][0])/det;
+      Mi[3][0] = -(M[1][0]*M[2][1]*M[3][2] - M[1][0]*M[2][2]*M[3][1] - M[1][1]*M[2][0]*M[3][2] + M[1][1]*M[2][2]*M[3][0] + M[1][2]*M[2][0]*M[3][1] - M[1][2]*M[2][1]*M[3][0])/det;
+      Mi[3][1] =  (M[0][0]*M[2][1]*M[3][2] - M[0][0]*M[2][2]*M[3][1] - M[0][1]*M[2][0]*M[3][2] + M[0][1]*M[2][2]*M[3][0] + M[0][2]*M[2][0]*M[3][1] - M[0][2]*M[2][1]*M[3][0])/det;
+      Mi[3][2] = -(M[0][0]*M[1][1]*M[3][2] - M[0][0]*M[1][2]*M[3][1] - M[0][1]*M[1][0]*M[3][2] + M[0][1]*M[1][2]*M[3][0] + M[0][2]*M[1][0]*M[3][1] - M[0][2]*M[1][1]*M[3][0])/det;
+      Mi[3][3] =  (M[0][0]*M[1][1]*M[2][2] - M[0][0]*M[1][2]*M[2][1] - M[0][1]*M[1][0]*M[2][2] + M[0][1]*M[1][2]*M[2][0] + M[0][2]*M[1][0]*M[2][1] - M[0][2]*M[1][1]*M[2][0])/det;
+      break;
+
+    default:
+      MstUtils::error("this is a basic matrix class that does not know how to invert matrices of dimension " + MstUtils::toString(N), "Matrix::inverse");
+      break;
+  }
+
+  return Mi;
+}
+
+Matrix Matrix::transpose() {
+  Matrix R = *this;
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) R[j][i] = M[i][j];
+  }
+  return R;
+}
+
+real Matrix::norm() {
+  real n = 0;
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) n += M[i][j] * M[i][j];
+  }
+  return sqrt(n);
+}
+
+real Matrix::norm2() {
+  real n = 0;
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) n += M[i][j] * M[i][j];
+  }
+  return n;
 }

@@ -40,6 +40,11 @@ Structure::Structure(Residue& R) {
   newChain->appendResidue(new Residue(R));
 }
 
+Structure::Structure(vector<Atom*>& atoms) {
+  numResidues = numAtoms = 0;
+  addAtoms(atoms);
+}
+
 /* The assumption is that if a Structure is deleted, all
  * of its children objects are no longer needed and should
  * go away. If a user needs to hold on to these, they
@@ -408,6 +413,27 @@ void Structure::renumber() {
   }
 }
 
+Structure Structure::reassignChainsByConnectivity(real maxPeptideBond) {
+  Structure S;
+  reassignChainsByConnectivity(S, maxPeptideBond);
+  return S;
+}
+
+void Structure::reassignChainsByConnectivity(Structure& dest, real maxPeptideBond) {
+  vector<Residue*> residues = this->getResidues();
+	Chain* chain = dest.appendChain("A");
+	for (int i = 0; i < residues.size() - 1; i++) {
+    chain->appendResidue(new Residue(*residues[i]));
+		Atom* atomC = residues[i]->findAtom("C", true);
+		Atom* atomN = residues[i + 1]->findAtom("N", true);
+    if ((atomC == NULL) || (atomN == NULL)) MstUtils::error("cannot break into disjoint segments as some C or N backbone atoms are missing", "Structure::reassignChainsByConnectivity");
+		if (atomC->distance(atomN) > maxPeptideBond) {
+      chain = dest.appendChain("A");
+    }
+	}
+	chain->appendResidue(new Residue(*residues[residues.size() - 1]));
+}
+
 void Structure::addAtom(Atom* A) {
   if ((A->getParent() == NULL) || (A->getParent()->getParent() == NULL)) MstUtils::error("cannot add a disembodied Atom", "Structure::addAtom");
   Residue* oldResidue = A->getParent();
@@ -440,7 +466,6 @@ void Structure::addAtoms(vector<Atom*>* atoms) {
 void Structure::addResidue(Residue* res) {
   if (res->getParent() == NULL) MstUtils::error("cannot add a disembodied Residue", "Structure::addResidue");
   Chain* oldChain = res->getParent();
-
 
   // is there a chain matching the Residue's parent chain? If not, create one.
   Chain* newChain = getChainByID(oldChain->getID());
@@ -856,7 +881,7 @@ Atom::~Atom() {
   if (alternatives != NULL) delete alternatives;
 }
 
-real Atom::operator[](int i) const {
+real& Atom::operator[](int i) {
   switch(i) {
     case 0:
       return x;
@@ -867,7 +892,7 @@ real Atom::operator[](int i) const {
     default:
       MstUtils::error("invalid coordinate index " + MstUtils::toString(i), "Atom::operator[](int)");
   }
-  return 0.0; // just to silence the warning from some compilres; in reality, this is never reached
+  return x; // just to silence the warning from some compilres; in reality, this is never reached
 }
 
 vector<real> Atom::getAltCoor(int altInd) {
@@ -961,6 +986,14 @@ CartesianPoint AtomPointerVector::getGeometricCenter() {
   }
   C /= this->size();
   return C;
+}
+
+void AtomPointerVector::center() {
+  CartesianPoint C = getGeometricCenter();
+  for (int i = 0; i < this->size(); i++) {
+    Atom& a = *((*this)[i]);
+    for (int k = 0; k < 3; k++) a[k] -= C[k];
+  }
 }
 
 real AtomPointerVector::radiusOfGyration() {
@@ -1428,12 +1461,16 @@ bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<At
             x1[0] = t[0]+u[0][0]*x[0]+u[0][1]*x[1]+u[0][2]*x[2];
             x1[1] = t[1]+u[1][0]*x[0]+u[1][1]*x[1]+u[1][2]*x[2];
             x1[2] = t[2]+u[2][0]*x[0]+u[2][1]*x[1]+u[2][2]*x[2];
-            _moveable[k]->setCoor(x1[0],x1[1],x1[2]);
+            _moveable[k]->setCoor(x1[0], x1[1], x1[2]);
         }
     }
     return suc;
 }
 
+bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, Structure& _moveable) {
+  vector<Atom*> atoms = _moveable.getAtoms();
+  return align(_align, _ref, atoms);
+}
 
 /**************************************************************************
   Implemetation of Kabsch algoritm for finding the best rotation matrix
@@ -2008,6 +2045,13 @@ string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDeli
   ret = str.substr(0, i);
   str = str.substr(i);
   return ret;
+}
+
+vector<string> MstUtils::split(string& str, string delimiters, bool skipTrailingDelims) {
+  string strCopy = str;
+  vector<string> tokens;
+  while (!strCopy.empty()) tokens.push_back(nextToken(strCopy, delimiters, skipTrailingDelims));
+  return tokens;
 }
 
 FILE* MstUtils::openFileC (const char* filename, const char* mode, string from) {

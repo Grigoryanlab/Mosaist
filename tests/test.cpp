@@ -15,6 +15,10 @@ int main(int argc, char** argv) {
   Structure S(pdbFile);
   S.writePDB(outBase + ".out.pdb");
 
+  // reassign by connectivity
+  S = S.reassignChainsByConnectivity();
+  S.writePDB(outBase + ".conn.out.pdb");
+
   // memory test (sort of)
   int n = 100;
   printf("reading %d Structure objects into memory...\n", n);
