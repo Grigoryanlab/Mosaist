@@ -22,6 +22,9 @@ class contactList {
       inContact = other.inContact;
     }
     void addContact(Residue* _resi, Residue* _resj, real _degree, string _info = "") {
+      if (_resi->getResidueIndex() > _resj->getResidueIndex()) {
+        Residue* tmp = _resi; _resi = _resj; _resj = tmp;
+      }
       resi.push_back(_resi);
       resj.push_back(_resj);
       degrees.push_back(_degree);

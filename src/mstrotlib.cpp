@@ -45,10 +45,10 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     }
 
     // read rotamer atom names and initialize a residue object
-    Residue* res = new Residue(aa, 1);
+    Residue res(aa, 1);
     for (int i = 0; i < na; i++) {
       string atomname = MstUtils::readNullTerminatedString(inp);
-      res->appendAtom(new Atom(1, atomname, 0, 0, 0, 0, 0, false, ' '));
+      res.appendAtom(new Atom(1, atomname, 0, 0, 0, 0, 0, false, ' '));
     }
 
     // read phi/psi angles for each bin, record unique ones.
@@ -101,7 +101,7 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
       inp.read((char*) &nr, sizeof(nr));  // number of rotamers in this bin
       chi[aa][i].resize(nr);
       prob[aa][i].resize(nr);
-      rot = new Residue(*res);
+      rot = new Residue(res);
       for (int j = 0; j < nr; j++) {
         // read rotamer probability
         inp.read((char*) &val, sizeof(val));

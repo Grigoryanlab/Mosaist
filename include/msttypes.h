@@ -50,7 +50,7 @@ class Structure {
     int chainSize() const { return chains.size(); }
     int residueSize() { return numResidues; }
     int positionSize() { return residueSize(); }  // for interchangability with MSL
-    int atomSize() { return numAtoms; }
+    int atomSize() const { return numAtoms; }
     Chain* getChainByID(string id) { return (chainsByID.find(id) != chainsByID.end()) ? chainsByID[id] : NULL; }
     Chain* getChainBySegID(string id) { return (chainsBySegID.find(id) != chainsBySegID.end()) ? chainsBySegID[id] : NULL; }
     Chain& getChain(int i) { return (*this)[i]; }
@@ -59,6 +59,7 @@ class Structure {
     vector<Atom*> getAtoms() const;
     vector<Residue*> getResidues();
     void setName(string _name) { name = _name; }
+    string getName() { return name; }
     void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout
 
     // looks at the length of the peptide bond between adjacent residues to figure out where chains break
@@ -412,7 +413,7 @@ class AtomPointerVector : public vector<Atom*> {
     real radiusOfGyration();
     void deletePointers();
 
-    friend ostream & operator<<(ostream &_os, AtomPointerVector& _atoms) {
+    friend ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms) {
       for (int i = 0; i < _atoms.size(); i++) {
         _os << _atoms[i]->pdbLine() << endl;
       }
@@ -481,19 +482,19 @@ class RMSDCalculator {
     vector<vector<real> > lastRotation();
 
     // calculate optimal superposition and the resulting RMSD, applying transformation to given atoms
-    bool align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<Atom*>& _moveable);
-    bool align(vector<Atom*> &_align, vector<Atom*> &_ref, Structure& _moveable);
+    bool align(const vector<Atom*> &_align, const vector<Atom*> &_ref, vector<Atom*>& _moveable);
+    bool align(const vector<Atom*> &_align, const vector<Atom*> &_ref, Structure& _moveable);
 
     // quickly calculate RMSD upon optimal superposition without generating the rotation matrix
-    real bestRMSD(vector<Atom*> &_align, vector<Atom*> &_ref, bool* _suc = NULL, bool setTransRot = false);
+    real bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool* _suc = NULL, bool setTransRot = false);
 
     // in-place RMSD (no transformations)
-    static real rmsd(vector<Atom*>& A, vector<Atom*>& B);
-    static real rmsd(Structure& A, Structure& B);
+    static real rmsd(const vector<Atom*>& A, const vector<Atom*>& B);
+    static real rmsd(const Structure& A, const Structure& B);
 
  protected:
     // implemetation of Kabsch algoritm for optimal superposition
-    bool Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode);
+    bool Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_ref, int mode);
 
  private:
     real _rmsd;
@@ -620,14 +621,16 @@ class MstUtils {
     static int toInt(string num, bool strict = true);
     static bool isInt(string num);
     static MST::real toReal(string num, bool strict = true);
+    static bool isReal(string num);
     static MST::real mod(MST::real num, MST::real den);
     static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string pathBase(string fn); // gets the base name of the path (removes the extension)
+    static string splitPath(string path, int outToken, string* dirPathPtr = NULL, string* fileNamePtr = NULL, string* extensionPtr = NULL);
     static bool fileExists(const char *filename);
     static bool fileExists(const string filename) { return fileExists(filename.c_str()); }
     static bool isDir(const char *filename);
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
-    static vector<string> split(string& str, string delimiters = " ", bool skipTrailingDelims = true);
+    static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
 
     static string readNullTerminatedString(fstream& ifs);
 
@@ -645,7 +648,13 @@ class MstUtils {
     template <class T1, class T2>
     static vector<T1> keys(map<T1, T2>& _map);
     template <class T>
-    static string vecToString(vector<T>& vec, string del = " ");
+    static string vecToString(const vector<T>& vec, string del = " ");
+    template <class T>
+    static T min(const T& a, const T& b);
+    template <class T>
+    static T max(const T& a, const T& b);
+    template <class T>
+    static bool closeEnough(const T& a, const T& b, const T& epsilon = std::numeric_limits<T>::epsilon());
 };
 
 template <class T>
@@ -678,13 +687,30 @@ vector<T1> MstUtils::keys(map<T1, T2>& _map) {
 }
 
 template <class T>
-string MstUtils::vecToString(vector<T>& vec, string del) {
+string MstUtils::vecToString(const vector<T>& vec, string del) {
   string str;
   for (int i = 0; i < vec.size(); i++) {
     str += MstUtils::toString(vec[i]);
     if (i != vec.size() - 1) str += del;
   }
   return str;
+}
+
+template <class T>
+T MstUtils::min(const T& a, const T& b) {
+  if (a < b) return a;
+  return b;
+}
+
+template <class T>
+T MstUtils::max(const T& a, const T& b) {
+  if (a > b) return a;
+  return b;
+}
+
+template <class T>
+bool MstUtils::closeEnough(const T& a, const T& b, const T& epsilon) {
+  return (a - b > -epsilon) && (a - b < epsilon);
 }
 
 #endif

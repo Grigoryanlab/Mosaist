@@ -11,7 +11,7 @@ Frame::Frame() {
   Z[0] = 0; Z[1] = 0; Z[2] = 1;
 }
 
-Frame::Frame(CartesianPoint& _O, CartesianPoint& _X, CartesianPoint& _Y, CartesianPoint& _Z) {
+Frame::Frame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) {
   MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3),
       "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)");
   real xn = _X.norm(); real yn = _Y.norm(); real zn = _Z.norm();
@@ -240,6 +240,36 @@ Transform Transform::translation() {
   return T;
 }
 
+void Transform::eulerAngles(real& x, real& y, real& z) {
+  // check for gimbal lock
+  if (MstUtils::closeEnough((float) M[2][0], (float) -1.0)) {
+    float z = 0; // gimbal lock, value of x doesn't matter
+    float y = M_PI / 2;
+    float x = z + atan2(M[1][0], M[2][0]);
+  } else if (MstUtils::closeEnough((float) M[2][0], (float) 1.0)) {
+    float z = 0;
+    float y = -M_PI / 2;
+    float x = -z + atan2(-M[1][0], -M[2][0]);
+  } else { // two solutions exist
+    float y1 = -asin(M[2][0]);
+    float y2 = M_PI - y1;
+
+    float x1 = atan2(M[2][1] / cos(y1), M[2][2] / cos(y1));
+    float x2 = atan2(M[2][1] / cos(y2), M[2][2] / cos(y2));
+
+    float z1 = atan2(M[1][0] / cos(y1), M[0][0] / cos(y1));
+    float z2 = atan2(M[1][0] / cos(y2), M[0][0] / cos(y2));
+
+    // choose one solution to return
+    // for example the "shortest" rotation
+    if ((fabsf(x1) + fabsf(y1) + fabsf(z1)) <= (fabsf(x2) + fabsf(y2) + fabsf(z2))) {
+      x = x1; y = y1; z = z1;
+    } else {
+      x = x2; y = y2; z = z2;
+    }
+  }
+}
+
 CartesianPoint Transform::applyToCopy(CartesianPoint& p) {
   return (*this) * p;
 }
@@ -287,6 +317,10 @@ void Transform::apply(Structure* S) {
   }
 }
 
+void Transform::apply(const AtomPointerVector& vec) {
+  for (int i = 0; i < vec.size(); i++) apply(vec[i]);
+}
+
 
 /* --------- TransformFactory --------- */
 /* lots of valuable information was taken from http://web.cs.iastate.edu/~cs577/handouts/homogeneous-transform.pdf */
@@ -300,7 +334,7 @@ Transform TransformFactory::translate(real x, real y, real z) {
   return T;
 }
 
-Transform TransformFactory::translate(CartesianPoint& p) {
+Transform TransformFactory::translate(const CartesianPoint& p) {
   if (p.size() != 3) MstUtils::error("Translation vector of unexpected dimension " + MstUtils::toString(p.size()), "TransformFactory::translate");
   return translate(p[0], p[1], p[2]);
 }
@@ -429,7 +463,7 @@ Transform TransformFactory::alignVectorWithZAxis(CartesianPoint& p) {
   return alignVectorWithZAxis(p[0], p[1], p[2]);
 }
 
-Transform TransformFactory::switchFrames(Frame& _from, Frame& _to) {
+Transform TransformFactory::switchFrames(const Frame& _from, const Frame& _to) {
   // the procedure will be simple enough:
   // 1. change of basis from _from to the standard basis (laboratory basis)
   // 2. inverse change of basis from _to to the standard basis
@@ -514,7 +548,7 @@ Matrix::Matrix(int rows, int cols, real val) {
   M.resize(rows, vector<real>(cols, val));
 }
 
-Matrix::Matrix(vector<real>& p, bool col) {
+Matrix::Matrix(const vector<real>& p, bool col) {
   if (col) {
     M.resize(p.size(), vector<real>(1));
     for (int i = 0; i < p.size(); i++) M[i][0] = p[i];

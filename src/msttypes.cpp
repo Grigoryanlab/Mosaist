@@ -371,14 +371,16 @@ Residue& Structure::getResidue(int i) {
 }
 
 vector<Atom*> Structure::getAtoms() const {
-  vector<Atom*> vec;
-
+  vector<Atom*> vec(this->atomSize());
+  int ii = 0;
   for (int i = 0; i < this->chainSize(); i++) {
     Chain& c = (*this)[i];
     for (int j = 0; j < c.residueSize(); j++) {
       Residue& r = c[j];
-      vector<Atom*> resAtoms = r.getAtoms();
-      vec.insert(vec.end(), resAtoms.begin(), resAtoms.end());
+      for (int k = 0; k < r.atomSize(); k++) {
+        vec[ii] = &(r[k]);
+        ii++;
+      }
     }
   }
 
@@ -1441,14 +1443,14 @@ vector<vector<real> > RMSDCalculator::lastRotation() {
     return rot;
 }
 
-real RMSDCalculator::bestRMSD(vector<Atom*> &_align, vector<Atom*> &_ref, bool* _suc, bool setTransRot) {
+real RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool* _suc, bool setTransRot) {
     _rmsd = 999999.0;
     if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
     else { if (_suc != NULL) *_suc = false; }
     return _rmsd;
 }
 
-bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<Atom*>& _moveable) {
+bool RMSDCalculator::align(const vector<Atom*> &_align, const vector<Atom*> &_ref, vector<Atom*>& _moveable) {
     _rmsd = 999999.0;
     bool suc = Kabsch(_align, _ref, 1);
 
@@ -1467,7 +1469,7 @@ bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, vector<At
     return suc;
 }
 
-bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, Structure& _moveable) {
+bool RMSDCalculator::align(const vector<Atom*> &_align, const vector<Atom*> &_ref, Structure& _moveable) {
   vector<Atom*> atoms = _moveable.getAtoms();
   return align(_align, _ref, atoms);
 }
@@ -1484,7 +1486,7 @@ bool RMSDCalculator::align(vector<Atom*> &_align, vector<Atom*> &_ref, Structure
   u    - u(i,j) is   rotation  matrix for best superposition  (output)
   t    - t(i)   is translation vector for best superposition  (output)
 **************************************************************************/
-bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode) {
+bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_ref, int mode) {
     int i, j, m, m1, l, k;
     real e0, rms1, d, h, g;
     real cth, sth, sqrth, p, det, sigma;
@@ -1785,7 +1787,7 @@ bool RMSDCalculator::Kabsch(vector<Atom*> &_align, vector<Atom*> &_ref, int mode
     return true;
 }
 
-real RMSDCalculator::rmsd(vector<Atom*>& A, vector<Atom*>& B) {
+real RMSDCalculator::rmsd(const vector<Atom*>& A, const vector<Atom*>& B) {
   if (A.size() != B.size())
     MstUtils::error("atom vectors of different length (" + MstUtils::toString(A.size()) + " and " + MstUtils::toString(B.size()) + ")", "RMSDCalculator::rmsd(vector<Atom*>&, vector<Atom*>&)");
 
@@ -1796,7 +1798,7 @@ real RMSDCalculator::rmsd(vector<Atom*>& A, vector<Atom*>& B) {
   return sqrt(ret/A.size());
 }
 
-real RMSDCalculator::rmsd(Structure& A, Structure& B) {
+real RMSDCalculator::rmsd(const Structure& A, const Structure& B) {
   vector<Atom*> atomsA = A.getAtoms();
   vector<Atom*> atomsB = B.getAtoms();
   return rmsd(atomsA, atomsB);
@@ -2021,6 +2023,42 @@ string MstUtils::pathBase(string fn) {
   else return fn.substr(0, fn.find_last_of("."));
 }
 
+string MstUtils::splitPath(string path, int outToken, string* dirPathPtr, string* fileNamePtr, string* extensionPtr) {
+  string dirPath, fileName, extension;
+  int pos = path.rfind("/");
+  if (pos == string::npos) {
+    fileName = path;
+    dirPath = "./";
+  } else if (pos == 0) {
+    fileName = path.substr(1);
+    dirPath = "/";
+  } else {
+    fileName = path.substr(pos+1);
+    dirPath = path.substr(0, pos);
+  }
+  pos = fileName.rfind(".");
+  if (pos == string::npos) {
+    extension = "";
+  } else {
+    extension = fileName.substr(pos+1);
+    fileName = fileName.substr(0, pos);
+  }
+  if (dirPathPtr != NULL) *dirPathPtr = dirPath;
+  if (fileNamePtr != NULL) *fileNamePtr = fileName;
+  if (extensionPtr != NULL) *extensionPtr = extension;
+  switch (outToken) {
+    case 0:
+      return dirPath;
+    case 1:
+      return fileName;
+    case 2:
+      return extension;
+    default:
+      MstUtils::error("unrecognized output token type specified '" + MstUtils::toString(outToken) + "'", " MstUtils::splitPath");
+  }
+  return ""; // just to make the compiler happy, this is never reached
+}
+
 bool MstUtils::fileExists(const char *filename) {
   struct stat buffer ;
   if (stat( filename, &buffer) == 0) return true;
@@ -2047,7 +2085,7 @@ string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDeli
   return ret;
 }
 
-vector<string> MstUtils::split(string& str, string delimiters, bool skipTrailingDelims) {
+vector<string> MstUtils::split(const string& str, string delimiters, bool skipTrailingDelims) {
   string strCopy = str;
   vector<string> tokens;
   while (!strCopy.empty()) tokens.push_back(nextToken(strCopy, delimiters, skipTrailingDelims));
@@ -2138,6 +2176,11 @@ int MstUtils::toInt(string num, bool strict) {
 bool MstUtils::isInt(string num) {
   int ret;
   return (sscanf(num.c_str(), "%d", &ret) != 0);
+}
+
+bool MstUtils::isReal(string num) {
+  double ret;
+  return (sscanf(num.c_str(), "%lf", &ret) != 0);
 }
 
 MST::real MstUtils::toReal(string num, bool strict) {

@@ -9,18 +9,19 @@ namespace MST {
 class Frame {
   public:
     Frame(); // same as the laboratory frame
-    Frame(CartesianPoint& _O, CartesianPoint& _X, CartesianPoint& _Y, CartesianPoint& _Z);
+    Frame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z);
+    Frame(const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) : Frame(CartesianPoint(0, 0, 0), _X, _Y, _Z) {};
     Frame(real _ox, real _oy, real _oz, real _xx, real _xy, real _xz, real _yx, real _yy, real _yz, real _zx, real _zy, real _zz);
     Frame(Frame& other);
 
-    CartesianPoint getX() { return CartesianPoint(X[0], X[1], X[2]); }
-    CartesianPoint getY() { return CartesianPoint(Y[0], Y[1], Y[2]); }
-    CartesianPoint getZ() { return CartesianPoint(Z[0], Z[1], Z[2]); }
-    CartesianPoint getO() { return CartesianPoint(O[0], O[1], O[2]); }
-    real getX(int i) { return X[i]; }
-    real getY(int i) { return Y[i]; }
-    real getZ(int i) { return Z[i]; }
-    real getO(int i) { return O[i]; }
+    CartesianPoint getX() const { return CartesianPoint(X[0], X[1], X[2]); }
+    CartesianPoint getY() const { return CartesianPoint(Y[0], Y[1], Y[2]); }
+    CartesianPoint getZ() const { return CartesianPoint(Z[0], Z[1], Z[2]); }
+    CartesianPoint getO() const { return CartesianPoint(O[0], O[1], O[2]); }
+    real getX(int i) const { return X[i]; }
+    real getY(int i) const { return Y[i]; }
+    real getZ(int i) const { return Z[i]; }
+    real getO(int i) const { return O[i]; }
 
     friend ostream & operator<<(ostream &_os, Frame& _F) {
       _os << "O: " << _F.O[0] << " " << _F.O[1] << " " << _F.O[2] << endl;
@@ -61,6 +62,12 @@ class Transform {
     Transform rotation();                  // extract the rotation component
     Transform translation();               // extract the translation component
 
+    /* Computes Euler angles corresponding to the the rotation component of the
+     * current transform. Assume the order of rotations is around X, then Y,
+     * then Z. Code adopted from stackoverflow.org based on derivations in:
+     * http://www.soi.city.ac.uk/~sbbh653/publications/euler.pdf */
+    void eulerAngles(real& x, real& y, real& z);
+
 
     CartesianPoint applyToCopy(CartesianPoint& p);
     void apply(CartesianPoint& p);
@@ -73,6 +80,7 @@ class Transform {
     void apply(Chain* chain);
     void apply(Structure& S) { apply(&S); }
     void apply(Structure* S);
+    void apply(const AtomPointerVector& vec);
 
     friend ostream & operator<<(ostream &_os, Transform& _T) {
       for (int i = 0; i < 4; i++) {
@@ -91,7 +99,7 @@ class Transform {
 class TransformFactory {
   public:
     static Transform translate(real x, real y, real z);
-    static Transform translate(CartesianPoint& p);
+    static Transform translate(const CartesianPoint& p);
 
     // rotations based on angle in degrees
     static Transform rotateAroundX(real angle);
@@ -123,7 +131,7 @@ class TransformFactory {
 
     // this transformation, when applied to points with coordinates in the from Frame
     // will produce coordinates of corresponding the same points but in the to Frame
-    static Transform switchFrames(Frame& from, Frame& to);
+    static Transform switchFrames(const Frame& from, const Frame& to);
 
     static const real degreesToRadians;
     static const real radiansToDegrees;
@@ -158,7 +166,7 @@ class Matrix {
     Matrix(int rows, int cols, real val = 0.0);
     Matrix(const vector<vector<real> >& _M) { M = _M; }
     Matrix(const Matrix& _M) { M = _M.M; }
-    Matrix(vector<real>& p, bool col = false); // by default makes row vectors
+    Matrix(const vector<real>& p, bool col = false); // by default makes row vectors
 
     int size(bool dim) const;
     int numRows() { return size(0); }
