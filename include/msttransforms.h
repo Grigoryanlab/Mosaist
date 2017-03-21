@@ -82,7 +82,7 @@ class Transform {
     void apply(Structure* S);
     void apply(const AtomPointerVector& vec);
 
-    friend ostream & operator<<(ostream &_os, Transform& _T) {
+    friend ostream & operator<<(ostream &_os, const Transform& _T) {
       for (int i = 0; i < 4; i++) {
         _os << endl;
         for (int j = 0; j < 4; j++) {

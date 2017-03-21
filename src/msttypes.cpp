@@ -366,7 +366,7 @@ Residue& Structure::getResidue(int i) {
       return chain[i];
     }
   }
-  MstUtils::error("something strange happened; most likely, various counters are inconsistent in Structure object", "Structure::getResidue(int)");
+  MstUtils::error("something strange happened when fetching residue " + MstUtils::toString(i) + "; most likely, various counters are inconsistent in Structure object", "Structure::getResidue(int)");
   return *(new Residue()); // just to make the compiler happy and not throw a warning; this is never reached
 }
 
@@ -971,11 +971,11 @@ string Atom::pdbLine(int resIndex, int atomIndex) {
   return (string) line;
 }
 
-real Atom::distance(Atom& another) {
+real Atom::distance(const Atom& another) const {
   return sqrt((x - another.x)*(x - another.x) + (y - another.y)*(y - another.y) + (z - another.z)*(z - another.z));
 }
 
-real Atom::distance2(Atom& another) {
+real Atom::distance2(const Atom& another) const {
   return (x - another.x)*(x - another.x) + (y - another.y)*(y - another.y) + (z - another.z)*(z - another.z);
 }
 
@@ -1111,7 +1111,7 @@ real CartesianPoint::dot(CartesianPoint other) const {
   return d;
 }
 
-real CartesianPoint::distance(CartesianPoint& another) {
+real CartesianPoint::distance(const CartesianPoint& another) const {
   if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance(CartesianPoint&)");
   real d = 0;
   for (int i = 0; i < this->size(); i++) {
@@ -1120,7 +1120,7 @@ real CartesianPoint::distance(CartesianPoint& another) {
   return sqrt(d);
 }
 
-real CartesianPoint::distance2(CartesianPoint& another) {
+real CartesianPoint::distance2(const CartesianPoint& another) const {
   if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance2(CartesianPoint&)");
   real d = 0;
   for (int i = 0; i < this->size(); i++) {
@@ -1814,7 +1814,7 @@ ProximitySearch::ProximitySearch(real _xlo, real _ylo, real _zlo, real _xhi, rea
   setBinWidths();
 }
 
-ProximitySearch::ProximitySearch(AtomPointerVector& _atoms, int _N, bool _addAtoms, vector<int>* tags, real pad) {
+ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, int _N, bool _addAtoms, vector<int>* tags, real pad) {
   calculateExtent(_atoms);
   xlo -= pad; ylo -= pad; zlo -= pad;
   xhi += pad; yhi += pad; zhi += pad;
@@ -1827,7 +1827,7 @@ ProximitySearch::ProximitySearch(AtomPointerVector& _atoms, int _N, bool _addAto
   }
 }
 
-ProximitySearch::ProximitySearch(AtomPointerVector& _atoms, real _characteristicDistance, bool _addAtoms, vector<int>* tags, real pad) {
+ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, real _characteristicDistance, bool _addAtoms, vector<int>* tags, real pad) {
   calculateExtent(_atoms);
   if (xlo == xhi) { xlo -= _characteristicDistance/2; xhi += _characteristicDistance/2; }
   if (ylo == yhi) { ylo -= _characteristicDistance/2; yhi += _characteristicDistance/2; }
@@ -1854,12 +1854,12 @@ ProximitySearch::~ProximitySearch() {
   for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
 }
 
-void ProximitySearch::calculateExtent(Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
+void ProximitySearch::calculateExtent(const Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
   AtomPointerVector atoms = S.getAtoms();
   calculateExtent(atoms, _xlo, _ylo, _zlo, _xhi, _yhi, _zhi);
 }
 
-void ProximitySearch::calculateExtent(AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
+void ProximitySearch::calculateExtent(const AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
   if (_atoms.size() == 0) { cout << "Error in ProximitySearch::calculateExtent() -- empty atom vector passed!\n"; exit(-1); }
   _xlo = _xhi = _atoms[0]->getX();
   _ylo = _yhi = _atoms[0]->getY();
@@ -1923,7 +1923,7 @@ void ProximitySearch::limitIndex(int *ind) {
   if (*ind > N-1) *ind = N-1;
 }
 
-bool ProximitySearch::pointsWithin(CartesianPoint c, real dmin, real dmax, vector<int>* list, bool byTag) {
+bool ProximitySearch::pointsWithin(const CartesianPoint& c, real dmin, real dmax, vector<int>* list, bool byTag) {
   real cx = c.getX(); real cy = c.getY(); real cz = c.getZ();
   // first check if the point is outside of the bounding box of the point cloud by a sufficient amount
   if ((cx < xlo - dmax) || (cy < ylo - dmax) || (cz < zlo - dmax) || (cx > xhi + dmax) || (cy > yhi + dmax) || (cz > zhi + dmax)) return false;
@@ -1985,7 +1985,7 @@ bool ProximitySearch::pointsWithin(CartesianPoint c, real dmin, real dmax, vecto
   return found;
 }
 
-vector<int> ProximitySearch::getPointsWithin(CartesianPoint c, real dmin, real dmax, bool byTag) {
+vector<int> ProximitySearch::getPointsWithin(const CartesianPoint& c, real dmin, real dmax, bool byTag) {
   vector<int> closeOnes;
   pointsWithin(c, dmin, dmax, &closeOnes, byTag);
   return closeOnes;

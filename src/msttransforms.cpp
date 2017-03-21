@@ -467,7 +467,7 @@ Transform TransformFactory::switchFrames(const Frame& _from, const Frame& _to) {
   // the procedure will be simple enough:
   // 1. change of basis from _from to the standard basis (laboratory basis)
   // 2. inverse change of basis from _to to the standard basis
-  // 3. translate from the origin of _from to the origin of _to
+  // 3. express origin of _from relative to the origin of _to
   Transform T1(_from.getX(), _from.getY(), _from.getZ(), Transform::byColumn);
   Transform T2(_to.getX(), _to.getY(), _to.getZ(), Transform::byColumn);
   CartesianPoint ori = _from.getO() - _to.getO();

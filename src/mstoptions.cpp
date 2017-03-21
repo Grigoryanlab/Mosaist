@@ -59,6 +59,7 @@ void MstOptions::setOptions(int argc, char** argv) {
   if (missingRequired.size() != 0) {
     cerr << usage() << endl;
     for (auto it = missingRequired.begin(); it != missingRequired.end(); ++it) cerr << "missing required option: " << *it << endl;
+    cerr << endl;
     MstUtils::error("not all required options were specified!", "MstOptions::setOptions");
   }
 }

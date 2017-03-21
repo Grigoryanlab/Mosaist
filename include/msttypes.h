@@ -302,10 +302,10 @@ class Atom {
     string pdbLine() { return pdbLine((this->parent == NULL) ? 1 : this->parent->getNum(), index); }
     string pdbLine(int resIndex, int atomIndex);
 
-    real distance(Atom& another);
-    real distance(Atom* another) { return distance(*another); }
-    real distance2(Atom& another);
-    real distance2(Atom* another) { return distance2(*another); }
+    real distance(const Atom& another) const;
+    real distance(const Atom* another) const { return distance(*another); }
+    real distance2(const Atom& another) const;
+    real distance2(const Atom* another) const { return distance2(*another); }
 
     friend ostream & operator<<(ostream &_os, Atom& _atom) {
       _os << _atom.getName() << _atom.getAlt() << " " << _atom.index << " " << (_atom.isHetero() ? "HETERO" : "");
@@ -379,10 +379,10 @@ class CartesianPoint : public vector<real> {
     real getY() const { return (*this)[1]; }
     real getZ() const { return (*this)[2]; }
 
-    real distance(CartesianPoint& another);
-    real distance(CartesianPoint* another) { return distance(*another); }
-    real distance2(CartesianPoint& another);
-    real distance2(CartesianPoint* another) { return distance2(*another); }
+    real distance(const CartesianPoint& another) const;
+    real distance(const CartesianPoint* another) const { return distance(*another); }
+    real distance2(const CartesianPoint& another) const;
+    real distance2(const CartesianPoint* another) const { return distance2(*another); }
 
     friend ostream & operator<<(ostream &_os, CartesianPoint& _p) {
       for (int i = 0; i < _p.size(); i++) {
@@ -507,8 +507,8 @@ class RMSDCalculator {
 class ProximitySearch {
   public:
     ProximitySearch(real _xlo, real _ylo, real _zlo, real _xhi, real _yhi, real _zhi, int _N = 20);
-    ProximitySearch(AtomPointerVector& _atoms, int _N, bool _addAtoms = true, vector<int>* tags = NULL, real pad = 0);
-    ProximitySearch(AtomPointerVector& _atoms, real _characteristicDistance, bool _addAtoms = true, vector<int>* tags = NULL, real pad = 0);
+    ProximitySearch(const AtomPointerVector& _atoms, int _N, bool _addAtoms = true, vector<int>* tags = NULL, real pad = 0);
+    ProximitySearch(const AtomPointerVector& _atoms, real _characteristicDistance, bool _addAtoms = true, vector<int>* tags = NULL, real pad = 0);
     ~ProximitySearch();
 
     real getXLow() { return xlo; }
@@ -520,6 +520,7 @@ class ProximitySearch {
     int pointSize() { return pointList.size(); }
     CartesianPoint& getPoint(int i) { return *(pointList[i]); }
     int getPointTag(int i) { return pointTags[i]; }
+    real distance(int i, int j) { return pointList[i]->distance(pointList[j]); }
 
     void reinitBuckets(int _N);
     void addPoint(CartesianPoint _p, int tag);
@@ -532,11 +533,14 @@ class ProximitySearch {
     real gridSpacingX() { return (xhi - xlo)/N; }
     real gridSpacingY() { return (yhi - ylo)/N; }
     real gridSpacingZ() { return (zhi - zlo)/N; }
-    static void calculateExtent(AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi);
-    static void calculateExtent(Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi);
+    static void calculateExtent(const AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi);
+    static void calculateExtent(const Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi);
 
-    bool pointsWithin(CartesianPoint c, real dmin, real dmax, vector<int>* list = NULL, bool byTag = false);
-    vector<int> getPointsWithin(CartesianPoint c, real dmin, real dmax, bool byTag = false);
+    bool pointsWithin(const CartesianPoint& c, real dmin, real dmax, vector<int>* list = NULL, bool byTag = false);
+    vector<int> getPointsWithin(const CartesianPoint& c, real dmin, real dmax, bool byTag = false);
+    int numPointsWithin(const CartesianPoint& c, real dmin, real dmax) {
+      vector<int> closeOnes; pointsWithin(c, dmin, dmax, &closeOnes); return closeOnes.size(); 
+    }
 
     // Returns true if the grid of the current ProximitySearch object overlaps
     // that of the ProximitySearch specified by more than the padding given
@@ -544,7 +548,7 @@ class ProximitySearch {
 
   protected:
     void setBinWidths();
-    void calculateExtent(AtomPointerVector& _atoms) { ProximitySearch::calculateExtent(_atoms, xlo, ylo, zlo, xhi, yhi, zhi); }
+    void calculateExtent(const AtomPointerVector& _atoms) { ProximitySearch::calculateExtent(_atoms, xlo, ylo, zlo, xhi, yhi, zhi); }
 
   private:
     int N; // dimension of bucket list is N x N x N
@@ -585,13 +589,13 @@ class DecoratedProximitySearch : public ProximitySearch {
       tags.push_back(tag);
     }
 
-    vector<T> getPointsWithin(CartesianPoint c, real dmin, real dmax) {
+    vector<T> getPointsWithin(const CartesianPoint& c, real dmin, real dmax) {
       vector<int> inds = this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
       vector<T> ret(inds.size());
       for (int i = 0; i < inds.size(); i++) ret[i] = tags[inds[i]];
       return ret;
     }
-    vector<int> getPointsWithinIndices(CartesianPoint c, real dmin, real dmax) {
+    vector<int> getPointsWithinIndices(const CartesianPoint& c, real dmin, real dmax) {
       return this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
     }
 
