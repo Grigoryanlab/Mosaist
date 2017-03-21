@@ -1443,7 +1443,7 @@ vector<vector<real> > RMSDCalculator::lastRotation() {
     return rot;
 }
 
-real RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool* _suc, bool setTransRot) {
+real RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot, bool* _suc) {
     _rmsd = 999999.0;
     if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
     else { if (_suc != NULL) *_suc = false; }

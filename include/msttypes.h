@@ -49,8 +49,8 @@ class Structure {
     Structure& operator=(const Structure& A);
 
     int chainSize() const { return chains.size(); }
-    int residueSize() { return numResidues; }
-    int positionSize() { return residueSize(); }  // for interchangability with MSL
+    int residueSize() const { return numResidues; }
+    int positionSize() const { return residueSize(); }  // for interchangability with MSL
     int atomSize() const { return numAtoms; }
     Chain* getChainByID(string id) { return (chainsByID.find(id) != chainsByID.end()) ? chainsByID[id] : NULL; }
     Chain* getChainBySegID(string id) { return (chainsBySegID.find(id) != chainsBySegID.end()) ? chainsBySegID[id] : NULL; }
@@ -118,9 +118,9 @@ class Chain {
     Chain(string chainID, string segID);
     ~Chain();
 
-    int residueSize() { return residues.size(); }
-    int positionSize() { return residueSize(); }  // for interchangability with MSL
-    int atomSize() { return numAtoms; }
+    int residueSize() const { return residues.size(); }
+    int positionSize() const { return residueSize(); }  // for interchangability with MSL
+    int atomSize() const { return numAtoms; }
     Residue& operator[](int i) { return *(residues[i]); }
     Residue& getResidue(int i) { return (*this)[i]; }
     vector<Residue*> getResidues() { return residues; }
@@ -487,7 +487,7 @@ class RMSDCalculator {
     bool align(const vector<Atom*> &_align, const vector<Atom*> &_ref, Structure& _moveable);
 
     // quickly calculate RMSD upon optimal superposition without generating the rotation matrix
-    real bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool* _suc = NULL, bool setTransRot = false);
+    real bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot = false, bool* _suc = NULL);
 
     // in-place RMSD (no transformations)
     static real rmsd(const vector<Atom*>& A, const vector<Atom*>& B);
@@ -539,7 +539,7 @@ class ProximitySearch {
     bool pointsWithin(const CartesianPoint& c, real dmin, real dmax, vector<int>* list = NULL, bool byTag = false);
     vector<int> getPointsWithin(const CartesianPoint& c, real dmin, real dmax, bool byTag = false);
     int numPointsWithin(const CartesianPoint& c, real dmin, real dmax) {
-      vector<int> closeOnes; pointsWithin(c, dmin, dmax, &closeOnes); return closeOnes.size(); 
+      vector<int> closeOnes; pointsWithin(c, dmin, dmax, &closeOnes); return closeOnes.size();
     }
 
     // Returns true if the grid of the current ProximitySearch object overlaps

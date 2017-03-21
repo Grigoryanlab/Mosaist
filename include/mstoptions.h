@@ -27,7 +27,7 @@ class MstOptions {
     void setUsageWidth(int _w) { w = _w; }
     void setUsageParOffset(int _p1) { p1 = _p1; }
     void setUsageSecondParOffset(int _p2) { p2 = _p2; }
-    string formatOptInfo(string opt, string mes);
+    string formatOptInfo(string opt, string mes, int _p1 = -1, int _p2 = -1);
 
     // parsing command-line options
     void setOptions(int argc, char** argv);

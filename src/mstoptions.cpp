@@ -10,18 +10,21 @@ void MstOptions::addOption(string opt, string info, bool req) {
 
 string MstOptions::usage() {
   string usageString;
-  usageString = "\n" + title + "\n";
+  usageString = "\n" + formatOptInfo("", title, 0, 0) + "\n";
   for (int i = 0; i < options.size(); i++) {
     usageString += formatOptInfo(options[i], optionsInfo[i]) + "\n";
   }
   return usageString;
 }
 
-string MstOptions::formatOptInfo(string opt, string mes) {
+string MstOptions::formatOptInfo(string opt, string mes, int _p1, int _p2) {
+  if (_p1 < 0) _p1 = p1;
+  if (_p2 < 0) _p2 = p2;
+
   // first print the name of the option
-  string text(p1, ' ');
-  text += "--" + opt;
-  if (p2 > text.size()) text += string(p2 - text.size(), ' ');
+  string text(_p1, ' ');
+  if (!opt.empty()) text += "--" + opt;
+  if (_p2 > text.size()) text += string(_p2 - text.size(), ' ');
 
   // next print the description text
   int i = 0, k, L = text.size(), n;
@@ -29,7 +32,7 @@ string MstOptions::formatOptInfo(string opt, string mes) {
     k = mes.find_first_of(" ", i);
     if (k == string::npos) k = mes.size();
     n = k - i;
-    if ((L + n >= w) && (L > 0)) { text += "\n" + string(p2, ' '); L = p2; }
+    if ((L + n >= w) && (L > 0)) { text += "\n" + string(_p2, ' '); L = _p2; }
     text += mes.substr(i, n) + " ";
     L += n + 1;
     i = k+1;
