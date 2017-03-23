@@ -355,7 +355,7 @@ void Structure::deleteChain(Chain* chain) {
   delete chain;
 }
 
-Residue& Structure::getResidue(int i) {
+Residue& Structure::getResidue(int i) const {
   if ((i < 0) && (i >= residueSize()))
     MstUtils::error("residue index " + MstUtils::toString(i) + " out of range for Structure", "Structure::getResidue(int)");
   for (int ci = 0; ci < chainSize(); ci++) {

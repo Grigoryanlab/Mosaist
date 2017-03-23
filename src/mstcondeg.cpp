@@ -183,7 +183,7 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cach
       rotamerID* rotB = itB->first;
       real rotProbB = rotLib->rotamerProbability(rotB);
       real aaPropB = aaProp[rotB->aminoAcid()];
-      cd +=  aaPropA * aaPropB * rotProbA * rotProbB;
+      cd += aaPropA * aaPropB * rotProbA * rotProbB;
       if (updateA) collProb[resA][rotA] += aaPropB * rotProbB;
       if (updateB) collProb[resB][rotB] += aaPropA * rotProbA;
     }
@@ -235,6 +235,8 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
 contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contactList* list) {
   cache(residues);
   fastmap<Residue*, fastmap<Residue*, bool> > checked;
+  fastmap<Residue*, bool> ofInterest;
+  for (int i = 0; i < residues.size(); i++) ofInterest[residues[i]] = true;
 
   contactList L;
   if (list == NULL) list = &L;
@@ -245,11 +247,13 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
     for (int j = 0; j < neighborhood.size(); j++) {
       Residue* resj = neighborhood[j];
       if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
+        if (ofInterest.find(resj) != ofInterest.end()) collProbUpdateOn(resj);
         checked[resj][resi] = true;
         real cd = contactDegree(resi, resj, false, true, false);
         if (cd > cdcut) {
           list->addContact(resi, resj, cd);
         }
+        if (ofInterest.find(resj) != ofInterest.end()) collProbUpdateOff(resj);
       }
     }
     collProbUpdateOff(resi);

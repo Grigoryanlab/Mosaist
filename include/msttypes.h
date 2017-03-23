@@ -54,8 +54,8 @@ class Structure {
     int atomSize() const { return numAtoms; }
     Chain* getChainByID(string id) { return (chainsByID.find(id) != chainsByID.end()) ? chainsByID[id] : NULL; }
     Chain* getChainBySegID(string id) { return (chainsBySegID.find(id) != chainsBySegID.end()) ? chainsBySegID[id] : NULL; }
-    Chain& getChain(int i) { return (*this)[i]; }
-    Residue& getResidue(int i);
+    Chain& getChain(int i) const { return (*this)[i]; }
+    Residue& getResidue(int i) const;
     Chain& operator[](int i) const { return *(chains[i]); }
     vector<Atom*> getAtoms() const;
     vector<Residue*> getResidues();
