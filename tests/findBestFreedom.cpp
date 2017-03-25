@@ -234,10 +234,10 @@ void addName(vector<string>& legalNames, map<string, int>& aaToIndex, vector<str
 // ---- Main Program
 int main(int argc, char *argv[]) {
   real lcpMin = 0.5;       // the lowest low collision probability (CP) cutoff value to consider
-  real lcpMax = 0.5;       // the highest low CP cutoff value to consider
-  real hcpMin = 2.0;       // the lowest high CP cutoff value to consider
-  real hcpMax = 2.0;       // the highest high CP cutoff value to consider
-  int N = 2;              // number of grid points between min and max in each parameter
+  real lcpMax = 1.5;       // the highest low CP cutoff value to consider
+  real hcpMin = 1.5;       // the lowest high CP cutoff value to consider
+  real hcpMax = 2.5;       // the highest high CP cutoff value to consider
+  int N = 21;              // number of grid points between min and max in each parameter
   int Nb = 50;             // number of freedom bins
 
   vector<real> lcpVals(N), hcpVals(N);
@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
     // consider all parameter combinations
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        C.setFreedomParams(lcpVals[i], hcpVals[j]);
+        C.setFreedomParams(lcpVals[i], hcpVals[j], 2);
         C.clearFreedom();
         vector<real> structFreedoms = C.getFreedom(allRes);
         freedoms[i][j].insert(freedoms[i][j].end(), structFreedoms.begin(), structFreedoms.end());

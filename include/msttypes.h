@@ -248,6 +248,7 @@ class Atom {
   friend class Structure;
   friend class Chain;
   friend class Residue;
+  friend class AtomPointerVector;
 
   public:
     Atom();
@@ -414,6 +415,9 @@ class AtomPointerVector : public vector<Atom*> {
     real radiusOfGyration();
     void deletePointers();
 
+    AtomPointerVector clone();
+    void clone(AtomPointerVector& into);
+
     friend ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms) {
       for (int i = 0; i < _atoms.size(); i++) {
         _os << _atoms[i]->pdbLine() << endl;
@@ -492,6 +496,10 @@ class RMSDCalculator {
     // in-place RMSD (no transformations)
     static real rmsd(const vector<Atom*>& A, const vector<Atom*>& B);
     static real rmsd(const Structure& A, const Structure& B);
+
+    // Craig's cutoff function
+    static real rmsdCutoff(const vector<int>& L, real rmsdMax = 1.1, real L0 = 15);
+    static real rmsdCutoff(const Structure& S, real rmsdMax = 1.1, real L0 = 15);
 
  protected:
     // implemetation of Kabsch algoritm for optimal superposition

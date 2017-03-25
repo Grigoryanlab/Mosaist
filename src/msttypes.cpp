@@ -1012,6 +1012,22 @@ void AtomPointerVector::deletePointers() {
   resize(0);
 }
 
+AtomPointerVector AtomPointerVector::clone() {
+  AtomPointerVector into;
+  clone(into);
+  return into;
+}
+
+void AtomPointerVector::clone(AtomPointerVector& into) {
+  int L = into.size();
+  into.resize(L + this->size());
+  for (int i = 0; i < this->size(); i++) {
+    Atom* newAtom = new Atom(*((*this)[i]));
+    newAtom->setParent(NULL);
+    into[L + i] = newAtom;
+  }
+}
+
 /* --------- CartesianPoint --------- */
 
 CartesianPoint::CartesianPoint(const Atom& A) {
@@ -1804,6 +1820,28 @@ real RMSDCalculator::rmsd(const Structure& A, const Structure& B) {
   return rmsd(atomsA, atomsB);
 }
 
+real RMSDCalculator::rmsdCutoff(const vector<int>& L, real rmsdMax, real L0) {
+  real a = (real) exp(-1./L0);
+  int N = 0, n;
+  real c = 0;
+
+  // disjoint segments are counted as independent, so their correlation
+  // with respect to each other is zero
+  for (int i = 0; i < L.size(); i++) {
+    N += L[i];
+    n = L[i];
+    c = c + (a/(1-a))*(n-1) - pow((a/(1-a)), 2)*(1 - pow(a, n-1));
+  }
+  double df = N*(1 - (2.0/(N*(N-1)))*c);
+
+  return rmsdMax/sqrt(N/df);
+}
+
+real RMSDCalculator::rmsdCutoff(const Structure& S, real rmsdMax, real L0) {
+  vector<int> L(S.chainSize());
+  for (int i = 0; i < S.chainSize(); i++) L[i] = S[i].residueSize();
+  return RMSDCalculator::rmsdCutoff(L, rmsdMax, L0);
+}
 
 /* --------- ProximitySearch --------- */
 

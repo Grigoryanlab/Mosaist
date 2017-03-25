@@ -35,6 +35,7 @@ void ConFind::setParams() {
   aaProp["ARG"] = 5.03; aaProp["SER"] = 6.13; aaProp["THR"] = 5.53; aaProp["VAL"] = 6.91; aaProp["TRP"] = 1.51; aaProp["TYR"] = 3.54;
   loCollProbCut = 0.5;
   hiCollProbCut = 2.0;
+  freedomType = 2;
 }
 
 ConFind::~ConFind() {
@@ -317,35 +318,38 @@ real ConFind::computeFreedom(Residue* res) {
   if (collProb.find(res) == collProb.end())
     MstUtils::error("residue not cached " + MstUtils::toString(res), "ConFind::computeFreedom");
 
-  int type = 2;
   // rotamers are in this map only if they do actually collide, so those that
   // do not collide with anything thus can be assumed to have zero collision probability mass
   fastmap<rotamerID*, real>& cp = collProb[res];
-  switch (type) {
-    case 1: {
+  real n, n1, n2;
+  switch (freedomType) {
+    case 1:
       // number of rotamers with < 0.5 collision probability mass
-      real n = survivingRotamers[res].size() - cp.size();
+      n = survivingRotamers[res].size() - cp.size();
       for (fastmap<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
         if (it->second/100 < 0.5) n += 1;
       }
       freedom[res] = n/numLibraryRotamers[res];
       break;
-    }
-    case 2: {
+    case 2:
+    case 3:
       // a combination of the number of rotamers with < 0.5 and < 2.0 collision probability masses
-      real n1 = survivingRotamers[res].size() - cp.size(); real n2 = n1;
+      n1 = survivingRotamers[res].size() - cp.size(); n2 = n1;
       for (fastmap<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
         if (it->second/100 < loCollProbCut) n1 += 1;
         if (it->second/100 < hiCollProbCut) n2 += 1;
       }
-      freedom[res] = sqrt((n1*n1 + n2*n2)/2)/numLibraryRotamers[res];
+      if (freedomType == 2) {
+        freedom[res] = sqrt((n1*n1 + n2*n2)/2)/numLibraryRotamers[res];
+      } else {
+         n1 /= numLibraryRotamers[res]; n2 /= numLibraryRotamers[res];
+         freedom[res] = ((n2 * n2 + n2*n1)/2);
+      }
 //      freedom[res] = sqrt((n1*n1 + 0.2*n2*n2)/(1 + 0.2))/numLibraryRotamers[res];
-//      n1 /= numLibraryRotamers[res]; n2 /= numLibraryRotamers[res]; freedom[res] = ((n2 * n2 + n2*n1)/2);
 //cout << "REPORT: " << *res << " " << n1 << " " << n2 << endl;
       break;
-    }
     default:
-      MstUtils::error("unknown freedom type '" + MstUtils::toString(type) + "'", "ConFind::computeFreedom");
+      MstUtils::error("unknown freedom type '" + MstUtils::toString(freedomType) + "'", "ConFind::computeFreedom");
   }
   return freedom[res];
 }
