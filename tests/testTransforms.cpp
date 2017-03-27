@@ -1,5 +1,6 @@
 #include "msttypes.h"
 #include "msttransforms.h"
+#include "mstlinalg.h"
 
 using namespace MST;
 
