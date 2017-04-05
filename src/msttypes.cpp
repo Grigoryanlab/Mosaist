@@ -897,12 +897,19 @@ real& Atom::operator[](int i) {
   return x; // just to silence the warning from some compilres; in reality, this is never reached
 }
 
-vector<real> Atom::getAltCoor(int altInd) {
+CartesianPoint Atom::getCoor() const {
+  CartesianPoint coor(x, y, z); return coor;
+}
+
+CartesianPoint Atom::getAltCoor(int altInd) const {
   if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
   altInfo& targ = (*alternatives)[altInd];
-  vector<real> coor;
-  coor.push_back(targ.x); coor.push_back(targ.y); coor.push_back(targ.z);
+  CartesianPoint coor(targ.x, targ.y, targ.z);
   return coor;
+}
+
+void Atom::setCoor(const CartesianPoint& xyz) {
+  x = xyz[0]; y = xyz[1]; z = xyz[2];
 }
 
 void Atom::setName(const char* _name) {
@@ -977,6 +984,56 @@ real Atom::distance(const Atom& another) const {
 
 real Atom::distance2(const Atom& another) const {
   return (x - another.x)*(x - another.x) + (y - another.y)*(y - another.y) + (z - another.z)*(z - another.z);
+}
+
+real Atom::angle(const Atom& A, const Atom& B, bool radians) const {
+  return CartesianGeometry::angle(*this, A, B, radians);
+}
+
+real Atom::angle(const Atom* A, const Atom* B, bool radians) const {
+  return CartesianGeometry::angle(this, A, B, radians);
+}
+
+real Atom::dihedral(const Atom& A, const Atom& B, const Atom& C, bool radians) const {
+  return CartesianGeometry::dihedral(*this, A, B, C, radians);
+}
+
+real Atom::dihedral(const Atom* A, const Atom* B, const Atom* C, bool radians) const {
+  return CartesianGeometry::dihedral(this, A, B, C, radians);
+}
+
+bool Atom::build(const Atom& diA, const Atom& anA, const Atom& thA, real di, real an, real th, bool radians) {
+  if (!radians) {
+    an *= M_PI/180;
+    th *= M_PI/180;
+  }
+
+  // unit vector from diA to anA (B - C)
+  CartesianPoint uCB = ((CartesianPoint) diA - (CartesianPoint) anA).getUnit();
+
+  // vector from anA to thA (C - D)
+  CartesianPoint dDC = (CartesianPoint) anA - (CartesianPoint) thA;
+
+  real an2 = M_PI - an;
+  real th2 = M_PI + th;
+  real rsin = di * sin(an2);
+  real rcos = di * cos(an2);
+  real rsinsin = rsin * sin(th2);
+  real rsincos = rsin * cos(th2);
+
+  CartesianPoint c1 = uCB.cross(dDC);
+
+  // when the first three atoms of the dihedral are co-linear, can't interpret
+  // the dihedral angle, so just place the atom di distance away from diA, but
+  // along some arbitrary direction
+  if (c1.norm() < 0.00000001) { setCoor(diA.getCoor() + CartesianPoint(di, 0, 0)); return false; }
+  c1 *= rsinsin / c1.norm();
+  CartesianPoint c2 = (-uCB * dDC.dot(uCB) + dDC).getUnit() * rsincos;
+  CartesianPoint dd = uCB * rcos + c1 + c2;
+
+  // set coordinate of placed atom
+  setCoor(diA.getCoor() + dd);
+  return true;
 }
 
 /* --------- AtomPointerVector --------- */
@@ -1101,7 +1158,19 @@ CartesianPoint& CartesianPoint::operator=(const Atom& A) {
 }
 
 real CartesianPoint::norm() const {
-  return sqrt((*this)[0]*(*this)[0] + (*this)[1]*(*this)[1] + (*this)[2]*(*this)[2]);
+  real n = 0;
+  for (int i = 0; i < size(); i++) n += (*this)[i]*(*this)[i];
+  return sqrt(n);
+}
+
+real CartesianPoint::mean() const {
+  return sum()/size();
+}
+
+real CartesianPoint::sum() const {
+  real s = 0;
+  for (int i = 0; i < size(); i++) s += (*this)[i];
+  return s;
 }
 
 CartesianPoint CartesianPoint::cross(CartesianPoint other) const {
@@ -1146,7 +1215,7 @@ real CartesianPoint::distance2(const CartesianPoint& another) const {
 }
 
 /* --------- CartesianGeometry --------- */
-real CartesianGeometry::dihedralRadians(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4) {
+real CartesianGeometry::dihedral(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4, bool radians) {
   CartesianPoint AB = _p1 - _p2;
   CartesianPoint CB = _p3 - _p2;
   CartesianPoint DC = _p4 - _p3;
@@ -1168,19 +1237,64 @@ real CartesianGeometry::dihedralRadians(const CartesianPoint & _p1, const Cartes
   if (ABxCB * DC > 0) {
     angle *= -1;
   }
+  if (!radians) angle *= 180/M_PI;
   return angle;
 }
 
-real CartesianGeometry::dihedralRadians(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4) {
-  return dihedralRadians(*_p1, *_p2, *_p3, *_p4);
+real CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4, bool radians) {
+  return dihedral(*_p1, *_p2, *_p3, *_p4, radians);
 }
 
-real CartesianGeometry::dihedral(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4) {
-  return dihedralRadians(_p1, _p2, _p3, _p4)*180/M_PI;
+real CartesianGeometry::angle(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, bool radians) {
+  CartesianPoint v21 = (_p1 - _p2).getUnit();
+  CartesianPoint v23 = (_p3 - _p2).getUnit();
+  real c = v21.dot(v23);
+  return atan2(sqrt(1 - c*c), c) * (radians ? 1 : 180/M_PI);
 }
 
-real CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4) {
-  return dihedralRadians(*_p1, *_p2, *_p3, *_p4)*180/M_PI;
+real CartesianGeometry::angle(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, bool radians) {
+  return angle(*_p1, *_p2, *_p3, radians);
+}
+
+real CartesianGeometry::angleDiff(real A, real B, bool radians) {
+  real PI = radians ? M_PI : 180.0;
+  real TWOPI = 2*PI;
+  real da = MstUtils::mod((MstUtils::mod(A, TWOPI) - MstUtils::mod(B, TWOPI)), TWOPI);
+  if (da > PI) da -= TWOPI;
+  return da;
+}
+
+real CartesianGeometry::angleDiffCCW(real A, real B, bool radians) {
+  real TWOPI = radians ? 2*M_PI : 360.0;
+  real da = MstUtils::mod((MstUtils::mod(A, TWOPI) - MstUtils::mod(B, TWOPI)), TWOPI);
+  return da;
+}
+
+pair<real, real> CartesianGeometry::angleRange(const vector<real>& angles, bool radians) {
+  int bestMin = 0; int bestMax = 0; double bestArc = (radians ? 2*M_PI : 360.0) + 1;
+  for (int minInd = 0; minInd < angles.size(); minInd++) {
+    int maxInd = 0; double arc = 0;
+    for (int j = 0; j < angles.size(); j++) {
+      if (CartesianGeometry::angleDiffCCW(angles[j], angles[minInd]) > arc) {
+        arc = CartesianGeometry::angleDiffCCW(angles[j], angles[minInd]);
+        maxInd = j;
+      }
+    }
+    if (arc < bestArc) {
+      bestMin = minInd; bestMax = maxInd; bestArc = arc;
+    }
+  }
+  return pair<real, real>(angles[bestMin], angles[bestMax]);
+}
+
+real CartesianGeometry::angleMean(const vector<real>& angles, bool radians) {
+  pair<real, real> minmax = angleRange(angles, radians);
+  real m = 0;
+  for (int i = 0; i < angles.size(); i++) {
+    m += angleDiffCCW(angles[i], minmax.first);
+  }
+  m /= angles.size();
+  return angleDiff(minmax.first + m, 0, radians);
 }
 
 /* --------- selector --------------- */

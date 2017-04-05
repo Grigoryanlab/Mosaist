@@ -11,7 +11,7 @@ namespace MST {
 class optimizerEvaluator {
   public:
     virtual vector<double> guessPoint() { return vector<double>(1, 0); }
-    virtual double eval(vector<double>& point) { return 0.0; }
+    virtual double eval(const vector<double>& point) { return 0.0; }
 };
 
 class Optim {

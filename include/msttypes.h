@@ -26,6 +26,7 @@ class Chain;
 class Residue;
 class Atom;
 class Structure;
+class CartesianPoint;
 
 typedef double real;
 typedef Structure System;                // for interchangability with MSL
@@ -260,15 +261,15 @@ class Atom {
     real getY() const{ return y; }
     real getZ() const{ return z; }
     real& operator[](int i);
-    vector<real> getCoor() { vector<real> coor; coor.push_back(x); coor.push_back(y); coor.push_back(z); return coor; }
-    vector<real> getAltCoor(int altInd);
+    CartesianPoint getCoor() const;
+    CartesianPoint getAltCoor(int altInd) const;
     real getB() { return B; }
     real getOcc() { return occ; }
-    string getName() { return string(name); }
+    string getName() const { return string(name); }
     char* getNameC() { return name; }
-    bool isHetero() { return het; }
-    int getIndex() { return index; }
-    char getAlt() { return alt; }
+    bool isHetero() const { return het; }
+    int getIndex() const { return index; }
+    char getAlt() const { return alt; }
     bool isNamed(const char* _name) { return (strcmp(name, _name) == 0); }
     bool isNamed(string _name) { return isNamed(_name.c_str()); }
     int numAlternatives() { return (alternatives == NULL) ? 0 : alternatives->size(); }
@@ -283,7 +284,7 @@ class Atom {
     void setY(real _y) { y = _y; }
     void setZ(real _z) { z = _z; }
     void setCoor(real _x, real _y, real _z) { x = _x; y = _y; z = _z; }
-    void setCoor(vector<real> xyz) { x = xyz[0]; y = xyz[1]; z = xyz[2]; }
+    void setCoor(const CartesianPoint& xyz);
     void setOcc(real _occ) { occ = _occ; }
     void setB(real _B) { B = _B; }
     void seetHet(bool _het) { het = _het; }
@@ -307,8 +308,21 @@ class Atom {
     real distance(const Atom* another) const { return distance(*another); }
     real distance2(const Atom& another) const;
     real distance2(const Atom* another) const { return distance2(*another); }
+    real angle(const Atom& A, const Atom& B, bool radians = false) const;
+    real angle(const Atom* A, const Atom* B, bool radians = false) const;
+    real dihedral(const Atom& A, const Atom& B, const Atom& C, bool radians = false) const;
+    real dihedral(const Atom* A, const Atom* B, const Atom* C, bool radians = false) const;
 
-    friend ostream & operator<<(ostream &_os, Atom& _atom) {
+    /* Sets the coordinates of the atom based on internal coordinates relative
+     * to three other atoms: thA, anA, diA, A (this atom). The internal
+     * coordinates are distance diA-A (di), angle anA-diA-A (an), and dihedral
+     * angle thA - anA - diA - A (th). */
+    bool build(const Atom& diA, const Atom& anA, const Atom& thA, real di, real an, real th, bool radians = false);
+    bool build(const Atom* diA, const Atom* anA, const Atom* thA, real di, real an, real th, bool radians = false) {
+      return build(*diA, *anA, *thA, di, an, th, radians);
+    }
+
+    friend ostream & operator<<(ostream &_os, const Atom& _atom) {
       _os << _atom.getName() << _atom.getAlt() << " " << _atom.index << " " << (_atom.isHetero() ? "HETERO" : "");
       _os << _atom.x << " " << _atom.y << " " << _atom.z << " : " << _atom.occ << " " << _atom.B;
       return _os;
@@ -371,6 +385,8 @@ class CartesianPoint : public vector<real> {
     const double operator*(const CartesianPoint& other) const { return this->dot(other); }
 
     real norm() const;
+    real mean() const;
+    real sum() const;
     CartesianPoint cross(CartesianPoint other) const;
     real dot(CartesianPoint other) const;
     CartesianPoint getUnit() const { double L = norm(); return (*this/L); };
@@ -385,7 +401,7 @@ class CartesianPoint : public vector<real> {
     real distance2(const CartesianPoint& another) const;
     real distance2(const CartesianPoint* another) const { return distance2(*another); }
 
-    friend ostream & operator<<(ostream &_os, CartesianPoint& _p) {
+    friend ostream & operator<<(ostream &_os, const CartesianPoint& _p) {
       for (int i = 0; i < _p.size(); i++) {
         _os << _p[i];
         if (i != _p.size() - 1) _os << " ";
@@ -396,10 +412,29 @@ class CartesianPoint : public vector<real> {
 
 class CartesianGeometry {
   public:
-    static real dihedralRadians(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4);
-    static real dihedralRadians(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4);
-    static real dihedral(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4);
-    static real dihedral(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4);
+    static real dihedral(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4, bool radians = false);
+    static real dihedral(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4, bool radians = false);
+    static real angle(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, bool radians = false);
+    static real angle(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, bool radians = false);
+    static real angleDiff(real A, real B, bool radians = false);
+    static real angleDiffCCW(real A, real B, bool radians = false);
+
+    /* Given a list of angles defined on the full circle, it is actually not clear
+     * where the min and max are (since angles are defined on a circle). Exampe:
+     * we are given -179 and +179. Is the range essentially the entire circle,
+     * from -179 to +179? Or is it just a two-degree arc from 179 to 181 (aka
+     * -179)? Both are correct. This function finds the min/max bounds that
+     * minimize the arc length corresponding to the range. This is often
+     * convenient. The functoin will try each angle value as the min, find its
+     * corresponding max, and pick the pair that minimizes the arc length. */
+    static pair<real, real> angleRange(const vector<real>& angles, bool radians = false);
+
+    /* Just like in the above, the average of a list of angles is also not
+     * necessarily uniquely defined. This functon defines it by first finding
+     * the angular range with the smallest arc length, and then finding the mean
+     * with respect to that range (i.e., via the average deviation from the
+     * minimal value). */
+    static real angleMean(const vector<real>& angles, bool radians = false);
 };
 
 class AtomPointerVector : public vector<Atom*> {
@@ -651,6 +686,8 @@ class MstUtils {
     static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
     // returns a random number in the range [0, upper) (convenient for generating random array subscripts)
     static int randInt(int upper) { return randInt(0, upper - 1); }
+    // random number in the unit range 0 and 1
+    static MST::real randUnit() { return ((MST::real) rand() / (RAND_MAX)); }
 
     template <class T>
     static string toString(T obj) { return toString(&obj); }
@@ -666,6 +703,10 @@ class MstUtils {
     static T min(const T& a, const T& b);
     template <class T>
     static T max(const T& a, const T& b);
+    template <class T>
+    static T min(const vector<T>& vec, int beg = -1, int end = -1, int* minIndex = NULL);
+    template <class T>
+    static T max(const vector<T>& vec, int beg = -1, int end = -1, int* maxIndex = NULL);
     template <class T>
     static bool closeEnough(const T& a, const T& b, const T& epsilon = std::numeric_limits<T>::epsilon());
 };
@@ -719,6 +760,42 @@ template <class T>
 T MstUtils::max(const T& a, const T& b) {
   if (a > b) return a;
   return b;
+}
+
+template <class T>
+T MstUtils::min(const vector<T>& vec, int beg, int end, int* minIndex) {
+  MstUtils::assert(vec.size() > 0, "empty vector passed!", "MstUtils::min(vector<T>&)");
+  if (beg < 0) beg = 0;
+  if (end < 0) end = vec.size()-1;
+  MstUtils::assert(beg <= end, "beg = " + MstUtils::toString(beg) + " and end = " + MstUtils::toString(end), "MstUtils::min(vector<T>&)");
+  MstUtils::assert(end < vec.size(), "end index out of bounds, " + MstUtils::toString(end), "MstUtils::min(vector<T>&)");
+
+  T mv = vec[beg];
+  if (minIndex != NULL) *minIndex = beg;
+  for (int i = beg; i <= end; i++) {
+    if (vec[i] < mv) {
+      mv = vec[i];
+      if (minIndex != NULL) *minIndex = i;
+    }
+  }
+  return mv;
+}
+
+template <class T>
+T MstUtils::max(const vector<T>& vec, int beg, int end, int* maxIndex) {
+  MstUtils::assert(vec.size() > 0, "empty vector passed!", "MstUtils::max(vector<T>&)");
+  if (beg < 0) beg = 0;
+  if (end < 0) end = vec.size()-1;
+  MstUtils::assert(beg <= end, "beg = " + MstUtils::toString(beg) + " and end = " + MstUtils::toString(end), "MstUtils::max(vector<T>&)");
+  MstUtils::assert(end < vec.size(), "end index out of bounds, " + MstUtils::toString(end), "MstUtils::max(vector<T>&)");
+
+  T mv = vec[beg];
+  if (maxIndex != NULL) *maxIndex = beg;
+  for (int i = beg; i <= end; i++) {
+    if (vec[i] > mv) mv = vec[i];
+    if (maxIndex != NULL) *maxIndex = i;
+  }
+  return mv;
 }
 
 template <class T>

@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
     // consider all parameter combinations
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        C.setFreedomParams(lcpVals[i], hcpVals[j], 2);
+        C.setFreedomParams(lcpVals[i], hcpVals[j], 3);
         C.clearFreedom();
         vector<real> structFreedoms = C.getFreedom(allRes);
         freedoms[i][j].insert(freedoms[i][j].end(), structFreedoms.begin(), structFreedoms.end());

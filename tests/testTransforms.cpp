@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
   Transform rot2(CartesianPoint(0.492, -0.587, 0.643), CartesianPoint(0.870, 0.310, -0.383), CartesianPoint(0.025, 0.748, 0.663), Transform::byRow);
   Transform tr = TransformFactory::translate(10.0, 20.0, 30.0);
   Transform total = tr * rot2;
-  cout << "Rotation matrix:" << rot2 << "\ntranslation matrix:" << tr << "\nand total:" << total << endl;
+  cout << "Rotation matrix:\n" << rot2 << "\ntranslation matrix:\n" << tr << "\nand total:\n" << total << endl;
   Structure So(pdbFile);
   AtomPointerVector all = So.getAtoms();
   all.center();
@@ -54,14 +54,20 @@ int main(int argc, char** argv) {
   // dome some simple matrix algebra
   srand(time(NULL));
   Matrix M(4, 4);
-  for (int i = 0; i < M.size(0); i++) {
-    for (int j = 0; j < M.size(1); j++) {
-      M[i][j] = ((double) rand() / (RAND_MAX));
+  for (int i = 0; i < M.size(1); i++) {
+    for (int j = 0; j < M.size(2); j++) {
+      M(i,j) = ((double) rand() / (RAND_MAX));
     }
   }
-  cout << "created random matrix: " << M << endl;
+  cout << "created random matrix:\n" << M << endl;
   Matrix Mi = M.inverse();
-  cout << "the inverse of which is: " << Mi << endl;
-  cout << "product of the matrix by its inverse is:" << M*Mi << endl;
+  cout << "the inverse of which is:\n" << Mi << endl;
+  cout << "product of the matrix by its inverse is:\b" << M*Mi << endl;
+
+  cout << "first row of random matrix:\n" << M.row(0) << endl;
+  M.row(0) = Matrix(1, 4, 1.0);;
+  cout << "overwrote the first row of random matrix:\n" << M << endl;
+  Matrix row = M.row(0);
+  cout << "the firs row now is:\n" << row << endl;
   printf("TEST DONE\n");
 }
