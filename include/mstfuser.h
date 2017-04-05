@@ -3,6 +3,7 @@
 
 #include "msttypes.h"
 #include "mstoptim.h"
+#include <chrono>
 
 using namespace std;
 using namespace MST;
@@ -20,13 +21,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
     double eval(const vector<double>& point);
 
-    vector<double> guessPoint() {
-      eval(vector<double>());
-      noise = 1;
-      anchorRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : -1;
-cout << "anchoring on " << anchorRes << endl;
-      return initPoint;
-    }
+    vector<double> guessPoint() { eval(vector<double>()); return initPoint; }
     bool isAnchored() { return anchorRes >= 0; }
     int numDF() {
       int df = 3*numMobileAtoms - 6;
@@ -35,6 +30,10 @@ cout << "anchoring on " << anchorRes << endl;
     }
     Structure getStructure() { return fused; }
     void setVerbose(bool _verbose) { verbose = _verbose; }
+    void randomize() {
+      anchorRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : -1;
+      noise = 1;
+    }
 
   protected:
     CartesianPoint bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache = false);
@@ -89,10 +88,11 @@ class Fuser {
       double bestScore = Optim::fminsearch(E, 1000, bestSolution);
       for (int i = 0; i < Nc-1; i++) {
         vector<double> solution;
+        E.randomize();
         double score = Optim::fminsearch(E, 1000, solution);
         if (score < bestScore) { bestScore = score; bestSolution = solution; }
       }
-      cout << "best score = " << bestScore << endl;
+      if (verbose) cout << "best score = " << bestScore << endl;
       E.eval(bestSolution);
       return E.getStructure();
     }

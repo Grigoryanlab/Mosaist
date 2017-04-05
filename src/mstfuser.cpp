@@ -65,8 +65,14 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
   kb = 100;
   ka =  0.02;
   kh = 0.01;
+
+  // other initial parameters
   verbose = _verbose;
   noise = 0; // the first time we provide a guess point, just take means (later can try noisy start points)
+
+  // initialize the random number number generator
+  long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+  srand(x);
 }
 
 double fusionEvaluator::eval(const vector<double>& point) {
@@ -74,9 +80,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
   if (init) initPoint.resize(0);
   real bR = 0.01; real aR = 1.0; real dR = 1.0; // randomness scale factors
 
-  if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters -- these appear to disagree", "fusionEvaluator::eval");
-
-  // TODO: take care of the case, where there are fixed residues, but the N-terminus is not fixed!!!!!!!!!!!!!!!
+  if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
 
   // -- build the fused backbone, atom by atom
   Chain& F = fused[0];
@@ -144,7 +148,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
       }
     }
     // place previous O relative to pCA, N, pC (an improper)
-    if ((i > 0) && !fixed[i-1]) {
+    if ((i > anchorRes) && !fixed[i-1]) {
       if (init) {
         initPoint.push_back(bondInstances(i-1, i-1, "C", "O").mean() + bR * MstUtils::randUnit() * noise);
         initPoint.push_back(angleInstances(i, i-1, i-1, "N", "C", "O").mean() + aR * MstUtils::randUnit() * noise);
@@ -191,24 +195,19 @@ double fusionEvaluator::eval(const vector<double>& point) {
         N->build(CA, C, pN, point[k], point[k+1], point[k+2]); k += 3;
       }
 
-      // place O relative to pCA, pN, C (an improper), except for the residue
-      // proceeding the anchor, since that residue's O was placed in forward building
-      if (i != anchorRes - 1) {
-        if (init) {
-          initPoint.push_back(bondInstances(i, i, "C", "O").mean() + bR * MstUtils::randUnit() * noise);
-          initPoint.push_back(angleInstances(i+1, i, i, "N", "C", "O").mean() + aR * MstUtils::randUnit() * noise);
-          initPoint.push_back(CartesianGeometry::angleMean(dihedralInstances(i, i+1, i, i, "CA", "N", "C", "O")) + dR * MstUtils::randUnit() * noise);
-        } else {
-          O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
-        }
+      // place O relative to pCA, pN, C (an improper)
+      if (init) {
+        initPoint.push_back(bondInstances(i, i, "C", "O").mean() + bR * MstUtils::randUnit() * noise);
+        initPoint.push_back(angleInstances(i+1, i, i, "N", "C", "O").mean() + aR * MstUtils::randUnit() * noise);
+        initPoint.push_back(CartesianGeometry::angleMean(dihedralInstances(i, i+1, i, i, "CA", "N", "C", "O")) + dR * MstUtils::randUnit() * noise);
+      } else {
+        O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
       }
-
     }
     pN = N; pCA = CA; pC = C; pO = O;
   }
 
   // compute penalty for out-of-range parameters (based on the built struct)
-  if (verbose) cout << endl << "evaluating:" << endl;
   double penalty = 0;
   k = 0;
   for (int i = 0; i < F.residueSize(); i++) {
@@ -224,7 +223,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
         bondInstances(i, i, "CA", "C", true);
         bondInstances(i, i, "C", "O", true);
         angleInstances(i, i, i, "N", "CA", "C", true);
-        // if O was placed relative to this residue (as opposed to relative to needing the next residue)
+        // if last residue, constrain O relative to this residue (as opposed to the next one)
         if (i == F.residueSize() - 1) {
           angleInstances(i, i, i, "CA", "C", "O", true);
           dihedralInstances(i, i, i, i, "N", "CA", "C", "O", true);
@@ -234,7 +233,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
         penalty += harmonicPenalty(CA->distance(C), bounds[k], kb); k++;
         penalty += harmonicPenalty(C->distance(O), bounds[k], kb); k++;
         penalty += harmonicPenalty(N->angle(CA, C), bounds[k], ka); k++;
-        // if O was placed relative to this residue (as opposed to relative to needing the next residue)
+        // if last residue, constrain O relative to this residue (as opposed to the next one)
         if (i == F.residueSize() - 1) {
           penalty += harmonicPenalty(CA->angle(C, O), bounds[k], ka); k++;
           penalty += harmonicPenalty(N->dihedral(CA, C, O), bounds[k], kh, true); k++;
@@ -252,7 +251,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
         angleInstances(i-1, i, i, "C", "N", "CA", true);
         dihedralInstances(i-1, i-1, i, i, "CA", "C", "N", "CA", true);
         dihedralInstances(i-1, i, i, i, "C", "N", "CA", "C", true);
-        // if previous O was placed relative to this resudue
+        // use this residue to constrain the previous O
         if (i < F.residueSize() - 1) {
           angleInstances(i-1, i-1, i, "O", "C", "N", true);
           dihedralInstances(i-1, i, i-1, i-1, "CA", "N", "C", "O", true);
@@ -264,7 +263,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
         penalty += harmonicPenalty(pC->angle(N, CA), bounds[k], ka); k++;
         penalty += harmonicPenalty(pCA->dihedral(pC, N, CA), bounds[k], kh, true); k++;
         penalty += harmonicPenalty(pC->dihedral(N, CA, C), bounds[k], kh, true); k++;
-        // if previous O was placed relative to this resudue
+        // use this residue to constrain the previous O
         if (i < F.residueSize() - 1) {
           penalty += harmonicPenalty(pO->angle(pC, N), bounds[k], ka); k++;
           penalty += harmonicPenalty(pCA->dihedral(N, pC, pO), bounds[k], kh, true); k++;
@@ -368,13 +367,11 @@ double fusionEvaluator::harmonicPenalty(double val, const pair<double, double>& 
   if (angular) {
     if (CartesianGeometry::angleDiffCCW(minmax.first, val) > CartesianGeometry::angleDiffCCW(minmax.second, val)) return 0;
     double dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(minmax.first, val), 2), pow(CartesianGeometry::angleDiff(minmax.second, val), 2));
-    if (verbose) cout << "dihe value = " << val << ", while interval [" << minmax.first << ", " << minmax.second << "], penalty = " << K * dx2 << endl;
     return K * dx2;
   } else {
     double pen = 0;
     if (val < minmax.first) { pen = K * (val - minmax.first) * (val - minmax.first); }
     else if (val > minmax.second) { pen = K * (val - minmax.second) * (val - minmax.second); }
-    if (verbose) cout << "value = " << val << ", while interval [" << minmax.first << ", " << minmax.second << "], penalty = " << pen << endl;
     return pen;
   }
 }
