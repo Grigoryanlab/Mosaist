@@ -6,9 +6,13 @@ using namespace std;
 using namespace MST;
 
 int main(int argc, char *argv[]) {
-  Structure unitA("/Users/gevorg/Dropbox/stack/heptad.0388_0001.pdb");
-  Structure unitB("/Users/gevorg/Dropbox/stack/heptad.0388_0007.pdb");
-  Structure bridge("/Users/gevorg/Dropbox/stack/heptad.0388_0014.pdb");
+  if (argc < 3) {
+    MstUtils::error("Usage: ./testFuser [testfiles/] [out.pdb]", "main");
+  }
+  string testdir(argv[1]), opdbf(argv[2]);
+  Structure unitA(testdir + "heptad.0388_0001.pdb");
+  Structure unitB(testdir + "heptad.0388_0007.pdb");
+  Structure bridge(testdir + "heptad.0388_0014.pdb");
 
   // will fuse chain B of unitA with chain A of unitB
   Chain& chainA = unitA[1];
@@ -41,5 +45,5 @@ int main(int argc, char *argv[]) {
   cout << "Leaving " << L - fixed.size() << " mobile" << endl;
 
   Structure fused = Fuser::fuse(resTopo, fixed, 10);
-  fused.writePDB("/Users/gevorg/Dropbox/stack/heptad.0388.fused.pdb");
+  fused.writePDB(opdbf);
 }
