@@ -1,10 +1,11 @@
 #include "mstfuser.h"
 
-fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> fixedResidues, bool _verbose) {
+fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> _fixedResidues, bool _verbose) {
   // copy overlapping residues
   overlappingResidues = resTopo;
 
   // mark fixed residues
+  fixedResidues = _fixedResidues;
   fixed.resize(resTopo.size(), false);
   for (int i = 0; i < fixedResidues.size(); i++) {
     if (fixedResidues[i] >= fixed.size())
@@ -37,11 +38,11 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
    * together (i.e., part of Chain pointed to by C), by storing which
    * Residues the segment has and which residue index, in the full fused
    * structure, they correspond to. */
-  map<Chain*, vector<pair<Residue*, int> > > frags;
+  map<Structure*, vector<pair<Residue*, int> > > frags;
   for (int i = 0; i < resTopo.size(); i++) {
     for (int j = 0; j < resTopo[i].size(); j++) {
-      Chain* C = resTopo[i][j]->getChain();
-      frags[C].push_back(pair<Residue*, int>(resTopo[i][j], i));
+      Structure* S = resTopo[i][j]->getStructure();
+      frags[S].push_back(pair<Residue*, int>(resTopo[i][j], i));
     }
   }
   Chain& fusedChain = fused[0];
@@ -77,18 +78,19 @@ double fusionEvaluator::eval(const vector<double>& point) {
 
   // TODO: take care of the case, where there are fixed residues, but the N-terminus is not fixed!!!!!!!!!!!!!!!
 
-  // build the fused backbone, atom by atom
+  // -- build the fused backbone, atom by atom
   Chain& F = fused[0];
   int k = 0;                 // parameter index
-  Atom *pN, *pCA, *pC, *pO;  // the previous three placed atoms (m3-m2-a1)
-  for (int i = 0; i < F.residueSize(); i++) {
+  Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;  // the previous three placed atoms
+  // build forward
+  for (int i = anchorRes; i < F.residueSize(); i++) {
     Residue& res = F[i];
     Atom* N = res.findAtom("N");
     Atom* CA = res.findAtom("CA");
     Atom* C = res.findAtom("C");
     Atom* O = res.findAtom("O");
     if (!fixed[i]) {
-      if (i == 0) {
+      if ((i == 0) && !isAnchored()) {
         if (init) {
           initPoint.push_back(bondInstances(i, i, "N", "CA").mean() + bR * MstUtils::randUnit() * noise);
           initPoint.push_back(bondInstances(i, i, "CA", "C").mean() + bR * MstUtils::randUnit() * noise);
@@ -150,6 +152,57 @@ double fusionEvaluator::eval(const vector<double>& point) {
       } else {
         pO->build(pC, N, pCA, point[k], point[k+1], point[k+2]); k += 3;
       }
+    }
+    pN = N; pCA = CA; pC = C; pO = O;
+  }
+
+  // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
+  for (int i = anchorRes; i >= 0; i--) {
+    Residue& res = F[i];
+    Atom* N = res.findAtom("N");
+    Atom* CA = res.findAtom("CA");
+    Atom* C = res.findAtom("C");
+    Atom* O = res.findAtom("O");
+    if (!fixed[i]) {
+      // place C relative to pC, pCA, pN
+      if (init) {
+        initPoint.push_back(bondInstances(i+1, i, "N", "C").mean() + bR * MstUtils::randUnit() * noise);
+        initPoint.push_back(angleInstances(i+1, i+1, i, "CA", "N", "C").mean() + aR * MstUtils::randUnit() * noise);
+        initPoint.push_back(CartesianGeometry::angleMean(dihedralInstances(i+1, i+1, i+1, i, "C", "CA", "N", "C")) + dR * MstUtils::randUnit() * noise);
+      } else {
+        C->build(pN, pCA, pC, point[k], point[k+1], point[k+2]); k += 3;
+      }
+
+      // place CA relative to pCA, pN, C
+      if (init) {
+        initPoint.push_back(bondInstances(i, i, "C", "CA").mean() + bR * MstUtils::randUnit() * noise);
+        initPoint.push_back(angleInstances(i+1, i, i, "N", "C", "CA").mean() + aR * MstUtils::randUnit() * noise);
+        initPoint.push_back(CartesianGeometry::angleMean(dihedralInstances(i+1, i+1, i, i, "CA", "N", "C", "CA")) + dR * MstUtils::randUnit() * noise);
+      } else {
+        CA->build(C, pN, pCA, point[k], point[k+1], point[k+2]); k += 3;
+      }
+
+      // place N relative to pN, C, CA
+      if (init) {
+        initPoint.push_back(bondInstances(i, i, "CA", "N").mean() + bR * MstUtils::randUnit() * noise);
+        initPoint.push_back(angleInstances(i, i, i, "C", "CA", "N").mean() + aR * MstUtils::randUnit() * noise);
+        initPoint.push_back(CartesianGeometry::angleMean(dihedralInstances(i+1, i, i, i, "N", "C", "CA", "N")) + dR * MstUtils::randUnit() * noise);
+      } else {
+        N->build(CA, C, pN, point[k], point[k+1], point[k+2]); k += 3;
+      }
+
+      // place O relative to pCA, pN, C (an improper), except for the residue
+      // proceeding the anchor, since that residue's O was placed in forward building
+      if (i != anchorRes - 1) {
+        if (init) {
+          initPoint.push_back(bondInstances(i, i, "C", "O").mean() + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInstances(i+1, i, i, "N", "C", "O").mean() + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(CartesianGeometry::angleMean(dihedralInstances(i, i+1, i, i, "CA", "N", "C", "O")) + dR * MstUtils::randUnit() * noise);
+        } else {
+          O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
+        }
+      }
+
     }
     pN = N; pCA = CA; pC = C; pO = O;
   }

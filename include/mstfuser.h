@@ -20,7 +20,13 @@ class fusionEvaluator: public optimizerEvaluator {
 
     double eval(const vector<double>& point);
 
-    vector<double> guessPoint() { eval(vector<double>()); noise = 1; return initPoint; }
+    vector<double> guessPoint() {
+      eval(vector<double>());
+      noise = 1;
+      anchorRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : -1;
+cout << "anchoring on " << anchorRes << endl;
+      return initPoint;
+    }
     bool isAnchored() { return anchorRes >= 0; }
     int numDF() {
       int df = 3*numMobileAtoms - 6;
@@ -41,6 +47,8 @@ class fusionEvaluator: public optimizerEvaluator {
   private:
     Structure fused;
     vector<bool> fixed; // marks whether each residue is to be fixed or not
+    vector<int> fixedResidues; // just a list of fixed residue indices. this is
+                               // redundant with the above, but helpful to have
     int anchorRes;      // index one of the fixed residues, which will be used
                         // to start placing all other atoms. If there are no
                         // fixed residues, this index is set to -1;
