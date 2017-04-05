@@ -659,6 +659,7 @@ void Residue::deleteAtom(int i) {
   if ((i < 0) || (i >= atoms.size())) {
     MstUtils::error("index out of range of atom vector in residue", "Residue::deleteAtom");
   }
+  delete atoms[i];
   atoms.erase(atoms.begin() + i);
   if (parent != NULL) {
     parent->incrementNumAtoms(-1);
