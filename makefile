@@ -16,3 +16,4 @@ all:
 	ar rs lib/libmstcondeg.a objs/mstcondeg.o objs/mstrotlib.o objs/msttransforms.o
 	ar rs lib/libmstlinalg.a objs/mstlinalg.o
 	ar rs lib/libmstoptim.a objs/mstoptim.o objs/mstlinalg.o
+	ar rs lib/libmstfuser.a objs/mstfuser.o objs/msttypes.o objs/mstoptim.o
