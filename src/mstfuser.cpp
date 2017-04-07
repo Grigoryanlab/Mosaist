@@ -281,7 +281,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
       rmsdScore += rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
     }
   }
-  if (verbose) cout << "rmsdScore = " << rmsdScore << ", penalty = " << penalty << ", EVAL DONE" << endl;
+  // if (verbose) cout << "rmsdScore = " << rmsdScore << ", penalty = " << penalty << ", EVAL DONE" << endl;
 
   return rmsdScore + penalty;
 }
@@ -291,9 +291,9 @@ CartesianPoint fusionEvaluator::bondInstances(int ri, int rj, const string& ai, 
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
   vector<Residue*>& resJ = overlappingResidues[rj];
-  map<Chain*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
+  map<Structure*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 2) continue;
@@ -315,10 +315,10 @@ CartesianPoint fusionEvaluator::angleInstances(int ri, int rj, int rk, const str
   vector<Residue*>& resI = overlappingResidues[ri];
   vector<Residue*>& resJ = overlappingResidues[rj];
   vector<Residue*>& resK = overlappingResidues[rk];
-  map<Chain*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
-  for (int i = 0; i < resK.size(); i++) S[resK[i]->getChain()].push_back(resK[i]);
+  map<Structure*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
+  for (int i = 0; i < resK.size(); i++) S[resK[i]->getStructure()].push_back(resK[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 3) continue;
@@ -342,11 +342,11 @@ CartesianPoint fusionEvaluator::dihedralInstances(int ri, int rj, int rk, int rl
   vector<Residue*>& resJ = overlappingResidues[rj];
   vector<Residue*>& resK = overlappingResidues[rk];
   vector<Residue*>& resL = overlappingResidues[rl];
-  map<Chain*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
-  for (int i = 0; i < resK.size(); i++) S[resK[i]->getChain()].push_back(resK[i]);
-  for (int i = 0; i < resL.size(); i++) S[resL[i]->getChain()].push_back(resL[i]);
+  map<Structure*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
+  for (int i = 0; i < resK.size(); i++) S[resK[i]->getStructure()].push_back(resK[i]);
+  for (int i = 0; i < resL.size(); i++) S[resL[i]->getStructure()].push_back(resL[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 4) continue;
