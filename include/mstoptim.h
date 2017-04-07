@@ -2,6 +2,7 @@
 #define _MSTOPTIM_H
 
 #include <vector>
+#include <algorithm>    // for sort to work on linux
 #include "mstlinalg.h"
 
 using namespace std;
