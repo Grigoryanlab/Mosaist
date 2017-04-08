@@ -81,7 +81,6 @@ double fusionEvaluator::eval(const vector<double>& point) {
   real bR = 0.01; real aR = 1.0; real dR = 1.0; // randomness scale factors
 
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
-
   // -- build the fused backbone, atom by atom
   Chain& F = fused[0];
   int k = 0;                 // parameter index
@@ -229,14 +228,14 @@ double fusionEvaluator::eval(const vector<double>& point) {
           dihedralInstances(i, i, i, i, "N", "CA", "C", "O", true);
         }
       } else {
-        penalty += harmonicPenalty(N->distance(CA), bounds[k], kb); k++;
-        penalty += harmonicPenalty(CA->distance(C), bounds[k], kb); k++;
-        penalty += harmonicPenalty(C->distance(O), bounds[k], kb); k++;
-        penalty += harmonicPenalty(N->angle(CA, C), bounds[k], ka); k++;
+        penalty += harmonicPenalty(N->distance(CA), bounds[k]); k++;
+        penalty += harmonicPenalty(CA->distance(C), bounds[k]); k++;
+        penalty += harmonicPenalty(C->distance(O), bounds[k]); k++;
+        penalty += harmonicPenalty(N->angle(CA, C), bounds[k]); k++;
         // if last residue, constrain O relative to this residue (as opposed to the next one)
         if (i == F.residueSize() - 1) {
-          penalty += harmonicPenalty(CA->angle(C, O), bounds[k], ka); k++;
-          penalty += harmonicPenalty(N->dihedral(CA, C, O), bounds[k], kh, true); k++;
+          penalty += harmonicPenalty(CA->angle(C, O), bounds[k]); k++;
+          penalty += harmonicPenalty(N->dihedral(CA, C, O), bounds[k]); k++;
         }
       }
     }
@@ -257,16 +256,16 @@ double fusionEvaluator::eval(const vector<double>& point) {
           dihedralInstances(i-1, i, i-1, i-1, "CA", "N", "C", "O", true);
         }
       } else {
-        penalty += harmonicPenalty(pC->distance(N), bounds[k], kb); k++;
-        penalty += harmonicPenalty(pCA->angle(pC, N), bounds[k], ka); k++;
-        penalty += harmonicPenalty(pN->dihedral(pCA, pC, N), bounds[k], kh, true); k++;
-        penalty += harmonicPenalty(pC->angle(N, CA), bounds[k], ka); k++;
-        penalty += harmonicPenalty(pCA->dihedral(pC, N, CA), bounds[k], kh, true); k++;
-        penalty += harmonicPenalty(pC->dihedral(N, CA, C), bounds[k], kh, true); k++;
+        penalty += harmonicPenalty(pC->distance(N), bounds[k]); k++;
+        penalty += harmonicPenalty(pCA->angle(pC, N), bounds[k]); k++;
+        penalty += harmonicPenalty(pN->dihedral(pCA, pC, N), bounds[k]); k++;
+        penalty += harmonicPenalty(pC->angle(N, CA), bounds[k]); k++;
+        penalty += harmonicPenalty(pCA->dihedral(pC, N, CA), bounds[k]); k++;
+        penalty += harmonicPenalty(pC->dihedral(N, CA, C), bounds[k]); k++;
         // use this residue to constrain the previous O
         if (i < F.residueSize() - 1) {
-          penalty += harmonicPenalty(pO->angle(pC, N), bounds[k], ka); k++;
-          penalty += harmonicPenalty(pCA->dihedral(N, pC, pO), bounds[k], kh, true); k++;
+          penalty += harmonicPenalty(pO->angle(pC, N), bounds[k]); k++;
+          penalty += harmonicPenalty(pCA->dihedral(N, pC, pO), bounds[k]); k++;
         }
       }
     }
@@ -288,12 +287,14 @@ double fusionEvaluator::eval(const vector<double>& point) {
 
 CartesianPoint fusionEvaluator::bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache) {
   CartesianPoint p;
+  bool chainBreak = false;
+
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
   vector<Residue*>& resJ = overlappingResidues[rj];
-  map<Structure*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
+  map<Chain*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 2) continue;
@@ -301,9 +302,20 @@ CartesianPoint fusionEvaluator::bondInstances(int ri, int rj, const string& ai, 
     Atom* Aj = residues[1]->findAtom(aj);
     p.push_back(Ai->distance(Aj));
   }
+  // if no comboes from the same chain were found, that means this element crosses
+  // a chain boundary, so we should try all combinations of atoms
+  if (p.size() == 0) {
+    chainBreak = true;
+    for (int i = 0; i < resI.size(); i++) {
+      Atom* Ai = resI[i]->findAtom(ai);
+      for (int j = 0; j < resJ.size(); j++) {
+        Atom* Aj = resJ[j]->findAtom(aj);
+        p.push_back(Ai->distance(Aj));
+      }
+    }
+  }
   if (addToCache) {
-    pair<double, double> b(MstUtils::min(p), MstUtils::max(p));
-    bounds.push_back(b);
+    bounds.push_back(icBound(chainBreak ? icBrokenBond : icBond, MstUtils::min(p), MstUtils::max(p)));
   }
 
   return p;
@@ -311,14 +323,16 @@ CartesianPoint fusionEvaluator::bondInstances(int ri, int rj, const string& ai, 
 
 CartesianPoint fusionEvaluator::angleInstances(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak, bool addToCache) {
   CartesianPoint p;
+  bool chainBreak = false;
+
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
   vector<Residue*>& resJ = overlappingResidues[rj];
   vector<Residue*>& resK = overlappingResidues[rk];
-  map<Structure*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
-  for (int i = 0; i < resK.size(); i++) S[resK[i]->getStructure()].push_back(resK[i]);
+  map<Chain*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
+  for (int i = 0; i < resK.size(); i++) S[resK[i]->getChain()].push_back(resK[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 3) continue;
@@ -327,9 +341,23 @@ CartesianPoint fusionEvaluator::angleInstances(int ri, int rj, int rk, const str
     Atom* Ak = residues[2]->findAtom(ak);
     p.push_back(Ai->angle(Aj, Ak));
   }
+  // if no comboes from the same chain were found, that means this element crosses
+  // a chain boundary, so we should try all combinations of atoms
+  if (p.size() == 0) {
+    chainBreak = true;
+    for (int i = 0; i < resI.size(); i++) {
+      Atom* Ai = resI[i]->findAtom(ai);
+      for (int j = 0; j < resJ.size(); j++) {
+        Atom* Aj = resJ[j]->findAtom(aj);
+        for (int k = 0; k < resK.size(); k++) {
+          Atom* Ak = resK[k]->findAtom(ak);
+          p.push_back(Ai->angle(Aj, Ak));
+        }
+      }
+    }
+  }
   if (addToCache) {
-    pair<double, double> b(MstUtils::min(p), MstUtils::max(p));
-    bounds.push_back(b);
+    bounds.push_back(icBound(chainBreak ? icBrokenAngle : icAngle, MstUtils::min(p), MstUtils::max(p)));
   }
 
   return p;
@@ -337,16 +365,18 @@ CartesianPoint fusionEvaluator::angleInstances(int ri, int rj, int rk, const str
 
 CartesianPoint fusionEvaluator::dihedralInstances(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al, bool addToCache) {
   CartesianPoint p;
+  bool chainBreak = false;
+
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
   vector<Residue*>& resJ = overlappingResidues[rj];
   vector<Residue*>& resK = overlappingResidues[rk];
   vector<Residue*>& resL = overlappingResidues[rl];
-  map<Structure*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
-  for (int i = 0; i < resK.size(); i++) S[resK[i]->getStructure()].push_back(resK[i]);
-  for (int i = 0; i < resL.size(); i++) S[resL[i]->getStructure()].push_back(resL[i]);
+  map<Chain*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
+  for (int i = 0; i < resK.size(); i++) S[resK[i]->getChain()].push_back(resK[i]);
+  for (int i = 0; i < resL.size(); i++) S[resL[i]->getChain()].push_back(resL[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 4) continue;
@@ -356,22 +386,51 @@ CartesianPoint fusionEvaluator::dihedralInstances(int ri, int rj, int rk, int rl
     Atom* Al = residues[3]->findAtom(al);
     p.push_back(Ai->dihedral(Aj, Ak, Al));
   }
+  // if no comboes from the same chain were found, that means this element crosses
+  // a chain boundary, so we should try all combinations of atoms
+  if (p.size() == 0) {
+    chainBreak = true;
+    for (int i = 0; i < resI.size(); i++) {
+      Atom* Ai = resI[i]->findAtom(ai);
+      for (int j = 0; j < resJ.size(); j++) {
+        Atom* Aj = resJ[j]->findAtom(aj);
+        for (int k = 0; k < resK.size(); k++) {
+          Atom* Ak = resK[k]->findAtom(ak);
+          for (int l = 0; l < resL.size(); l++) {
+            Atom* Al = resL[l]->findAtom(al);
+            p.push_back(Ai->dihedral(Aj, Ak, Al));
+          }
+        }
+      }
+    }
+  }
   if (addToCache) {
-    bounds.push_back(CartesianGeometry::angleRange(p));
+    bounds.push_back(icBound(chainBreak ? icBrokenDihedral : icDihedral, CartesianGeometry::angleRange(p)));
   }
 
   return p;
 }
 
-double fusionEvaluator::harmonicPenalty(double val, const pair<double, double>& minmax, double K, bool angular) {
-  if (angular) {
-    if (CartesianGeometry::angleDiffCCW(minmax.first, val) > CartesianGeometry::angleDiffCCW(minmax.second, val)) return 0;
-    double dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(minmax.first, val), 2), pow(CartesianGeometry::angleDiff(minmax.second, val), 2));
-    return K * dx2;
-  } else {
-    double pen = 0;
-    if (val < minmax.first) { pen = K * (val - minmax.first) * (val - minmax.first); }
-    else if (val > minmax.second) { pen = K * (val - minmax.second) * (val - minmax.second); }
-    return pen;
+double fusionEvaluator::harmonicPenalty(double val, const icBound& b) {
+  switch (b.type) {
+    case icDihedral: {
+      if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return 0;
+      double dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
+      return kh * dx2;
+    }
+    case icAngle:
+    case icBond: {
+      double pen = 0;
+      double K = (b.type == icBond) ? kb : ka;
+      if (val < b.minVal) { pen = K * (val - b.minVal) * (val - b.minVal); }
+      else if (val > b.maxVal) { pen = K * (val - b.maxVal) * (val - b.maxVal); }
+      return pen;
+    }
+    case icBrokenDihedral:
+    case icBrokenAngle:
+    case icBrokenBond:
+      return 0;
+    default:
+      MstUtils::error("uknown variable type", "fusionEvaluator::harmonicPenalty");
   }
 }

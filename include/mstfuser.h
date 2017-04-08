@@ -10,6 +10,9 @@ using namespace MST;
 
 class fusionEvaluator: public optimizerEvaluator {
   public:
+    // broken means across a chain break
+    enum icType { icBond = 1, icAngle, icDihedral, icBrokenBond, icBrokenAngle, icBrokenDihedral };
+
     /* vector<vector<Residue*> >& resTopo simultaneously represents the various
      * aligned segments as well as which residues overlap in the alignment. It is
      * assumed that all residues from a give chain move together (i.e., are
@@ -35,13 +38,23 @@ class fusionEvaluator: public optimizerEvaluator {
       noise = 1;
     }
 
+  class icBound {
+    public:
+      icBound(icType _type, real _minVal, real _maxVal) { type = _type; minVal = _minVal; maxVal = _maxVal; }
+      icBound(icType _type, const pair<real, real>& b) { type = _type; minVal = b.first; maxVal = b.second; }
+      icBound(const icBound& icb) { type = icb.type; minVal = icb.minVal; maxVal = icb.maxVal; }
+
+      icType type;
+      real minVal, maxVal;
+  };
+
   protected:
     CartesianPoint bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache = false);
     CartesianPoint angleInstances(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak, bool addToCache = false);
     CartesianPoint dihedralInstances(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al, bool addToCache = false);
 
     // if the last flag is specified as true, will compute angular differences
-    double harmonicPenalty(double val, const pair<double, double>& minmax, double K, bool angular = false);
+    double harmonicPenalty(double val, const icBound& b);
 
   private:
     Structure fused;
@@ -62,7 +75,7 @@ class fusionEvaluator: public optimizerEvaluator {
      * some degrees of freedom involving those atoms would still neeed to be
      * compared to allowed ranges to score (e.g., the bond between a fixed and
      * a non-fixed atom). */
-    vector<pair<double, double> > bounds;
+    vector<icBound> bounds;
 
     /* For each residue index in the fused structure, this variable stores the
      * list of all overlapping fragment residues. */
