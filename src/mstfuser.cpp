@@ -86,7 +86,8 @@ double fusionEvaluator::eval(const vector<double>& point) {
   int k = 0;                 // parameter index
   Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;  // the previous three placed atoms
   // build forward
-  for (int i = anchorRes; i < F.residueSize(); i++) {
+  int startIdx = isAnchored() ? anchorRes : 0;
+  for (int i = startIdx; i < F.residueSize(); i++) {
     Residue& res = F[i];
     Atom* N = res.findAtom("N");
     Atom* CA = res.findAtom("CA");
@@ -147,7 +148,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
       }
     }
     // place previous O relative to pCA, N, pC (an improper)
-    if ((i > anchorRes) && !fixed[i-1]) {
+    if ((i > startIdx) && !fixed[i-1]) {
       if (init) {
         initPoint.push_back(bondInstances(i-1, i-1, "C", "O").mean() + bR * MstUtils::randUnit() * noise);
         initPoint.push_back(angleInstances(i, i-1, i-1, "N", "C", "O").mean() + aR * MstUtils::randUnit() * noise);
