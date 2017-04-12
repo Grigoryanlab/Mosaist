@@ -281,7 +281,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
       rmsdScore += rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
     }
   }
-  // if (verbose) cout << "rmsdScore = " << rmsdScore << ", penalty = " << penalty << ", EVAL DONE" << endl;
+  if (verbose) cout << "rmsdScore = " << rmsdScore << ", penalty = " << penalty << ", EVAL DONE" << endl;
 
   return rmsdScore + penalty;
 }
