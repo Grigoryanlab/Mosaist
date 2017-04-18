@@ -7,9 +7,9 @@ using namespace MST;
 
 int main(int argc, char *argv[]) {
   if (argc < 3) {
-    MstUtils::error("Usage: ./testFuser [testfiles/] [out.pdb]", "main");
+    MstUtils::error("Usage: ./testFuser [testfiles/] [out-base]", "main");
   }
-  string testdir(argv[1]), opdbf(argv[2]);
+  string testdir(argv[1]), outBase(argv[2]);
   Structure unitA(testdir + "heptad.0388_0001.pdb");
   Structure unitB(testdir + "heptad.0388_0007.pdb");
   Structure bridge(testdir + "heptad.0388_0014.pdb");
@@ -44,6 +44,52 @@ int main(int argc, char *argv[]) {
   cout << "Will fix residues: " << MstUtils::vecToString(fixed) << endl;
   cout << "Leaving " << L - fixed.size() << " mobile" << endl;
 
-  Structure fused = Fuser::fuse(resTopo, fixed, 10, true);
-  fused.writePDB(opdbf);
+  Structure fused = Fuser::fuse(resTopo, fixed, 1000, 10, true);
+  fused.writePDB(outBase + ".fused.pdb");
+
+
+  // --- now try a different, more challenging case
+  // assembly with three terms - in chains A, B, and C
+	Structure s(testdir + "/fuserinput.pdb");
+  Structure termA = Structure(s[0]).reassignChainsByConnectivity();
+  Structure termB = Structure(s[1]).reassignChainsByConnectivity();
+  Structure termC = Structure(s[2]).reassignChainsByConnectivity();
+
+	// build residue topology
+	vector<vector<Residue* > > residues(32);
+	for (int i = 0; i < 10; i++) { // chain A of term1
+		residues[i].push_back(&(termA[0][i]));
+	}
+
+	for (int i = 0; i < 10; i++) { // chain B of term1
+		residues[i+11].push_back(&(termA[1][i]));
+	}
+
+	for (int i = 0; i < 10; i++) { // chain A of term2
+		residues[i+11].push_back(&(termB[0][i]));
+	}
+
+	for (int i = 0; i < 10; i++) { // chain B of term2
+		residues[i+22].push_back(&(termB[1][i]));
+	}
+
+	for (int i = 0; i < 5; i++) { // chain A of term3
+		residues[i+21].push_back(&(termC[0][i]));
+	}
+
+	for (int i = 0; i < 5; i++) { // chain B of term3
+		residues[i+10].push_back(&(termC[1][i]));
+	}
+
+	// print out residues
+	for (int i = 0; i < residues.size(); i++) {
+		cout << i;
+		for (int j = 0; j < residues[i].size(); j++) {
+			cout << " " << *residues[i][j];
+		}
+		cout << endl;
+	}
+
+	Structure fusedStruct = Fuser::fuse(residues, vector<int>(1, 0), 10000, 2, true);
+	fusedStruct.writePDB(outBase + ".fused1.pdb");
 }

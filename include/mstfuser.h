@@ -31,12 +31,15 @@ class fusionEvaluator: public optimizerEvaluator {
       if (isAnchored()) df += 6;
       return df;
     }
+    int getAnchor() { return anchorRes; }
+    void setAnchor(int _anchorRes) { anchorRes = _anchorRes; }
     Structure getStructure() { return fused; }
     void setVerbose(bool _verbose) { verbose = _verbose; }
-    void randomize() {
+    int randomizeAnchor() {
       anchorRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : -1;
-      noise = 1;
+      return anchorRes;
     }
+    void noisifyGuessPoint(real _noise = 1.0) { noise = _noise; }
 
   class icBound {
     public:
@@ -95,17 +98,25 @@ class fusionEvaluator: public optimizerEvaluator {
 
 class Fuser {
   public:
-    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Nc = 2, bool verbose = false) {
-      fusionEvaluator E(resTopo, fixed, verbose);
+    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Ni = 1000, int Nc = 2, bool verbose = false) {
+      fusionEvaluator E(resTopo, fixed);
       vector<double> bestSolution;
-      double bestScore = Optim::fminsearch(E, 1000, bestSolution);
+      double bestScore = Optim::fminsearch(E, Ni, bestSolution);
+      int bestAnchor = E.getAnchor();
+      if (verbose) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
+      E.noisifyGuessPoint(0.2);
       for (int i = 0; i < Nc-1; i++) {
         vector<double> solution;
-        E.randomize();
-        double score = Optim::fminsearch(E, 1000, solution);
-        if (score < bestScore) { bestScore = score; bestSolution = solution; }
+        int anchor = E.randomizeAnchor();
+        double score = Optim::fminsearch(E, Ni, solution);
+        if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = anchor; }
+        if (verbose) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
       }
-      if (verbose) cout << "best score = " << bestScore << endl;
+      E.setAnchor(bestAnchor);
+      if (verbose) {
+        cout << "best score = " << bestScore << ":" << endl;
+        E.setVerbose(true);
+      }
       E.eval(bestSolution);
       return E.getStructure();
     }

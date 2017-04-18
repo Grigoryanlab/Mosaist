@@ -279,9 +279,10 @@ double fusionEvaluator::eval(const vector<double>& point) {
     RMSDCalculator rms;
     for (int i = 0; i < alignedFrags.size(); i++) {
       rmsdScore += rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
+      // rmsdScore += pow(rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first), 2) * alignedFrags[i].first.size();
     }
   }
-  if (verbose) cout << "rmsdScore = " << rmsdScore << ", penalty = " << penalty << ", EVAL DONE" << endl;
+  if (verbose) cout << "rmsdScore = " << rmsdScore << ", penalty = " << penalty << endl;
 
   return rmsdScore + penalty;
 }

@@ -43,6 +43,14 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
     // center of the current simplex
     Matrix m = simplex.mean(1);
 
+    // quit if the current simplex is too small (stopping criterion by Dennis and Woods (1987))
+    // bool tooSmall = true;
+    // real d = max(1.0, simplex.row(0).norm());
+    // for (int i = 1; i < simplex.size(); i++) {
+    //   if ((simplex.row(0) - simplex.row(i)).norm() / d > 10E-4) { tooSmall = false; break; }
+    // }
+    // if (tooSmall) break;
+
     // quit if the current simplex is too small
     bool tooSmall = true;
     for (int i = 0; i < simplex.size(); i++) {

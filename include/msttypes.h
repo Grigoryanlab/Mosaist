@@ -386,6 +386,7 @@ class CartesianPoint : public vector<real> {
 
     real norm() const;
     real mean() const;
+    real median() const;
     real sum() const;
     CartesianPoint cross(CartesianPoint other) const;
     real dot(CartesianPoint other) const;

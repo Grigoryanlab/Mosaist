@@ -1174,6 +1174,14 @@ real CartesianPoint::sum() const {
   return s;
 }
 
+real CartesianPoint::median() const {
+  if (size() == 0) return 0; // could also throw an error in this case
+  vector<real> vec = *this;
+  sort(vec.begin(), vec.end());
+  if (vec.size() % 2 == 0) return (vec[vec.size() / 2] + vec[vec.size() / 2 - 1])/2;
+  return vec[vec.size() / 2];
+}
+
 CartesianPoint CartesianPoint::cross(CartesianPoint other) const {
   if (size() != 3) MstUtils::error("don't know how to compute cross produces for dimensions other than 3", "CartesianPoint::cross");
   if (size() != other.size()) MstUtils::error("vector size mismatch", "CartesianPoint::cross");

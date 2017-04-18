@@ -6,7 +6,7 @@ all:
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstlinalg.o tests/testTransforms.cpp -o bin/testTransforms
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstrotlib.o tests/testRotlib.cpp -o bin/testRotlib
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstmagic.o tests/testTERMUtils.cpp -o bin/testTERMUtils
-	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o tests/testConFind.cpp -o bin/testConFind
+	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o objs/mstoptions.o tests/testConFind.cpp -o bin/testConFind
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o tests/findBestFreedom.cpp -o bin/findBestFreedom
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
 	mkdir -p lib
