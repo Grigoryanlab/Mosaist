@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <typeinfo>
 #include <stdio.h>
-#include <getopt.h>
 #include <map>
 #include <iomanip>
 #include <unistd.h>

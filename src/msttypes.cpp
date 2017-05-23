@@ -2159,6 +2159,98 @@ bool ProximitySearch::overlaps(ProximitySearch& other, real pad) {
   return true;
 }
 
+/* --------- Clusterer --------- */
+vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& units, real rmsdCut, int Nmax) {
+  coputedRMSDs.clear();
+  vector<vector<int> > clusters;
+  set<int> remIndices;
+  for (int i = 0; i < units.size(); i++) remIndices.insert(i);
+  if (remIndices.size() >= Nmax) return Clusterer::greedyClusterBruteForce(units, remIndices, rmsdCut);
+
+  while (remIndices.size() > Nmax) {
+    // sub-sample Nmax elements
+    set<int> subSample = Clusterer::randomSubsample(remIndices, Nmax);
+
+    // get the top cluster from these and use its centroid
+    vector<int> topClustSub = Clusterer::greedyClusterBruteForce(units, subSample, rmsdCut, 1)[0];
+    vector<int> topClust = Clusterer::elementsWithin(units, remIndices, topClustSub[0], rmsdCut);
+
+    // now try to grow the cluster by improving the centroid, if there are compute cycles left
+    int Ntry = int(round(Nmax * Nmax * 1.0 / remIndices.size()));
+    for (int i = 1; i <= MstUtils::min(Ntry, (int) topClust.size()-1); i++) {
+      vector<int> newTopClust = Clusterer::elementsWithin(units, remIndices, topClust[i], rmsdCut);
+      if (newTopClust.size() > topClust.size()) topClust = newTopClust;
+    }
+
+    // keep whatever cluster end up with, exclude its elements
+    clusters.push_back(topClust);
+    for (int i = 0; i < topClust.size(); i++) remIndices.erase(topClust[i]);
+  }
+
+  // brute force through the rest
+  vector<vector<int> > remClusters = greedyClusterBruteForce(units, remIndices, rmsdCut);
+  clusters.insert(clusters.end(), remClusters.begin(), remClusters.end());
+  return clusters;
+}
+
+vector<vector<int> > Clusterer::greedyClusterBruteForce(const vector<vector<Atom*> >& units, set<int> remIndices, real rmsdCut, int nClusts) {
+  vector<vector<int> > clusters;
+  while (remIndices.size() != 0) {
+    // pick the best current centroid
+    vector<int> bestClust;
+    for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
+      vector<int> clust = elementsWithin(units, remIndices, *it, rmsdCut);
+      if (clust.size() > bestClust.size()) bestClust = clust;
+    }
+
+    // add its corresponding cluster
+    clusters.push_back(bestClust);
+    for (int i = 0; i < bestClust.size(); i++) remIndices.erase(bestClust[i]);
+
+    // where we asked for at most the top some number of clusters?
+    if ((nClusts > 0) && (clusters.size() >= nClusts)) break;
+  }
+  return clusters;
+}
+
+vector<int> Clusterer::elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, int from, real rmsdCut) {
+  vector<int> neigh; vector<real> rmsds;
+  const vector<Atom*>& fromUnit = units[from];
+  RMSDCalculator rCalc;
+  for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
+    real r = rCalc.bestRMSD(fromUnit, units[*it]);
+    if (r <= rmsdCut) {
+      neigh.push_back(*it);
+      rmsds.push_back(r);
+    }
+  }
+
+  // sort by ascending RMSD
+  vector<int> si = MstUtils::sortIndices(rmsds);
+  vector<int> orderedNeigh = neigh;
+  for (int i = 0; i < si.size(); i++) {
+    orderedNeigh[i] = neigh[si[i]];
+  }
+
+  return orderedNeigh;
+}
+
+set<int> Clusterer::randomSubsample(set<int>& indices, int N) {
+  if (N > indices.size())
+    MstUtils::error("asked for a subsample of " + MstUtils::toString(N) + " elements from an array of " + MstUtils::toString(indices.size()) + " elements", "Clusterer::randomSubsample");
+
+  vector<int> inds(indices.size(), 0);
+  int k = 0;
+  for (auto it = indices.begin(); it != indices.end(); ++it) {
+    inds[k] = *it; k++;
+  }
+  MstUtils::shuffle(inds);
+
+  set<int> sub;
+  for (int i = 0; i < N; i++) sub.insert(inds[i]);
+  return sub;
+}
+
 /* --------- MstUtils --------- */
 void MstUtils::openFile (fstream& fs, string filename, ios_base::openmode mode, string from) {
   fs.open(filename.c_str(), mode);

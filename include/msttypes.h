@@ -11,7 +11,9 @@
 #include <iomanip>
 #include <vector>
 #include <map>
+#include <set>
 #include <limits>
+#include <algorithm>
 #include <math.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -647,6 +649,29 @@ class DecoratedProximitySearch : public ProximitySearch {
     vector<T> tags;
 };
 
+
+class Clusterer {
+  public:
+    /* Will greedy cluster the given set of units (must all have the same number of atoms),
+     * using the given RMSD cutoff, while making sure that no more than Nmax x Nmax RMSD
+     * computations are done per iteration. So, if the number of units is below Nmax, a
+     * normal greedy clustering will be performed. However, if above Nmax, then will try
+     * be further greedy and find best centroids without ever doing all-by-all comparisons. */
+    vector<vector<int> > greedyCluster(const vector<vector<Atom*> >& units, real rmsdCut, int Nmax = 10000);
+
+
+  protected:
+    // these functions are protected because they assume that the cache of pre-
+    // computed RMSDs is in a good state (so don't want external calls)
+    vector<vector<int> > greedyClusterBruteForce(const vector<vector<Atom*> >& units, set<int> remIndices, real rmsdCut, int nClusts = -1);
+    vector<int> elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, int from, real rmsdCut);
+    set<int> randomSubsample(set<int>& indices, int N);
+
+  private:
+    // won't cache for now (need careful memory management)
+    map<int, map<int, real > > coputedRMSDs;
+};
+
 }
 
 /* Utilities class, with a bunch of useful static functions, is defined outside of the MST namespace because:
@@ -680,7 +705,6 @@ class MstUtils {
     static bool isDir(const char *filename);
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
-
     static string readNullTerminatedString(fstream& ifs);
 
     // returns a random number in the range [lower, upper]
@@ -688,7 +712,7 @@ class MstUtils {
     // returns a random number in the range [0, upper) (convenient for generating random array subscripts)
     static int randInt(int upper) { return randInt(0, upper - 1); }
     // random number in the unit range 0 and 1
-    static MST::real randUnit() { return ((MST::real) rand() / (RAND_MAX)); }
+    static MST::real randUnit() { return ((MST::real) rand() / RAND_MAX); }
 
     template <class T>
     static string toString(T obj) { return toString(&obj); }
@@ -710,6 +734,10 @@ class MstUtils {
     static T max(const vector<T>& vec, int beg = -1, int end = -1, int* maxIndex = NULL);
     template <class T>
     static bool closeEnough(const T& a, const T& b, const T& epsilon = std::numeric_limits<T>::epsilon());
+
+    // randomly shuffle the array in place using the Fisher-Yates shuffle
+    template <class T>
+    static void shuffle(vector<T>& vec);
 };
 
 template <class T>
@@ -802,6 +830,16 @@ T MstUtils::max(const vector<T>& vec, int beg, int end, int* maxIndex) {
 template <class T>
 bool MstUtils::closeEnough(const T& a, const T& b, const T& epsilon) {
   return (a - b > -epsilon) && (a - b < epsilon);
+}
+
+template <class T>
+void MstUtils::shuffle(vector<T>& vec) {
+  int i, j, tmp;
+  for (i = vec.size() - 1; i >= 0; i--) {
+    j = MstUtils::randInt(0, i);
+    if (i == j) continue;
+    tmp = vec[i]; vec[i] = vec[j]; vec[j] = tmp;
+  }
 }
 
 #endif

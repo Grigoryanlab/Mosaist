@@ -19,7 +19,7 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
       if (simplex(i, i) == 0) {
         simplex(i, i) = 0.00025; // default value
       } else {
-        simplex(i, i) = 1.05 * simplex(i, i); // add 5%
+        simplex(i, i) = 1.1 * simplex(i, i); // add 10%
       }
     }
     values(i) = E.eval(simplex.row(i));

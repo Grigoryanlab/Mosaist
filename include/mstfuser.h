@@ -52,6 +52,10 @@ class fusionEvaluator: public optimizerEvaluator {
   };
 
   protected:
+    AtomPointerVector atomInstances(int ri, const string& ai);
+    real bondInitValue(int ri, int rj, const string& ai, const string& aj);
+    real angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak);
+    real dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al);
     CartesianPoint bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache = false);
     CartesianPoint angleInstances(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak, bool addToCache = false);
     CartesianPoint dihedralInstances(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al, bool addToCache = false);
@@ -92,7 +96,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
     double kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     vector<double> initPoint;
-    bool verbose;
+    bool verbose, startWithMean;
     real noise;
 };
 
