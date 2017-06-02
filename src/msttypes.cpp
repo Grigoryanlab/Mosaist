@@ -450,7 +450,7 @@ void Structure::addAtom(Atom* A) {
   }
 
   // is there a residue matching the Atoms parent residue? If not, create one.
-  newResidue = newChain->findResidue(oldResidue->getName(), oldResidue->getNum());
+  newResidue = newChain->findResidue(oldResidue->getName(), oldResidue->getNum(), oldResidue->getIcode());
   if (newResidue == NULL) {
     newResidue = new Residue(oldResidue->getName(), oldResidue->getNum(), oldResidue->getIcode());
     newChain->appendResidue(newResidue);

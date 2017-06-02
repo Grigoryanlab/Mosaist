@@ -15,22 +15,18 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
                       " is out of range", "fusionEvaluator::fusionEvaluator");
       fixed[fixedResidues[i]] = true;
   }
-  numMobileAtoms = 4*(resTopo.size() - fixedResidues.size());
+  numMobileAtoms = bba.size()*(resTopo.size() - fixedResidues.size());
   anchorRes = (fixedResidues.size() > 0) ? MstUtils::min(fixedResidues) : -1;
 
   // create room for fused structure (initialize with average coordinates)
   fused.appendChain(new Chain());
   for (int i = 0; i < resTopo.size(); i++) {
-    if (fixed[i]) {
-      if (resTopo[i].size() != 1) MstUtils::error("residue index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
-      fused[0].appendResidue(new Residue(*(resTopo[i][0])));
-    } else {
-      Residue* res = new Residue();
-      fused[0].appendResidue(res);
-      for (int j = 0; j < bba.size(); j++) {
-        CartesianPoint m = atomInstances(i, bba[j]).getGeometricCenter();
-        res->appendAtom(new Atom(1, bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
-      }
+    if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("residue index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
+    Residue* res = new Residue();
+    fused[0].appendResidue(res);
+    for (int j = 0; j < bba.size(); j++) {
+      CartesianPoint m = atomInstances(i, bba[j]).getGeometricCenter();
+      res->appendAtom(new Atom(1, bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
     }
   }
   fused.renumber();
@@ -69,7 +65,8 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
 
   // other initial parameters
   verbose = _verbose;
-  startWithMean = true; // start optimization from the averaged structure
+  optimCartesian = true; // optimize cartesian coordinates?
+  startWithMean = true;  // start optimization from the averaged structure; this is implied if optimCartesian is true
   noise = 0; // the first time we provide a guess point, just take means (later can try noisy start points)
 
   // initialize the random number number generator
@@ -81,132 +78,157 @@ double fusionEvaluator::eval(const vector<double>& point) {
   bool init = point.empty();
   if (init) initPoint.resize(0);
   real bR = 0.01; real aR = 1.0; real dR = 1.0; // randomness scale factors
-
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
-  // -- build the fused backbone, atom by atom
+  int k = 0;
+  Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;
+
   Chain& F = fused[0];
-  int k = 0;                 // parameter index
-  Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;  // the previous three placed atoms
-  // build forward
-  int startIdx = isAnchored() ? anchorRes : 0;
-  for (int i = startIdx; i < F.residueSize(); i++) {
-    Residue& res = F[i];
-    Atom* N = &(res[0]);
-    Atom* CA = &(res[1]);
-    Atom* C = &(res[2]);
-    Atom* O = &(res[3]);
-    if (!fixed[i]) {
-      if ((i == 0) && !isAnchored()) {
-        if (init) {
-          initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
-          initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
-          initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
-        } else {
-          double d0 = point[k]; k++;
-          double d1 = point[k]; k++;
-          double a0 = point[k]; k++;
-          N->setCoor(0.0, 0.0, 0.0);
-          CA->setCoor(d0, 0.0, 0.0);
-          C->setCoor(d0 - d1*cos(a0), d1*sin(a0), 0.0);
+  if (optimCartesian) {
+    if (init) {
+      for (int i = 0; i < F.residueSize(); i++) {
+        if (fixed[i]) continue;
+        Residue& res = F[i];
+        for (int j = 0; j < res.atomSize(); j++) {
+          initPoint.push_back(res[j].getX());
+          initPoint.push_back(res[j].getY());
+          initPoint.push_back(res[j].getZ());
         }
-      } else {
-        // place N relative to pN, pCA, pC
-        if (init) {
-          initPoint.push_back(bondInitValue(i-1, i, "C", "N") + bR * MstUtils::randUnit() * noise);
-          initPoint.push_back(angleInitValue(i-1, i-1, i, "CA", "C", "N") + aR * MstUtils::randUnit() * noise);
-          initPoint.push_back(dihedralInitValue(i-1, i-1, i-1, i, "N", "CA", "C", "N") + dR * MstUtils::randUnit() * noise);
-        } else {
-          N->build(pC, pCA, pN, point[k], point[k+1], point[k+2]); k += 3;
+      }
+    } else {
+      k = 0;
+      for (int i = 0; i < F.residueSize(); i++) {
+        if (fixed[i]) continue;
+        Residue& res = F[i];
+        for (int j = 0; j < res.atomSize(); j++) {
+          res[j].setX(point[k]); k++;
+          res[j].setY(point[k]); k++;
+          res[j].setZ(point[k]); k++;
         }
-
-        // place CA relative to pCA, pC, N
-        if (init) {
-          initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
-          initPoint.push_back(angleInitValue(i-1, i, i, "C", "N", "CA") + aR * MstUtils::randUnit() * noise);
-          initPoint.push_back(dihedralInitValue(i-1, i-1, i, i, "CA", "C", "N", "CA") + dR * MstUtils::randUnit() * noise);
-        } else {
-          CA->build(N, pC, pCA, point[k], point[k+1], point[k+2]); k += 3;
-        }
-
-        // place C relative to pC, N, CA
-        if (init) {
-          initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
-          initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
-          initPoint.push_back(dihedralInitValue(i-1, i, i, i, "C", "N", "CA", "C") + dR * MstUtils::randUnit() * noise);
-        } else {
-          C->build(CA, N, pC, point[k], point[k+1], point[k+2]); k += 3;
-        }
-
-        // if this is the last residue, place the O relative to N-CA-C
-        if (i == F.residueSize() - 1) {
+      }
+    }
+  } else {
+    // -- build the fused backbone, atom by atom
+    // build forward
+    int startIdx = isAnchored() ? anchorRes : 0;
+    for (int i = startIdx; i < F.residueSize(); i++) {
+      Residue& res = F[i];
+      Atom* N = &(res[0]);
+      Atom* CA = &(res[1]);
+      Atom* C = &(res[2]);
+      Atom* O = &(res[3]);
+      if (!fixed[i]) {
+        if ((i == 0) && !isAnchored()) {
           if (init) {
-            initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
-            initPoint.push_back(angleInitValue(i, i, i, "CA", "C", "O") + aR * MstUtils::randUnit() * noise);
-            initPoint.push_back(dihedralInitValue(i, i, i, i, "N", "CA", "C", "O") + dR * MstUtils::randUnit() * noise);
+            initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
           } else {
-            O->build(C, CA, N, point[k], point[k+1], point[k+2]); k += 3;
+            double d0 = point[k]; k++;
+            double d1 = point[k]; k++;
+            double a0 = point[k]; k++;
+            N->setCoor(0.0, 0.0, 0.0);
+            CA->setCoor(d0, 0.0, 0.0);
+            C->setCoor(d0 - d1*cos(a0), d1*sin(a0), 0.0);
+          }
+        } else {
+          // place N relative to pN, pCA, pC
+          if (init) {
+            initPoint.push_back(bondInitValue(i-1, i, "C", "N") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i-1, i-1, i, "CA", "C", "N") + aR * MstUtils::randUnit() * noise);
+            initPoint.push_back(dihedralInitValue(i-1, i-1, i-1, i, "N", "CA", "C", "N") + dR * MstUtils::randUnit() * noise);
+          } else {
+            N->build(pC, pCA, pN, point[k], point[k+1], point[k+2]); k += 3;
+          }
+
+          // place CA relative to pCA, pC, N
+          if (init) {
+            initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i-1, i, i, "C", "N", "CA") + aR * MstUtils::randUnit() * noise);
+            initPoint.push_back(dihedralInitValue(i-1, i-1, i, i, "CA", "C", "N", "CA") + dR * MstUtils::randUnit() * noise);
+          } else {
+            CA->build(N, pC, pCA, point[k], point[k+1], point[k+2]); k += 3;
+          }
+
+          // place C relative to pC, N, CA
+          if (init) {
+            initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
+            initPoint.push_back(dihedralInitValue(i-1, i, i, i, "C", "N", "CA", "C") + dR * MstUtils::randUnit() * noise);
+          } else {
+            C->build(CA, N, pC, point[k], point[k+1], point[k+2]); k += 3;
+          }
+
+          // if this is the last residue, place the O relative to N-CA-C
+          if (i == F.residueSize() - 1) {
+            if (init) {
+              initPoint.push_back(bondInitValue(i, i, "C", "O", true) + bR * MstUtils::randUnit() * noise);
+              initPoint.push_back(angleInitValue(i, i, i, "CA", "C", "O") + aR * MstUtils::randUnit() * noise);
+              initPoint.push_back(dihedralInitValue(i, i, i, i, "N", "CA", "C", "O") + dR * MstUtils::randUnit() * noise);
+            } else {
+              O->build(C, CA, N, point[k], point[k+1], point[k+2]); k += 3;
+            }
           }
         }
       }
+      // place previous O relative to pCA, N, pC (an improper)
+      if ((i > startIdx) && !fixed[i-1]) {
+        if (init) {
+          initPoint.push_back(bondInitValue(i-1, i-1, "C", "O", true) + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i, i-1, i-1, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i-1, i, i-1, i-1, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
+        } else {
+          pO->build(pC, N, pCA, point[k], point[k+1], point[k+2]); k += 3;
+        }
+      }
+      pN = N; pCA = CA; pC = C; pO = O;
     }
-    // place previous O relative to pCA, N, pC (an improper)
-    if ((i > startIdx) && !fixed[i-1]) {
-      if (init) {
-        initPoint.push_back(bondInitValue(i-1, i-1, "C", "O") + bR * MstUtils::randUnit() * noise);
-        initPoint.push_back(angleInitValue(i, i-1, i-1, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
-        initPoint.push_back(dihedralInitValue(i-1, i, i-1, i-1, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
-      } else {
-        pO->build(pC, N, pCA, point[k], point[k+1], point[k+2]); k += 3;
+
+    // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
+    for (int i = anchorRes; i >= 0; i--) {
+      Residue& res = F[i];
+      Atom* N = &(res[0]);
+      Atom* CA = &(res[1]);
+      Atom* C = &(res[2]);
+      Atom* O = &(res[3]);
+      if (!fixed[i]) {
+        // place C relative to pC, pCA, pN
+        if (init) {
+          initPoint.push_back(bondInitValue(i+1, i, "N", "C") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i+1, i+1, i, "CA", "N", "C") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i+1, i+1, i+1, i, "C", "CA", "N", "C") + dR * MstUtils::randUnit() * noise);
+        } else {
+          C->build(pN, pCA, pC, point[k], point[k+1], point[k+2]); k += 3;
+        }
+
+        // place CA relative to pCA, pN, C
+        if (init) {
+          initPoint.push_back(bondInitValue(i, i, "C", "CA") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "CA") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i+1, i+1, i, i, "CA", "N", "C", "CA") + dR * MstUtils::randUnit() * noise);
+        } else {
+          CA->build(C, pN, pCA, point[k], point[k+1], point[k+2]); k += 3;
+        }
+
+        // place N relative to pN, C, CA
+        if (init) {
+          initPoint.push_back(bondInitValue(i, i, "CA", "N") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i, i, i, "C", "CA", "N") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i+1, i, i, i, "N", "C", "CA", "N") + dR * MstUtils::randUnit() * noise);
+        } else {
+          N->build(CA, C, pN, point[k], point[k+1], point[k+2]); k += 3;
+        }
+
+        // place O relative to pCA, pN, C (an improper)
+        if (init) {
+          initPoint.push_back(bondInitValue(i, i, "C", "O", true) + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i, i+1, i, i, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
+        } else {
+          O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
+        }
       }
+      pN = N; pCA = CA; pC = C; pO = O;
     }
-    pN = N; pCA = CA; pC = C; pO = O;
-  }
-
-  // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
-  for (int i = anchorRes; i >= 0; i--) {
-    Residue& res = F[i];
-    Atom* N = &(res[0]);
-    Atom* CA = &(res[1]);
-    Atom* C = &(res[2]);
-    Atom* O = &(res[3]);
-    if (!fixed[i]) {
-      // place C relative to pC, pCA, pN
-      if (init) {
-        initPoint.push_back(bondInitValue(i+1, i, "N", "C") + bR * MstUtils::randUnit() * noise);
-        initPoint.push_back(angleInitValue(i+1, i+1, i, "CA", "N", "C") + aR * MstUtils::randUnit() * noise);
-        initPoint.push_back(dihedralInitValue(i+1, i+1, i+1, i, "C", "CA", "N", "C") + dR * MstUtils::randUnit() * noise);
-      } else {
-        C->build(pN, pCA, pC, point[k], point[k+1], point[k+2]); k += 3;
-      }
-
-      // place CA relative to pCA, pN, C
-      if (init) {
-        initPoint.push_back(bondInitValue(i, i, "C", "CA") + bR * MstUtils::randUnit() * noise);
-        initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "CA") + aR * MstUtils::randUnit() * noise);
-        initPoint.push_back(dihedralInitValue(i+1, i+1, i, i, "CA", "N", "C", "CA") + dR * MstUtils::randUnit() * noise);
-      } else {
-        CA->build(C, pN, pCA, point[k], point[k+1], point[k+2]); k += 3;
-      }
-
-      // place N relative to pN, C, CA
-      if (init) {
-        initPoint.push_back(bondInitValue(i, i, "CA", "N") + bR * MstUtils::randUnit() * noise);
-        initPoint.push_back(angleInitValue(i, i, i, "C", "CA", "N") + aR * MstUtils::randUnit() * noise);
-        initPoint.push_back(dihedralInitValue(i+1, i, i, i, "N", "C", "CA", "N") + dR * MstUtils::randUnit() * noise);
-      } else {
-        N->build(CA, C, pN, point[k], point[k+1], point[k+2]); k += 3;
-      }
-
-      // place O relative to pCA, pN, C (an improper)
-      if (init) {
-        initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
-        initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
-        initPoint.push_back(dihedralInitValue(i, i+1, i, i, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
-      } else {
-        O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
-      }
-    }
-    pN = N; pCA = CA; pC = C; pO = O;
   }
 
   // compute penalty for out-of-range parameters (based on the built struct)
@@ -303,8 +325,8 @@ AtomPointerVector fusionEvaluator::atomInstances(int ri, const string& ai) {
   return atoms;
 }
 
-real fusionEvaluator::bondInitValue(int ri, int rj, const string& ai, const string& aj) {
-  if (startWithMean) {
+real fusionEvaluator::bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean) {
+  if (startWithMean && !negateStartWithMean) {
     return (fused.getResidue(ri).findAtom(ai))->distance(fused.getResidue(rj).findAtom(aj));
   }
   return bondInstances(ri, rj, ai, aj).mean();

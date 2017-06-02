@@ -28,7 +28,10 @@ class fusionEvaluator: public optimizerEvaluator {
     bool isAnchored() { return anchorRes >= 0; }
     int numDF() {
       int df = 3*numMobileAtoms - 6;
-      if (isAnchored()) df += 6;
+      // TODO: for now, use 3N degrees of freedom when optimizing in XYZ; will change
+      // later (need to position the initial conformation so that the first three
+      // atoms are in their stardard orientations)
+      if (isAnchored() || optimCartesian) df += 6;
       return df;
     }
     int getAnchor() { return anchorRes; }
@@ -53,7 +56,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
   protected:
     AtomPointerVector atomInstances(int ri, const string& ai);
-    real bondInitValue(int ri, int rj, const string& ai, const string& aj);
+    real bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean = false);
     real angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak);
     real dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al);
     CartesianPoint bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache = false);
@@ -96,7 +99,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
     double kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     vector<double> initPoint;
-    bool verbose, startWithMean;
+    bool verbose, startWithMean, optimCartesian;
     real noise;
 };
 
