@@ -2,6 +2,21 @@
 
 using namespace MST;
 
+vector<double> optimizerEvaluator::finiteDifferenceGradient(const vector<double>& point, vector<double> eps) {
+  vector<double> grad(point.size(), 0);
+  vector<double> p = point;
+  if (eps.empty()) eps = vector<double>(point.size(), 10E-7);
+  double a, b;
+  for (int i = 0; i < grad.size(); i++) {
+    p[i] = point[i] - eps[i];
+    a = eval(p);
+    p[i] = point[i] + eps[i];
+    b = eval(p);
+    grad[i] = (b - a)/(2*eps[i]);
+  }
+  return grad;
+}
+
 double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& solution, bool verbose) {
   double tol = 10E-6;
   Matrix x0(E.guessPoint()); // row vector
@@ -42,14 +57,6 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
 
     // center of the current simplex
     Matrix m = simplex.mean(1);
-
-    // quit if the current simplex is too small (stopping criterion by Dennis and Woods (1987))
-    // bool tooSmall = true;
-    // real d = max(1.0, simplex.row(0).norm());
-    // for (int i = 1; i < simplex.size(); i++) {
-    //   if ((simplex.row(0) - simplex.row(i)).norm() / d > 10E-4) { tooSmall = false; break; }
-    // }
-    // if (tooSmall) break;
 
     // quit if the current simplex is too small
     bool tooSmall = true;
@@ -122,4 +129,24 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
   double bestScore = MstUtils::min((vector<real>) values, -1, -1, &bestPoint);
   solution = simplex.row(bestPoint);
   return bestScore;
+}
+
+double Optim::gradDescent(optimizerEvaluator& E, vector<double>& solution, int numIters, double tol, bool verbose) {
+  vector<double> x0(E.guessPoint()), x1;
+  double gamma = 0.001;      // initial step size (gradient descent rate)
+  double v0, v1;
+  vector<double> grad0, grad1;
+  Matrix deltaGrad(x0.size(), 1);
+
+  v0 = E.eval(x0, grad0);
+  for (int i = 0; i < numIters; i++) {
+    x1 = x0 - gamma * grad0;
+    v1 = E.eval(x1, grad1);
+    deltaGrad = Matrix(grad1, true) - Matrix(grad0, true);
+    gamma = (Matrix(x1) - Matrix(x0)) * deltaGrad/deltaGrad.norm2();
+    if (gamma < tol) break;
+    x0 = x1; v0 = v1; grad0 = grad1;
+  }
+  solution = x0;
+  return v0;
 }

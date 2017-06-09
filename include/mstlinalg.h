@@ -22,8 +22,6 @@ class Matrix {
     int numCols() const { return size(2); }
     real& operator()(int i, int j) { return *(M[i][j]); }
     real operator()(int i, int j) const { return *(M[i][j]); }
-    real& operator()(int i) { return *(M[i][0]); }
-    real operator()(int i) const { return *(M[i][0]); }
 
     Matrix& operator=(const Matrix& _M);
     Matrix& operator/=(const real& s);
@@ -67,10 +65,21 @@ class Matrix {
     Matrix(const vector<vector<real*> >& _M, int rowBeg = 0, int rowEnd = -1, int colBeg = 0, int colEnd = -1);
     void setOwnFlag(bool _own) { own = _own; }
     bool getOwnFlag() { return own; }
-
-  private:
     vector<vector<real*> > M;
     bool own;                  // do I own the data in the matrix, or is my matrix a sub-matrix from some other matrix?
+};
+
+class Vector : public Matrix {
+  public:
+    Vector(int numel, real val = 0.0, bool col = false) : Matrix(vector<real>(numel, val), col) {}
+    Vector(const vector<real>& p, bool col = false) : Matrix(p, col) {}
+    Vector(const Vector& V) : Matrix(V) {}
+
+    bool isRow() const { return numRows() >= numCols(); }
+    bool isColumn() const { return numRows() <= numCols(); }
+    real& operator()(int i) { return isRow() ? *(M[0][i]) : *(M[i][0]); }
+    real operator()(int i) const { return isRow() ? *(M[0][i]) : *(M[i][0]); }
+
 };
 
 }
