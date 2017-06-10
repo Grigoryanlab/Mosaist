@@ -90,6 +90,6 @@ int main(int argc, char *argv[]) {
 		cout << endl;
 	}
 
-	Structure fusedStruct = Fuser::fuse(residues, vector<int>(1, 0), 10000, 2, true);
+	Structure fusedStruct = Fuser::fuse(residues, vector<int>(1, 0), 1000, 2, true);
 	fusedStruct.writePDB(outBase + ".fused1.pdb");
 }

@@ -23,6 +23,12 @@ class Matrix {
     real& operator()(int i, int j) { return *(M[i][j]); }
     real operator()(int i, int j) const { return *(M[i][j]); }
 
+    // single-subscript access (column-major order, as in Matlab)
+    real& operator()(int i) { int n = numRows(); return *(M[i % n][i / n]); }
+    real operator()(int i) const { int n = numRows(); return *(M[i % n][i / n]); }
+    real& operator[](int i) { int n = numRows(); return *(M[i % n][i / n]); }
+    real operator[](int i) const { int n = numRows(); return *(M[i % n][i / n]); }
+
     Matrix& operator=(const Matrix& _M);
     Matrix& operator/=(const real& s);
     Matrix& operator*=(const real& s);
@@ -65,21 +71,19 @@ class Matrix {
     Matrix(const vector<vector<real*> >& _M, int rowBeg = 0, int rowEnd = -1, int colBeg = 0, int colEnd = -1);
     void setOwnFlag(bool _own) { own = _own; }
     bool getOwnFlag() { return own; }
+    void clear();
     vector<vector<real*> > M;
     bool own;                  // do I own the data in the matrix, or is my matrix a sub-matrix from some other matrix?
 };
 
+// A convenience class. A Vector is really just a Matrix, with one of the
+// dimensions required to be unity.
 class Vector : public Matrix {
   public:
     Vector(int numel, real val = 0.0, bool col = false) : Matrix(vector<real>(numel, val), col) {}
     Vector(const vector<real>& p, bool col = false) : Matrix(p, col) {}
     Vector(const Vector& V) : Matrix(V) {}
-
-    bool isRow() const { return numRows() >= numCols(); }
-    bool isColumn() const { return numRows() <= numCols(); }
-    real& operator()(int i) { return isRow() ? *(M[0][i]) : *(M[i][0]); }
-    real operator()(int i) const { return isRow() ? *(M[0][i]) : *(M[i][0]); }
-
+    Vector(const Matrix& _M) : Matrix(_M) { MstUtils::assert((_M.numRows() == 1) || (_M.numCols() == 1), "cannot construct a vector from a matrix with non-unitary dimensions", "Vector::Vector(const Matrix& _M)"); }
 };
 
 }

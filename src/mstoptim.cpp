@@ -2,16 +2,17 @@
 
 using namespace MST;
 
-vector<double> optimizerEvaluator::finiteDifferenceGradient(const vector<double>& point, vector<double> eps) {
-  vector<double> grad(point.size(), 0);
+Vector optimizerEvaluator::finiteDifferenceGradient(const vector<double>& point, vector<double> eps) {
+  Vector grad(point.size(), 0);
   vector<double> p = point;
-  if (eps.empty()) eps = vector<double>(point.size(), 10E-7);
+  if (eps.empty()) eps = vector<double>(point.size(), 10E-6);
   double a, b;
-  for (int i = 0; i < grad.size(); i++) {
+  for (int i = 0; i < grad.length(); i++) {
     p[i] = point[i] - eps[i];
     a = eval(p);
     p[i] = point[i] + eps[i];
     b = eval(p);
+    p[i] = point[i];
     grad[i] = (b - a)/(2*eps[i]);
   }
   return grad;
@@ -132,20 +133,19 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
 }
 
 double Optim::gradDescent(optimizerEvaluator& E, vector<double>& solution, int numIters, double tol, bool verbose) {
-  vector<double> x0(E.guessPoint()), x1;
+  Vector x0(E.guessPoint());
+  Vector x1(x0);
   double gamma = 0.001;      // initial step size (gradient descent rate)
   double v0, v1;
-  vector<double> grad0, grad1;
-  Matrix deltaGrad(x0.size(), 1);
+  Vector g0(x0.length()), g1(x0.length());
 
-  v0 = E.eval(x0, grad0);
+  v0 = E.eval(x0, g0);
   for (int i = 0; i < numIters; i++) {
-    x1 = x0 - gamma * grad0;
-    v1 = E.eval(x1, grad1);
-    deltaGrad = Matrix(grad1, true) - Matrix(grad0, true);
-    gamma = (Matrix(x1) - Matrix(x0)) * deltaGrad/deltaGrad.norm2();
-    if (gamma < tol) break;
-    x0 = x1; v0 = v1; grad0 = grad1;
+    if (verbose) printf("gradient descent %d: %e (gamma = %e)\n", i+1, v0, gamma);
+    x1 = x0 - gamma * g0;
+    v1 = E.eval(x1, g1);
+    if (fabs(v0 - v1) < tol) break;
+    x0 = x1; v0 = v1; g0 = g1;
   }
   solution = x0;
   return v0;

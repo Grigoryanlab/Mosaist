@@ -464,15 +464,21 @@ Transform TransformFactory::alignVectorWithZAxis(CartesianPoint& p) {
 }
 
 Transform TransformFactory::switchFrames(const Frame& _from, const Frame& _to) {
-  // the procedure will be simple enough:
-  // 1. change of basis from _from to the standard basis (laboratory basis)
-  // 2. inverse change of basis from _to to the standard basis
-  // 3. express origin of _from relative to the origin of _to
+  /* The procedure will be simple enough:
+   * 1. change of basis from _from to the standard basis (laboratory basis)
+   * 2. adjust origin
+   * 3. inverse change of basis from _to to the standard basis
+   * Two things always confuse me at first, to explaining for clarity:
+   * a. it is fromOrigin minus toOrigin because coordinates should change in the
+   *    opposite direction of the origin change.
+   * b. the update of origins is between the two change of bases because the
+   *    coordinates of the origins in both to and from bases are relative to the
+   *    laboratory frame. */
   Transform T1(_from.getX(), _from.getY(), _from.getZ(), Transform::byColumn);
   Transform T2(_to.getX(), _to.getY(), _to.getZ(), Transform::byColumn);
   CartesianPoint ori = _from.getO() - _to.getO();
 
-  return translate(ori) * (T2.inverse()) * T1;
+  return  (T2.inverse()) * translate(ori) * T1;
 }
 
 

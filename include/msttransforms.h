@@ -130,7 +130,7 @@ class TransformFactory {
     static Transform alignVectorWithZAxis(CartesianPoint& p);
 
     // this transformation, when applied to points with coordinates in the from Frame
-    // will produce coordinates of corresponding the same points but in the to Frame
+    // will produce coordinates corresponding the same points but in the to Frame
     static Transform switchFrames(const Frame& from, const Frame& to);
 
     static const real degreesToRadians;

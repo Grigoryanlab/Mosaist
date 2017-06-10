@@ -3,6 +3,7 @@
 
 #include "msttypes.h"
 #include "mstoptim.h"
+#include "msttransforms.h"
 #include <chrono>
 
 using namespace std;
@@ -24,34 +25,37 @@ class fusionEvaluator: public optimizerEvaluator {
 
     double eval(const vector<double>& point);
 
-    vector<double> guessPoint() { eval(vector<double>()); return initPoint; }
-    bool isAnchored() { return anchorRes >= 0; }
+    vector<double> guessPoint() { if (initPoint.empty()) eval(vector<double>()); return initPoint; }
+    void setGuessPoint(const vector<double>& _initPoint) { initPoint = _initPoint; }
+    void noisifyGuessPoint(real _noise = 1.0) { noise = _noise; initPoint.resize(0); }
+    int numResidues() { return overlappingResidues.size(); }
+    bool isAnchored() { return fixedResidues.size() > 0; }
     int numDF() {
       int df = 3*numMobileAtoms - 6;
       // TODO: for now, use 3N degrees of freedom when optimizing in XYZ; will change
       // later (need to position the initial conformation so that the first three
       // atoms are in their stardard orientations)
-      if (isAnchored() || optimCartesian) df += 6;
+      if (isAnchored()) df += 6;
       return df;
     }
-    int getAnchor() { return anchorRes; }
-    void setAnchor(int _anchorRes) { anchorRes = _anchorRes; }
+    int getBuildOrigin() { return buildOriginRes; }
+    void setBuildOrigin(int _buildOriginRes) { buildOriginRes = _buildOriginRes; }
     Structure getStructure() { return fused; }
     void setVerbose(bool _verbose) { verbose = _verbose; }
-    int randomizeAnchor() {
-      anchorRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : -1;
-      return anchorRes;
+    int randomizeBuildOrigin() {
+      buildOriginRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : MstUtils::randInt(0, numResidues() - 1);
+      return buildOriginRes;
     }
-    void noisifyGuessPoint(real _noise = 1.0) { noise = _noise; }
 
   class icBound {
     public:
-      icBound(icType _type, real _minVal, real _maxVal) { type = _type; minVal = _minVal; maxVal = _maxVal; }
-      icBound(icType _type, const pair<real, real>& b) { type = _type; minVal = b.first; maxVal = b.second; }
-      icBound(const icBound& icb) { type = icb.type; minVal = icb.minVal; maxVal = icb.maxVal; }
+      icBound(icType _type, real _minVal, real _maxVal, string _name = "") { type = _type; minVal = _minVal; maxVal = _maxVal; name = _name; }
+      icBound(icType _type, const pair<real, real>& b, string _name = "") { type = _type; minVal = b.first; maxVal = b.second; name = _name; }
+      icBound(const icBound& icb) { type = icb.type; minVal = icb.minVal; maxVal = icb.maxVal; name = icb.name; }
 
       icType type;
       real minVal, maxVal;
+      string name;
   };
 
   protected:
@@ -71,7 +75,7 @@ class fusionEvaluator: public optimizerEvaluator {
     vector<bool> fixed; // marks whether each residue is to be fixed or not
     vector<int> fixedResidues; // just a list of fixed residue indices. this is
                                // redundant with the above, but helpful to have
-    int anchorRes;      // index one of the fixed residues, which will be used
+    int buildOriginRes;      // index one of the fixed residues, which will be used
                         // to start placing all other atoms. If there are no
                         // fixed residues, this index is set to -1;
     int numMobileAtoms; // number of non-fixed atoms
@@ -105,28 +109,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
 class Fuser {
   public:
-    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Ni = 1000, int Nc = 2, bool verbose = false) {
-      fusionEvaluator E(resTopo, fixed);
-      vector<double> bestSolution;
-      double bestScore = Optim::fminsearch(E, Ni, bestSolution);
-      int bestAnchor = E.getAnchor();
-      if (verbose) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
-      E.noisifyGuessPoint(0.2);
-      for (int i = 0; i < Nc-1; i++) {
-        vector<double> solution;
-        int anchor = E.randomizeAnchor();
-        double score = Optim::fminsearch(E, Ni, solution);
-        if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = anchor; }
-        if (verbose) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
-      }
-      E.setAnchor(bestAnchor);
-      if (verbose) {
-        cout << "best score = " << bestScore << ":" << endl;
-        E.setVerbose(true);
-      }
-      E.eval(bestSolution);
-      return E.getStructure();
-    }
+    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Ni = 100, int Nc = 1, bool verbose = false);
 };
 
 

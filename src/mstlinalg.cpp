@@ -5,13 +5,7 @@ using namespace MST;
 /* --------- Matrix --------- */
 
 Matrix::~Matrix() {
-  if (own) {
-    for (int i = 0; i < M.size(); i++) {
-      for (int j = 0; j < M[i].size(); j++) {
-        delete(M[i][j]);
-      }
-    }
-  }
+  if (own) clear();
 }
 
 Matrix::Matrix(int rows, int cols, real val) {
@@ -51,6 +45,14 @@ Matrix::Matrix(const vector<vector<real*> >& _M, int rowBeg, int rowEnd, int col
   own = false;
 }
 
+void Matrix::clear() {
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      delete(M[i][j]);
+    }
+  }
+}
+
 Matrix::Matrix(const Matrix& _M) {
   M.resize(_M.numRows(), vector<real*>(_M.numCols(), NULL));
   for (int i = 0; i < _M.numRows(); i++) {
@@ -87,11 +89,22 @@ int Matrix::size(int dim) const {
 
 Matrix& Matrix::operator=(const Matrix& _M) {
   if ((numRows() != _M.numRows()) || (numCols() != _M.numCols())) {
-    MstUtils::error("matrix dimensions do not agree", "Matrix::operator=");
-  }
-  for (int i = 0; i < this->numRows(); i++) {
-    for (int j = 0; j < this->numCols(); j++) {
-      *(M[i][j]) = _M(i, j);
+    if (!getOwnFlag()) {
+      MstUtils::error("dimensions must agree when assigning to a sub-Matrix", "Matrix::operator=");
+    } else {
+      clear();
+      M.resize(_M.numRows(), vector<real*>(_M.numCols(), NULL));
+      for (int i = 0; i < _M.numRows(); i++) {
+        for (int j = 0; j < _M.numCols(); j++) {
+          M[i][j] = new real(_M(i, j));
+        }
+      }
+    }
+  } else {
+    for (int i = 0; i < this->numRows(); i++) {
+      for (int j = 0; j < this->numCols(); j++) {
+        *(M[i][j]) = _M(i, j);
+      }
     }
   }
   return *this;
@@ -283,7 +296,7 @@ Matrix Matrix::inverse() {
 }
 
 Matrix Matrix::transpose() {
-  Matrix R = *this;
+  Matrix R(numCols(), numRows());
   for (int i = 0; i < M.size(); i++) {
     for (int j = 0; j < M[i].size(); j++) R(j,i) = *(M[i][j]);
   }

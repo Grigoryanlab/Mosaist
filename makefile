@@ -8,7 +8,7 @@ all:
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstmagic.o tests/testTERMUtils.cpp -o bin/testTERMUtils
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o objs/mstoptions.o tests/testConFind.cpp -o bin/testConFind
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o tests/findBestFreedom.cpp -o bin/findBestFreedom
-	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
+	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
 	mkdir -p lib
 	ar rs lib/libmst.a objs/mstoptions.o objs/msttypes.o
@@ -18,4 +18,4 @@ all:
 	ar rs lib/libmstlinalg.a objs/mstlinalg.o
 	ar rs lib/libmstoptim.a objs/mstoptim.o objs/mstlinalg.o
 	ar rs lib/libmstfuser.a objs/mstfuser.o objs/msttypes.o objs/mstoptim.o
-	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/fuserTest4.cpp -o bin/fuserTest4
+	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/fuserTest4.cpp -o bin/fuserTest4

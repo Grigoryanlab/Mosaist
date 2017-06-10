@@ -1,5 +1,7 @@
 #include "mstfuser.h"
 
+/* --------- fusionEvaluator ----------- */
+
 fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> _fixedResidues, bool _verbose) {
   vector<string> bba = {"N", "CA", "C", "O"};
   // copy overlapping residues
@@ -16,7 +18,7 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
       fixed[fixedResidues[i]] = true;
   }
   numMobileAtoms = bba.size()*(resTopo.size() - fixedResidues.size());
-  anchorRes = (fixedResidues.size() > 0) ? MstUtils::min(fixedResidues) : -1;
+  buildOriginRes = (fixedResidues.size() > 0) ? MstUtils::min(fixedResidues) : 0;
 
   // create room for fused structure (initialize with average coordinates)
   fused.appendChain(new Chain());
@@ -30,6 +32,16 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
     }
   }
   fused.renumber();
+
+  // orient so that the first atom is at the origin, the second is along the X-
+  // axis and the third is in the XY plane
+  Frame L(CartesianPoint(0, 0, 0), CartesianPoint(1, 0, 0), CartesianPoint(0, 1, 0), CartesianPoint(0, 0, 1));
+  CartesianPoint A(fused[0][0][0]), B(fused[0][0][1]), C(fused[0][0][2]);
+  CartesianPoint X = (B - A).getUnit();
+  CartesianPoint Z = (X.cross(C - B)).getUnit();
+  Frame F(A, X, Z.cross(X), Z);
+  Transform T = TransformFactory::switchFrames(L, F);
+  T.apply(fused);
 
   /* Initialize alignedFrags. frags[C] designates a segment that moves
    * together (i.e., part of Chain pointed to by C), by storing which
@@ -77,39 +89,37 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
 double fusionEvaluator::eval(const vector<double>& point) {
   bool init = point.empty();
   if (init) initPoint.resize(0);
-  real bR = 0.01; real aR = 1.0; real dR = 1.0; // randomness scale factors
+  real bR = 0.01; real aR = 1.0; real dR = 1.0; real xyzR = 0.01; // randomness scale factors
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
   int k = 0;
   Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;
 
   Chain& F = fused[0];
   if (optimCartesian) {
-    if (init) {
-      for (int i = 0; i < F.residueSize(); i++) {
-        if (fixed[i]) continue;
-        Residue& res = F[i];
-        for (int j = 0; j < res.atomSize(); j++) {
-          initPoint.push_back(res[j].getX());
-          initPoint.push_back(res[j].getY());
-          initPoint.push_back(res[j].getZ());
-        }
-      }
-    } else {
-      k = 0;
-      for (int i = 0; i < F.residueSize(); i++) {
-        if (fixed[i]) continue;
-        Residue& res = F[i];
-        for (int j = 0; j < res.atomSize(); j++) {
-          res[j].setX(point[k]); k++;
-          res[j].setY(point[k]); k++;
-          res[j].setZ(point[k]); k++;
+    for (int i = 0; i < F.residueSize(); i++) {
+      if (fixed[i]) continue;
+      Residue& res = F[i];
+      for (int j = 0; j < res.atomSize(); j++) {
+        bool skipDFs = ((i == 0) && !isAnchored());
+        for (int dim = 0; dim < 3; dim++) {
+          /* If the fused structure is not anchored in space, skip all coordinates
+           * of the first atom, the Y and the Z coordinates of the second atom,
+           * and the Z coordinate of the third atom. In this case, the constructor
+           * would have placed the first atom at the origin, the second atom on
+           * the X-axis, and the third atom in the X-Y plane. */
+          if (skipDFs && (j < 3) && (dim >= j)) continue;
+          if (init) {
+            initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
+          } else {
+            res[j][dim] = point[k]; k++;
+          }
         }
       }
     }
   } else {
     // -- build the fused backbone, atom by atom
     // build forward
-    int startIdx = isAnchored() ? anchorRes : 0;
+    int startIdx = isAnchored() ? buildOriginRes : 0;
     for (int i = startIdx; i < F.residueSize(); i++) {
       Residue& res = F[i];
       Atom* N = &(res[0]);
@@ -184,7 +194,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
     }
 
     // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
-    for (int i = anchorRes; i >= 0; i--) {
+    for (int i = buildOriginRes; i >= 0; i--) {
       Residue& res = F[i];
       Atom* N = &(res[0]);
       Atom* CA = &(res[1]);
@@ -376,7 +386,7 @@ CartesianPoint fusionEvaluator::bondInstances(int ri, int rj, const string& ai, 
     }
   }
   if (addToCache) {
-    bounds.push_back(icBound(chainBreak ? icBrokenBond : icBond, MstUtils::min(p), MstUtils::max(p)));
+    bounds.push_back(icBound(chainBreak ? icBrokenBond : icBond, MstUtils::min(p), MstUtils::max(p), MstUtils::toString(ri) + "-" + ai + " : " + MstUtils::toString(rj) + "-" + aj));
   }
 
   return p;
@@ -494,4 +504,39 @@ double fusionEvaluator::harmonicPenalty(double val, const icBound& b) {
     default:
       MstUtils::error("uknown variable type", "fusionEvaluator::harmonicPenalty");
   }
+}
+
+
+/* --------- Fuser ----------- */
+
+Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Ni, int Nc, bool verbose) {
+  bool useGradDescent = true;
+  fusionEvaluator E(resTopo, fixed);
+  vector<double> bestSolution; double score, bestScore;
+  if (useGradDescent) {
+    bestScore = Optim::gradDescent(E, bestSolution, Ni, 10E-6, verbose);
+  } else {
+    double bestScore = Optim::fminsearch(E, Ni, bestSolution);
+  }
+  int bestAnchor = E.getBuildOrigin();
+  if (verbose) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
+  for (int i = 0; i < Nc-1; i++) {
+    E.noisifyGuessPoint(0.2);
+    vector<double> solution;
+    int anchor = E.randomizeBuildOrigin();
+    if (useGradDescent) {
+      score = Optim::gradDescent(E, solution, Ni, 10E-6, verbose);
+    } else {
+      score = Optim::fminsearch(E, Ni, solution);
+    }
+    if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = anchor; }
+    if (verbose) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
+  }
+  E.setBuildOrigin(bestAnchor);
+  if (verbose) {
+    cout << "best score = " << bestScore << ":" << endl;
+    E.setVerbose(true);
+  }
+  E.eval(bestSolution);
+  return E.getStructure();
 }
