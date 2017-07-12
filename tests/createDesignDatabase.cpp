@@ -6,8 +6,8 @@ int main(int argc, char *argv[]) {
   op.setTitle("Creates a complete database for use in TERM-based protein design. Options:");
   op.addOption("p", "root path to local PDB database (e.g., /home/grigoryanlab/library/databases/pdb.org).", true);
   op.addOption("o", "path to output directory, where everything will be placed.", true);
-  op.addOption("se", "extract statistical energies, in addition to building a search database.", true);
-  op.addOption("r", "X-ray resolution cutoff (default 2.6).", true);
+  op.addOption("se", "extract statistical energies, in addition to building a search database.");
+  op.addOption("r", "X-ray resolution cutoff (default 2.6).");
   op.setOptions(argc, argv);
   string pdbBase = op.getString("p");
   double resolCut = op.getReal("r", 2.6);
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     if (line.find("----") == 0) { f = true; continue; }
     if (!f) { continue; }
     vector<string> ents = MstUtils::split(line, " ;");
-    MstUtils::assert(ents.size() == 3, "could not parse line '" + line + "' from PDB resolution file.");
+    MstUtils::assert(ents.size() == 2, "could not parse line '" + line + "' from PDB resolution file.");
     resol[MstUtils::uc(ents[0])] = MstUtils::toReal(ents[1]);
   }
   ifh.close();
