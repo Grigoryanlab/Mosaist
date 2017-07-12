@@ -34,8 +34,11 @@ int main(int argc, char *argv[]) {
   while (getline(ifh, line)) {
     if (line.find("----") == 0) { f = true; continue; }
     if (!f) { continue; }
-    vector<string> ents = MstUtils::split(line, " ;");
-    MstUtils::assert(ents.size() == 2, "could not parse line '" + line + "' from PDB resolution file.");
+    vector<string> ents = MstUtils::split(line, " ;\t");
+    if (ents.size() != 2) {
+      cout << "\tskipping line '" << line << "' of PDB resolution file..." << endl;
+      continue;
+    }
     resol[MstUtils::uc(ents[0])] = MstUtils::toReal(ents[1]);
   }
   ifh.close();
