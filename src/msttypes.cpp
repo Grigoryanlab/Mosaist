@@ -92,6 +92,7 @@ void Structure::readPDB(string pdbFile, string options) {
   bool iCodesAsSepResidues = true;   // consequtive residues that differ only in their insertion code will be treated as separate residues
   bool uniqChainIDs = true;          // make sure chain IDs are unique, even if they are not unique in the read file
   bool ignoreTER = false;            // if true, will not pay attention to TER lines in deciding when chains end/begin
+  bool verbose = true;               // report various warnings when weird things are found and fixed?
 
   // user-specified custom parsing options
   options = MstUtils::uc(options);
@@ -103,6 +104,7 @@ void Structure::readPDB(string pdbFile, string options) {
   if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
   if (options.find("IGNORE-ICODES") != string::npos) iCodesAsSepResidues = true;
   if (options.find("IGNORE-TER") != string::npos) ignoreTER = true;
+  if (options.find("QUITE") != string::npos) verbose = false;
 
   // read line by line
   string line;
@@ -145,7 +147,7 @@ void Structure::readPDB(string pdbFile, string options) {
       this->appendChain(chain, uniqChainIDs);
       // non-unique chains will be automatically renamed (unless the user specified not to rename chains), BUT we need to
       // remember the name that was actually read, since this name is what will be used to determine when the next chain comes
-      if (chainID.compare(chain->getID())) {
+      if (verbose && chainID.compare(chain->getID())) {
         MstUtils::warn("chain name '" + chainID + "' was repeated in '" + pdbFile + "', renaming the chain to '" + chain->getID() + "'", "Structure::readPDB");
       }
 

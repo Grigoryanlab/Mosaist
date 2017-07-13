@@ -80,12 +80,13 @@ int main(int argc, char *argv[]) {
   fstream ofh; MstUtils::openFile(ofh, outPath + "/PDB.fasta", ios_base::out);
   oldIDs = vector<string>(); oldIDs.swap(IDs);
   for (int i = 0; i < oldIDs.size(); i++) {
+    if ((i+1) % 1000 == 0) cout << "\tread " << i+1 << "/" << oldIDs.size() << " structures..." << endl;
     // look at the first bio unit, since don't know any better
     string m2 = MstUtils::lc(oldIDs[i].substr(1, 2));
     string base = m2 + "/" + MstUtils::lc(oldIDs[i]);
     string packedFile = pdbBase + "/data/biounit/coordinates/divided/" + base + ".pdb1.gz";
     MstUtils::csystem("gunzip < " + packedFile + " > " + tmpFile);
-    Structure S(tmpFile);
+    Structure S(tmpFile, "QUITE");
 
     // filter by size and number of chains
     if (S.residueSize() > maxSize) continue;
