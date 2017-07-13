@@ -76,12 +76,12 @@ int main(int argc, char *argv[]) {
   // filter by biounit size and by fraction of protein residues
   string outPdbDir = outPath + "/PDB"; MstUtils::csystem("mkdir " + outPdbDir);
   string tmpFile = tmpDir + "/db-entry-mek.pdb";
-  fstream ofh; MstUtils::openFile(ofh, outPath + "/PDB.fasta");
+  fstream ofh; MstUtils::openFile(ofh, outPath + "/PDB.fasta", ios_base::out);
   oldIDs = vector<string>(); oldIDs.swap(IDs);
   for (int i = 0; i < oldIDs.size(); i++) {
     // look at the first bio unit, since don't know any better
     string m2 = oldIDs[i].substr(1, 2);
-    string base = m2 + MstUtils::lc(oldIDs[i]);
+    string base = m2 + "/" + MstUtils::lc(oldIDs[i]);
     string packedFile = pdbBase + "/data/biounit/coordinates/divided/" + base + ".pdb1.gz";
     MstUtils::csystem("gunzip < " + packedFile + " > " + tmpFile);
     Structure S(tmpFile);
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
 
     // dump the "cleaned" PDB file and the corresponding sequence
     if (!MstUtils::isDir(outPdbDir + "/" + m2)) MstUtils::csystem("mkdir " + outPdbDir + "/" + m2);
-    Sp.writePDB(outPdbDir + "/" + m2 + MstUtils::uc(oldIDs[i]) + ".pdb");
+    Sp.writePDB(outPdbDir + "/" + m2 + "/" + MstUtils::uc(oldIDs[i]) + ".pdb");
     for (int ci = 0; ci < Sp.chainSize(); ci++) {
       Chain& C = Sp[ci];
       ofh << ">" << MstUtils::uc(oldIDs[i]) << "_" << C.getID() << endl;
