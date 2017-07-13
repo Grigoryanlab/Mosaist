@@ -688,7 +688,8 @@ class MstUtils {
     static void warn(string message, string from = "");
     static void error(string message, string from = "", int code = -1);
     static void assert(bool condition, string message = "error: assertion failed", string from = "", int exitCode = -1);
-    static string uc(string& str);                        // returns an upper-case copy of the input string
+    static string uc(const string& str);                        // returns an upper-case copy of the input string
+    static string lc(const string& str);                        // returns an lower-case copy of the input string
     static bool stringsEqual(const string& A, const string& B, bool caseInsensitive = true);
     static string wrapText(string message, int width, int leftSkip = 0, int startingOffset = 0);
     static char* copyStringC(const char* str);
@@ -703,9 +704,11 @@ class MstUtils {
     static bool fileExists(const char *filename);
     static bool fileExists(const string filename) { return fileExists(filename.c_str()); }
     static bool isDir(const char *filename);
+    static bool isDir(const string& filename) { return isDir(filename.c_str()); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static string readNullTerminatedString(fstream& ifs);
+    static int csystem(const string& cmd, bool checkError = true, int success = 0, const string& from = "");
 
     // returns a random number in the range [lower, upper]
     static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }

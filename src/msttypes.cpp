@@ -2325,13 +2325,17 @@ bool MstUtils::isDir(const char *filename) {
 }
 
 string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDelims) {
-  string ret;
-  if (skipTrailingDelims) str = trim(str, delimiters);
-  int i = str.find_first_of(delimiters);
-  if (i == string::npos) {
-    ret = str;
-    str = "";
-    return ret;
+  string ret; int i;
+  if (!delimiters.empty()) {
+    if (skipTrailingDelims) str = trim(str, delimiters);
+    i = str.find_first_of(delimiters);
+    if (i == string::npos) {
+      ret = str;
+      str = "";
+      return ret;
+    }
+  } else {
+    i = min(1, (int) str.length()); // interpret an empty list of delimiters in the same way as perl's split("", $string)
   }
   ret = str.substr(0, i);
   str = str.substr(i);
@@ -2355,10 +2359,18 @@ FILE* MstUtils::openFileC (const char* filename, const char* mode, string from) 
   return fp;
 }
 
-string MstUtils::uc(string& str){
+string MstUtils::uc(const string& str){
   string ret = str;
   for (int i = 0; i < ret.length(); i++) {
     ret[i] = toupper(ret[i]);
+  }
+  return ret;
+}
+
+string MstUtils::lc(const string& str){
+  string ret = str;
+  for (int i = 0; i < ret.length(); i++) {
+    ret[i] = tolower(ret[i]);
   }
   return ret;
 }
@@ -2454,4 +2466,13 @@ string MstUtils::readNullTerminatedString(fstream& ifs) {
     str += c;
   }
   return str;
+}
+
+int MstUtils::csystem(const string& cmd, bool checkError, int success, const string& from) {
+  int ret = system(cmd.c_str());
+  string head = from.empty() ? "" : from + " -> ";
+  if ((checkError) && (ret != success)) {
+    MstUtils::error("system command '" + cmd + "' failed", head + "MstUtils::csystem", ret);
+  }
+  return ret;
 }

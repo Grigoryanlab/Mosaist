@@ -1,7 +1,7 @@
 CPPFLAGS=-O3 -std=c++11
 
 all:
-	mkdir -p objs; cd objs; g++ $(CPPFLAGS) -I../include -c ../src/mstfuser.cpp ../src/mstoptim.cpp ../src/mstlinalg.cpp ../src/mstoptions.cpp ../src/msttypes.cpp ../src/msttransforms.cpp ../src/mstrotlib.cpp ../src/mstmagic.cpp ../src/mstcondeg.cpp
+	mkdir -p objs; cd objs; g++ $(CPPFLAGS) -I../include -c ../src/mstfuser.cpp ../src/mstoptim.cpp ../src/mstlinalg.cpp ../src/mstoptions.cpp ../src/msttypes.cpp ../src/msttransforms.cpp ../src/mstrotlib.cpp ../src/mstmagic.cpp ../src/mstcondeg.cpp ../src/mstsequence.cpp
 	mkdir -p bin; g++ $(CPPFLAGS) -I./include objs/msttypes.o tests/test.cpp -o bin/test
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstlinalg.o tests/testTransforms.cpp -o bin/testTransforms
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstrotlib.o tests/testRotlib.cpp -o bin/testRotlib
@@ -10,7 +10,7 @@ all:
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o tests/findBestFreedom.cpp -o bin/findBestFreedom
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
 	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
-	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptions.o tests/createDesignDatabase.cpp -o bin/createDesignDatabase
+	g++ $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptions.o objs/mstsequence.o tests/createDesignDatabase.cpp -o bin/createDesignDatabase
 	mkdir -p lib
 	ar rs lib/libmst.a objs/mstoptions.o objs/msttypes.o
 	ar rs lib/libmsttrans.a objs/msttransforms.o
