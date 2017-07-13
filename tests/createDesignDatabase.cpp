@@ -73,6 +73,8 @@ int main(int argc, char *argv[]) {
   }
   printf("after filtering for resolution better than %f, %d entries left...\n", resolCut, (int) IDs.size());
 
+  // TODO: log file that tracks the run, also reports on why every structure that was skipped was skipped (after big filters)
+
   // filter by biounit size and by fraction of protein residues
   string outPdbDir = outPath + "/PDB";
   if (!MstUtils::isDir(outPdbDir)) MstUtils::csystem("mkdir " + outPdbDir);
@@ -85,6 +87,10 @@ int main(int argc, char *argv[]) {
     string m2 = MstUtils::lc(oldIDs[i].substr(1, 2));
     string base = m2 + "/" + MstUtils::lc(oldIDs[i]);
     string packedFile = pdbBase + "/data/biounit/coordinates/divided/" + base + ".pdb1.gz";
+    if (!MstUtils::fileExists(packedFile)) {
+      MstUtils::warn("skipping entry " + oldIDs[i] + ", file " + packedFile + " does not exist...");
+      continue;
+    }
     MstUtils::csystem("gunzip < " + packedFile + " > " + tmpFile);
     Structure S(tmpFile, "QUITE");
 
