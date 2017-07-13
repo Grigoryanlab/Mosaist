@@ -2273,12 +2273,12 @@ void MstUtils::fileToArray(string _filename, vector<string>& lines) {
   }
 }
 
-string MstUtils::pathBase(string fn) {
+string MstUtils::pathBase(const string& fn) {
   if (fn.find_last_of(".") == string::npos) return fn;
   else return fn.substr(0, fn.find_last_of("."));
 }
 
-string MstUtils::splitPath(string path, int outToken, string* dirPathPtr, string* fileNamePtr, string* extensionPtr) {
+string MstUtils::splitPath(const string& path, int outToken, string* dirPathPtr, string* fileNamePtr, string* extensionPtr) {
   string dirPath, fileName, extension;
   int pos = path.rfind("/");
   if (pos == string::npos) {

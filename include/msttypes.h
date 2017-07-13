@@ -699,8 +699,8 @@ class MstUtils {
     static bool isReal(string num);
     static MST::real mod(MST::real num, MST::real den);
     static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
-    static string pathBase(string fn); // gets the base name of the path (removes the extension)
-    static string splitPath(string path, int outToken, string* dirPathPtr = NULL, string* fileNamePtr = NULL, string* extensionPtr = NULL);
+    static string pathBase(const string& fn); // gets the base name of the path (removes the extension)
+    static string splitPath(const string& path, int outToken, string* dirPathPtr = NULL, string* fileNamePtr = NULL, string* extensionPtr = NULL);
     static bool fileExists(const char *filename);
     static bool fileExists(const string filename) { return fileExists(filename.c_str()); }
     static bool isDir(const char *filename);
