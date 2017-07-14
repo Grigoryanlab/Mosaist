@@ -2268,62 +2268,11 @@ void MstUtils::fileToArray(string _filename, vector<string>& lines) {
   string line;
   while (true) {
     getline(inp, line);
-    if (inp.eof()) break; // if eof set upon trying to read the line, then it was not really a valid line, so we are done
+    // if eof set upon trying to read the line, and the line is empty, then it
+    // was not really a valid line (but just the last eof that was not yet read)
+    if (inp.eof() && line.empty()) break;
     lines.push_back(line);
   }
-}
-
-string MstUtils::pathBase(const string& fn) {
-  if (fn.find_last_of(".") == string::npos) return fn;
-  else return fn.substr(0, fn.find_last_of("."));
-}
-
-string MstUtils::splitPath(const string& path, int outToken, string* dirPathPtr, string* fileNamePtr, string* extensionPtr) {
-  string dirPath, fileName, extension;
-  int pos = path.rfind("/");
-  if (pos == string::npos) {
-    fileName = path;
-    dirPath = "./";
-  } else if (pos == 0) {
-    fileName = path.substr(1);
-    dirPath = "/";
-  } else {
-    fileName = path.substr(pos+1);
-    dirPath = path.substr(0, pos);
-  }
-  pos = fileName.rfind(".");
-  if (pos == string::npos) {
-    extension = "";
-  } else {
-    extension = fileName.substr(pos+1);
-    fileName = fileName.substr(0, pos);
-  }
-  if (dirPathPtr != NULL) *dirPathPtr = dirPath;
-  if (fileNamePtr != NULL) *fileNamePtr = fileName;
-  if (extensionPtr != NULL) *extensionPtr = extension;
-  switch (outToken) {
-    case 0:
-      return dirPath;
-    case 1:
-      return fileName;
-    case 2:
-      return extension;
-    default:
-      MstUtils::error("unrecognized output token type specified '" + MstUtils::toString(outToken) + "'", " MstUtils::splitPath");
-  }
-  return ""; // just to make the compiler happy, this is never reached
-}
-
-bool MstUtils::fileExists(const char *filename) {
-  struct stat buffer ;
-  if (stat( filename, &buffer) == 0) return true;
-  return false;
-}
-
-bool MstUtils::isDir(const char *filename) {
-  struct stat buffer ;
-  if (stat( filename, &buffer) < 0) return false;
-  return (buffer.st_mode & S_IFDIR);
 }
 
 string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDelims) {
@@ -2468,13 +2417,4 @@ string MstUtils::readNullTerminatedString(fstream& ifs) {
     str += c;
   }
   return str;
-}
-
-int MstUtils::csystem(const string& cmd, bool checkError, int success, const string& from) {
-  int ret = system(cmd.c_str());
-  string head = from.empty() ? "" : from + " -> ";
-  if ((checkError) && (ret != success)) {
-    MstUtils::error("system command '" + cmd + "' failed", head + "MstUtils::csystem", ret);
-  }
-  return ret;
 }

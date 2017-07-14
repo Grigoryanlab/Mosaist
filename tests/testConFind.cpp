@@ -12,6 +12,7 @@
 #include "mstrotlib.h"
 #include "mstcondeg.h"
 #include "mstoptions.h"
+#include "mstsystem.h"
 
 using namespace std;
 using namespace MST;
@@ -102,12 +103,12 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
   if (iopts.pdbfs.size() > 1) {
     if (iopts.omapfs.size() == 1) {
       iopts.omapfs.resize(iopts.pdbfs.size());
-      string base = MstUtils::pathBase(iopts.omapfs[0]);
+      string base = MstSys::pathBase(iopts.omapfs[0]);
       for (int i = 0; i < iopts.pdbfs.size(); i++) { iopts.omapfs[i] = base + ".f" + MstUtils::toString(i+1) + ".cont"; }
     }
     if (iopts.opdbfs.size() == 1) {
       iopts.opdbfs.resize(iopts.pdbfs.size());
-      string base = MstUtils::pathBase(iopts.opdbfs[0]);
+      string base = MstSys::pathBase(iopts.opdbfs[0]);
       for (int i = 0; i < iopts.pdbfs.size(); i++) { iopts.opdbfs[i] = base + ".f" + MstUtils::toString(i+1) + ".pdb"; }
     }
   }

@@ -128,8 +128,8 @@ class Chain {
     Residue& getResidue(int i) { return (*this)[i]; }
     vector<Residue*> getResidues() { return residues; }
     vector<Atom*> getAtoms();
-    string getID() { return cid; }
-    string getSegID() { return sid; }
+    string getID() const { return cid; }
+    string getSegID() const { return sid; }
     Structure* getParent() { return parent; }
     Structure* getStructure() { return getParent(); }
     int getResidueIndex(Residue* res);
@@ -699,16 +699,9 @@ class MstUtils {
     static bool isReal(string num);
     static MST::real mod(MST::real num, MST::real den);
     static MST::real sign(MST::real val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
-    static string pathBase(const string& fn); // gets the base name of the path (removes the extension)
-    static string splitPath(const string& path, int outToken, string* dirPathPtr = NULL, string* fileNamePtr = NULL, string* extensionPtr = NULL);
-    static bool fileExists(const char *filename);
-    static bool fileExists(const string filename) { return fileExists(filename.c_str()); }
-    static bool isDir(const char *filename);
-    static bool isDir(const string& filename) { return isDir(filename.c_str()); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static string readNullTerminatedString(fstream& ifs);
-    static int csystem(const string& cmd, bool checkError = true, int success = 0, const string& from = "");
 
     // returns a random number in the range [lower, upper]
     static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
