@@ -2418,3 +2418,9 @@ string MstUtils::readNullTerminatedString(fstream& ifs) {
   }
   return str;
 }
+
+string MstUtils::getDate() {
+  time_t rawtime;
+  time (&rawtime);
+  return string(ctime(&rawtime));
+}

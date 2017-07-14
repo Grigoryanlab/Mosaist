@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 
 using namespace std;
 
@@ -702,6 +703,7 @@ class MstUtils {
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static string readNullTerminatedString(fstream& ifs);
+    static string getDate();
 
     // returns a random number in the range [lower, upper]
     static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
