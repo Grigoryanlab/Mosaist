@@ -65,6 +65,7 @@ int MstSys::csystem(const string& cmd, bool checkError, int success, const strin
 }
 
 void MstSys::cmkdir(const string& dirPath, bool makeParents) {
+  if (MstSys::isDir(dirPath)) return; // return if the path is already a dir
   int ret = MstSys::csystem("mkdir " + (makeParents ? (string) "-p " : (string) "") + dirPath, false);
   MstUtils::assert(ret == 0, "failed to make directory '" + dirPath + "'");
 }
