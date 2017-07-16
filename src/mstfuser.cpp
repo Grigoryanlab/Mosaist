@@ -540,3 +540,75 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int
   E.eval(bestSolution);
   return E.getStructure();
 }
+
+Structure Fuser::autofuse(const vector<Residue*>& residues, const vector<int>& fixed, int Ni, int Nc, bool verbose) {
+  // build a proximity search object
+  real closeDist = 2.0, pepBondMax = 2.0;
+  AtomPointerVector CAs(residues.size(), NULL), Ns(residues.size(), NULL), Cs(residues.size(), NULL);;
+  for (int i = 0; i < residues.size(); i++) {
+    Ns[i] = residues[i]->findAtom("N");
+    CAs[i] = residues[i]->findAtom("CA");
+    Cs[i] = residues[i]->findAtom("C");
+  }
+  ProximitySearch psN(Ns, 2*closeDist);
+  ProximitySearch psCA(CAs, 2*closeDist);
+  ProximitySearch psC(Cs, 2*closeDist);
+
+  // marked fixed residues
+  map<Residue*, bool> isFixed;
+  for (int i = 0; i < fixed.size(); i++) {
+    MstUtils::assert((fixed[i] >= 0) && (fixed[i] < residues.size()), "fixed residue index " + MstUtils::toString(fixed[i]) + " out of range", "Fuser::autofuse");
+    isFixed[residues[fixed[i]]] = true;
+  }
+
+  // build topology
+  vector<vector<Residue*> > resTopo;
+  map<Residue*, int> resTopoIdx; // stores indices into the above topology structure that each residue maps into
+  vector<bool> counted(residues.size(), false);
+  for (int i = 0; i < residues.size(); i++) {
+    if (counted[i]) continue;
+    resTopo.push_back(vector<Residue*>());
+    vector<int> bucket = psCA.getPointsWithin(CAs[i]->getCoor(), 0, closeDist);
+    for (int j = 0; j < bucket.size(); j++) {
+      resTopo.back().push_back(residues[bucket[j]]);
+      resTopoIdx[residues[bucket[j]]] = resTopo.size() - 1;
+      counted[bucket[j]] = true;
+      MstUtils::assert(isFixed[residues[bucket[0]]] == isFixed[residues[bucket[j]]], "apparently overlapping residues " + MstUtils::toString(bucket[0]) + " and " + MstUtils::toString(bucket[j]) + " have different 'fixed' status", "Fuser::autofuse");
+    }
+  }
+
+  // now order residues N-to-C of the final chain
+  vector<int> ntoc(1, 0); // put first residue in chain
+  // keep growing the chain by finding bonded neighbors on either end
+  for (int nc = 0; nc < 2; nc++) {
+    while (ntoc.size() != resTopo.size()) {
+      int ri = nc ? ntoc.front() : ntoc.back();
+      bool found = false;
+      for (int i = 0; i < resTopo[ri].size(); i++) {
+        Residue* r = resTopo[ri][i];
+        Atom* n = nc ? r->findAtom("N") : r->findAtom("C");
+        vector<int> neigh = nc ? psC.getPointsWithin(n->getCoor(), 0, pepBondMax) : psN.getPointsWithin(n->getCoor(), 0, pepBondMax);
+        if (neigh.empty()) continue;
+        if (nc)  ntoc.insert(ntoc.begin(), resTopoIdx[residues[neigh[0]]]);
+        else ntoc.push_back(resTopoIdx[residues[neigh[0]]]);
+        found = true;
+        break;
+      }
+      if (!found) break;
+    }
+  }
+  MstUtils::assert(ntoc.size() == resTopo.size(), "could not deduce chain connectivity automatically", "Fuser::autofuse");
+
+  // finally, re-order
+  vector<vector<Residue*> > oldResTopo = resTopo;
+  vector<int> fixedInTopo;
+  for (int i = 0; i < ntoc.size(); i++) {
+    resTopo[i] = oldResTopo[ntoc[i]];
+    if (isFixed[resTopo[i][0]]) {
+      fixedInTopo.push_back(i);
+    }
+  }
+
+  // call regular fuser to do all the work
+  return fuse(resTopo, fixedInTopo, Ni, Nc, verbose);
+}

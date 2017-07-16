@@ -27,6 +27,7 @@ tests: $(OBJECTS)
 	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o objs/mstoptions.o objs/mstsystem.o tests/testConFind.cpp -o bin/testConFind
 	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o objs/mstsystem.o tests/findBestFreedom.cpp -o bin/findBestFreedom
 	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
+	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testAutofuser.cpp -o bin/testAutofuser
 	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
 
 libs: $(OBJECTS)

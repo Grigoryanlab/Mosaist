@@ -109,7 +109,22 @@ class fusionEvaluator: public optimizerEvaluator {
 
 class Fuser {
   public:
-    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Ni = 100, int Nc = 1, bool verbose = false);
+    /* Fuses given residues into a single polymer. The parameter resTopo specifies
+     * which residues overlap. That is, resTopo.size() is the length of the
+     * eventual chain, and resTopo[i] is a list of residues, of length 1 or more
+     * that overlap with the i-th residue in the chain, in the N-to-C order,
+     * starting with 0. Returns the the fused chain as a Structure object. */
+    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed = vector<int>(), int Ni = 100, int Nc = 1, bool verbose = false);
+
+    /* This function is a simplified version of Fuser::fuse(), in that it guesses
+     * the topology automatically. Argument residues is a flat vector of all the
+     * residues from all the different fragments that are to be fused. residues
+     * from the different fragments can be intermixed in this vector, BUT when
+     * one considers only residues of a given fragment, these must be in N-to-C
+     * order. The function guesses the topology by finding residues that are
+     * likely overlapping (i.e., have close CA atoms). This should not give
+     * incorrect topologies in "normal" circumstances, but in strange cases can. */
+    static Structure autofuse(const vector<Residue*>& residues, const vector<int>& fixed = vector<int>(), int Ni = 100, int Nc = 1, bool verbose = false);
 };
 
 
