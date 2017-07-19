@@ -4,7 +4,11 @@
 class MstSys {
   public:
     static string pathBase(const string& fn); // gets the base name of the path (removes the extension)
+
+    /* Returns the directory part of the path, the file name, or the file extension,
+     * depending on whether outToken is 0, 1, or 2, respectively. */
     static string splitPath(const string& path, int outToken, string* dirPathPtr = NULL, string* fileNamePtr = NULL, string* extensionPtr = NULL);
+
     static bool fileExists(const char *filename);
     static bool fileExists(const string filename) { return fileExists(filename.c_str()); }
     static bool isDir(const char *filename);

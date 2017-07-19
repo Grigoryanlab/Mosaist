@@ -1062,9 +1062,19 @@ real AtomPointerVector::radiusOfGyration() {
   CartesianPoint center = getGeometricCenter();
   real s = 0;
   for (int i = 0; i < size(); i++) {
-      s += CartesianPoint((*this)[i]).distance2(center);
+    s += CartesianPoint((*this)[i]).distance2(center);
   }
   return sqrt(s / size());
+}
+
+real AtomPointerVector::boundingSphereRadiusCent() {
+  CartesianPoint center = getGeometricCenter();
+  real r = 0;
+  for (int i = 0; i < size(); i++) {
+    real dist = CartesianPoint((*this)[i]).distance(center);
+    if (dist > r) r = dist;
+  }
+  return r;
 }
 
 void AtomPointerVector::deletePointers() {

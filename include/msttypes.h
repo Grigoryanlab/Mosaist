@@ -452,6 +452,9 @@ class AtomPointerVector : public vector<Atom*> {
     CartesianPoint getGeometricCenter();
     void center();
     real radiusOfGyration();
+    // computes the smallest radius of a sphere centered at the centroid of the
+    // atom vector, which encloses the set of all atoms.
+    real boundingSphereRadiusCent();
     void deletePointers();
 
     AtomPointerVector clone();
