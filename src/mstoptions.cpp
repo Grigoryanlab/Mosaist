@@ -48,10 +48,11 @@ void MstOptions::setOptions(int argc, char** argv) {
   execName = argv[0];
   for (int i = 1; i < argc; ) {
     string token = argv[i];
+    string nextToken = ((i < argc - 1) ? argv[i+1] : "");
     if (token.find("--") != 0) MstUtils::error("could not parse options, could not understand the token '" + token + "'", "MstOptions::setOptions");
     token = token.substr(2);
-    if (i < argc - 1) {
-      givenOptions[token] = (string) argv[i+1];
+    if (nextToken.find("--") != 0) {
+      givenOptions[token] = nextToken;
       i += 2;
     } else {
       givenOptions[token] = "";
