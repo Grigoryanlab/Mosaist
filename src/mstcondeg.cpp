@@ -75,7 +75,7 @@ void ConFind::cache(Residue* res) {
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
     MstUtils::error("cannot build rotamers at position " + MstUtils::toString(res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
   }
-  real phi = res->getPhi(); real psi = res->getPsi();
+  real phi = res->getPhi(false); real psi = res->getPsi(false);
 
   // load rotamers of each amino acid
   int numRemRotsInPosition = 0; int totNumRotsInPosition = 0;
