@@ -38,7 +38,6 @@ libs: $(OBJECTS)
 	ar rs lib/libmstlinalg.a objs/mstlinalg.o
 	ar rs lib/libmstoptim.a objs/mstoptim.o objs/mstlinalg.o
 	ar rs lib/libmstfuser.a objs/mstfuser.o objs/msttypes.o objs/mstoptim.o
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/fuserTest4.cpp -o bin/fuserTest4
 
 
 .PHONY: clean
