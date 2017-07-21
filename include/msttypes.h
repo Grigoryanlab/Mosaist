@@ -735,6 +735,8 @@ class MstUtils {
     static T max(const vector<T>& vec, int beg = -1, int end = -1, int* maxIndex = NULL);
     template <class T>
     static bool closeEnough(const T& a, const T& b, const T& epsilon = std::numeric_limits<T>::epsilon());
+    template <class T>
+    static set<T> contents(const vector<T>& vec);
 
     // randomly shuffle the array in place using the Fisher-Yates shuffle
     template <class T>
@@ -841,6 +843,13 @@ void MstUtils::shuffle(vector<T>& vec) {
     if (i == j) continue;
     tmp = vec[i]; vec[i] = vec[j]; vec[j] = tmp;
   }
+}
+
+template <class T>
+set<T> MstUtils::contents(const vector<T>& vec) {
+  set<T> cont;
+  for (int i = 0; i < vec.size(); i++) cont.insert(vec[i]);
+  return cont;
 }
 
 #endif
