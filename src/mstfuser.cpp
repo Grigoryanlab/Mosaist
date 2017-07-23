@@ -541,7 +541,7 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int
   return E.getStructure();
 }
 
-Structure Fuser::autofuse(const vector<Residue*>& residues, const vector<int>& fixed, int Ni, int Nc, bool verbose) {
+Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps, int Ni, int Nc, bool verbose) {
   // build a proximity search object
   real closeDist = 2.0, pepBondMax = 2.0;
   AtomPointerVector CAs(residues.size(), NULL), Ns(residues.size(), NULL), Cs(residues.size(), NULL);;
@@ -553,13 +553,6 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, const vector<int>& f
   ProximitySearch psN(Ns, 2*closeDist);
   ProximitySearch psCA(CAs, 2*closeDist);
   ProximitySearch psC(Cs, 2*closeDist);
-
-  // marked fixed residues
-  map<Residue*, bool> isFixed;
-  for (int i = 0; i < fixed.size(); i++) {
-    MstUtils::assert((fixed[i] >= 0) && (fixed[i] < residues.size()), "fixed residue index " + MstUtils::toString(fixed[i]) + " out of range", "Fuser::autofuse");
-    isFixed[residues[fixed[i]]] = true;
-  }
 
   // build topology
   vector<vector<Residue*> > resTopo;
@@ -573,7 +566,6 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, const vector<int>& f
       resTopo.back().push_back(residues[bucket[j]]);
       resTopoIdx[residues[bucket[j]]] = resTopo.size() - 1;
       counted[bucket[j]] = true;
-      MstUtils::assert(isFixed[residues[bucket[0]]] == isFixed[residues[bucket[j]]], "apparently overlapping residues " + MstUtils::toString(bucket[0]) + " and " + MstUtils::toString(bucket[j]) + " have different 'fixed' status", "Fuser::autofuse");
     }
   }
 
@@ -601,11 +593,26 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, const vector<int>& f
 
   // finally, re-order
   vector<vector<Residue*> > oldResTopo = resTopo;
-  vector<int> fixedInTopo;
   for (int i = 0; i < ntoc.size(); i++) {
     resTopo[i] = oldResTopo[ntoc[i]];
-    if (isFixed[resTopo[i][0]]) {
-      fixedInTopo.push_back(i);
+  }
+
+  // if specified, mark as fixed all positions except those that are close enough
+  // to positions with multiple overlapping residues
+  vector<int> fixedInTopo;
+  if (flexOnlyNearOverlaps >= 0) {
+    set<int> flexible;
+    for (int i = 0; i < resTopo.size(); i++) {
+      // mark as flexible if close enough to a position with overlapping residues
+      for (int j = max(i - flexOnlyNearOverlaps, 0); j <= min(i + flexOnlyNearOverlaps, (int) resTopo.size() - 1); j++) {
+        if (resTopo[j].size() > 1) {
+          flexible.insert(i);
+          break;
+        }
+      }
+    }
+    for (int i = 0; i < resTopo.size(); i++) {
+      if (flexible.find(i) == flexible.end()) fixedInTopo.push_back(i);
     }
   }
 

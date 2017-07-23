@@ -124,7 +124,7 @@ class Fuser {
      * order. The function guesses the topology by finding residues that are
      * likely overlapping (i.e., have close CA atoms). This should not give
      * incorrect topologies in "normal" circumstances, but in strange cases can. */
-    static Structure autofuse(const vector<Residue*>& residues, const vector<int>& fixed = vector<int>(), int Ni = 100, int Nc = 1, bool verbose = false);
+    static Structure autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps = -1, int Ni = 100, int Nc = 1, bool verbose = false);
 };
 
 

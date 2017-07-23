@@ -11,6 +11,6 @@ int main(int argc, char *argv[]) {
   }
   Structure unfused(argv[1]);
   string outFile(argv[2]);
-  Structure fused = Fuser::autofuse(unfused.getResidues());
+  Structure fused = Fuser::autofuse(unfused.getResidues(), 1);
 	fused.writePDB(outFile);
 }

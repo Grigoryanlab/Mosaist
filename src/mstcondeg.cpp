@@ -100,14 +100,28 @@ void ConFind::cache(Residue* res) {
         closeOnes.clear();
         bbNN->pointsWithin(a.getCoor(), 0.0, clashDist, &closeOnes);
         for (int ci = 0; ci < closeOnes.size(); ci++) {
-          // backbone atoms of the same residue do not count as clashing (the rotamer library should not allow true clashes with own backbone)
+          // backbone atoms of the same residue do not count as clashing (the
+          // rotamer library should not allow true clashes with own backbone)
           if (backbone[closeOnes[ci]]->getResidue() != res) {
             prune = true;
-            // clashes with ALA have a special meaning (permanent "unavoidable" contacts; need to find all of them, though unlikely to have more than one)
+            // clashes with ALA have a special meaning (permanent "unavoidable" contacts;
+            // need to find all of them, though unlikely to have more than one)
             if (rot.isNamed("ALA")) permanentContacts[res].insert(closeOnes[ci]);
             else break;
           }
         }
+
+        // compute contributions to this residue's interference
+        set<Residue*> interfering;
+        for (int ci = 0; ci < closeOnes.size(); ci++) {
+          Residue* resB = backbone[closeOnes[ci]]->getResidue();
+          if (interfering.find(resB) != interfering.end()) continue;
+          if (resB != res) {
+            interfering.insert(resB);
+            interference[res][resB] += aaP * rotP;
+          }
+        }
+
         if (prune) break;
       }
       if (prune) continue;
@@ -268,6 +282,22 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
     computeFreedom(resi);
   }
 
+  return *list;
+}
+
+contactList ConFind::getInterferences(vector<Residue*>& residues, real incut, contactList* list) {
+  cache(residues);
+  contactList L;
+
+  for (auto itA = interference.begin(); itA != interference.end(); ++itA) {
+    fastmap<Residue*, real>& interB = itA->second;
+    for (auto itB = interB.begin(); itB != interB.end(); ++itB) {
+      real in = itB->second;
+      if (in >= incut) {
+        list->addContact(itA->first, itB->first, in, "", true);
+      }
+    }
+  }
   return *list;
 }
 

@@ -21,8 +21,8 @@ class contactList {
       infos = other.infos;
       inContact = other.inContact;
     }
-    void addContact(Residue* _resi, Residue* _resj, real _degree, string _info = "") {
-      if (_resi->getResidueIndex() > _resj->getResidueIndex()) {
+    void addContact(Residue* _resi, Residue* _resj, real _degree, string _info = "", bool directional = false) {
+      if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
         Residue* tmp = _resi; _resi = _resj; _resj = tmp;
       }
       resi.push_back(_resi);
@@ -48,8 +48,8 @@ class contactList {
         int lhsI = lhs.first->getResidueIndex();
         int rhsI = rhs.first->getResidueIndex();
         if (lhsI == rhsI) {
-          lhsI = lhs.second->Residue::getResidueIndex();
-          rhsI = rhs.second->Residue::getResidueIndex();
+          lhsI = lhs.second->getResidueIndex();
+          rhsI = rhs.second->getResidueIndex();
         }
         return lhsI < rhsI;
       }
@@ -89,6 +89,7 @@ class ConFind {
     contactList getContacts(Structure& S, real cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(vector<Residue*>& residues, real cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, real cdcut = 0.0);
+    contactList getInterferences(vector<Residue*>& residues, real incut = 0.0, contactList* list = NULL);
 
     real getCrowdedness(Residue* res);
     vector<real> getCrowdedness(vector<Residue*>& residues);
@@ -124,6 +125,8 @@ class ConFind {
     fastmap<Residue*, fastmap<Residue*, real> > degrees;
     fastmap<Residue*, fastmap<rotamerID*, real> > collProb;
     fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
+    fastmap<Residue*, fastmap<Residue*, real> > interference; // interferance[resA][resB] will store home much the backbone of
+                                                              // resB can potentially interfere with the amino-acid choice at resA
 
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
     real dcut;                  // CA-AC distance cutoff beyond which we do not consider pairwise interactions
