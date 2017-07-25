@@ -5,7 +5,13 @@ SDIR = src
 LDIR = lib
 INCDIR = include
 
-PYLIBPATH = $(shell python-config --exec-prefix)/lib
+# python.boost stuff
+uname := $(shell uname -s)
+ifeq ($(uname),Linux)
+    PYLIBPATH = $(shell python-config --exec-prefix)/lib64
+else
+    PYLIBPATH = $(shell python-config --exec-prefix)/lib
+endif
 PYLIB = -L$(PYLIBPATH) -L$(LDIR) $(shell python-config --libs) -lboost_python -lmst
 PYOPTS = $(shell python-config --includes) -O2 -fPIC -std=c++11 -I$(INCDIR)
 
@@ -21,28 +27,28 @@ setup:
 	mkdir -p bin
 	mkdir -p lib
 
-$(OBJECTS): objs/%.o : src/%.cpp include/%.h
+$(OBJECTS): $(ODIR)/%.o : $(SDIR)/%.cpp $(INCDIR)/%.h
 	$(CC) $(CPPFLAGS) -I$(INCDIR) -c -o $@ $<
 
 tests: $(OBJECTS)
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o tests/test.cpp -o bin/test
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstlinalg.o tests/testTransforms.cpp -o bin/testTransforms
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstrotlib.o tests/testRotlib.cpp -o bin/testRotlib
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/mstmagic.o tests/testTERMUtils.cpp -o bin/testTERMUtils
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o objs/mstoptions.o objs/mstsystem.o tests/testConFind.cpp -o bin/testConFind
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/mstrotlib.o objs/msttransforms.o objs/mstcondeg.o objs/mstsystem.o tests/findBestFreedom.cpp -o bin/findBestFreedom
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/msttransforms.o objs/mstoptim.o objs/mstfuser.o objs/mstlinalg.o tests/testAutofuser.cpp -o bin/testAutofuser
-	$(CC) $(CPPFLAGS) -I./include objs/msttypes.o objs/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o tests/test.cpp -o bin/test
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstlinalg.o tests/testTransforms.cpp -o bin/testTransforms
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstrotlib.o tests/testRotlib.cpp -o bin/testRotlib
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstmagic.o tests/testTERMUtils.cpp -o bin/testTERMUtils
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstrotlib.o $(ODIR)/msttransforms.o $(ODIR)/mstcondeg.o $(ODIR)/mstoptions.o $(ODIR)/mstsystem.o tests/testConFind.cpp -o bin/testConFind
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstrotlib.o $(ODIR)/msttransforms.o $(ODIR)/mstcondeg.o $(ODIR)/mstsystem.o tests/findBestFreedom.cpp -o bin/findBestFreedom
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testAutofuser.cpp -o bin/testAutofuser
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
 
 libs: $(OBJECTS)
-	ar rs lib/libmst.a objs/mstoptions.o objs/msttypes.o objs/mstsequence.o objs/mstsystem.o
-	ar rs lib/libmsttrans.a objs/msttransforms.o
-	ar rs lib/libmstmagic.a objs/msttypes.o objs/mstmagic.o
-	ar rs lib/libmstcondeg.a objs/mstcondeg.o objs/mstrotlib.o objs/msttransforms.o
-	ar rs lib/libmstlinalg.a objs/mstlinalg.o
-	ar rs lib/libmstoptim.a objs/mstoptim.o objs/mstlinalg.o
-	ar rs lib/libmstfuser.a objs/mstfuser.o objs/msttypes.o objs/mstoptim.o
+	ar rs lib/libmst.a $(ODIR)/mstoptions.o $(ODIR)/msttypes.o $(ODIR)/mstsequence.o $(ODIR)/mstsystem.o
+	ar rs lib/libmsttrans.a $(ODIR)/msttransforms.o
+	ar rs lib/libmstmagic.a $(ODIR)/msttypes.o $(ODIR)/mstmagic.o
+	ar rs lib/libmstcondeg.a $(ODIR)/mstcondeg.o $(ODIR)/mstrotlib.o $(ODIR)/msttransforms.o
+	ar rs lib/libmstlinalg.a $(ODIR)/mstlinalg.o
+	ar rs lib/libmstoptim.a $(ODIR)/mstoptim.o $(ODIR)/mstlinalg.o
+	ar rs lib/libmstfuser.a $(ODIR)/mstfuser.o $(ODIR)/msttypes.o $(ODIR)/mstoptim.o
 
 
 python: $(LDIR)/mstpython.so
