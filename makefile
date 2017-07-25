@@ -2,7 +2,12 @@ CC = g++
 CPPFLAGS=-O3 -std=c++11
 ODIR = objs
 SDIR = src
+LDIR = lib
 INCDIR = include
+
+PYLIBPATH = $(shell python-config --exec-prefix)/lib
+PYLIB = -L$(PYLIBPATH) -L$(LDIR) $(shell python-config --libs) -lboost_python -lmst
+PYOPTS = $(shell python-config --includes) -O2 -fPIC -std=c++11 -I$(INCDIR)
 
 SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem
 OBJECTS = $(patsubst %,$(ODIR)/%.o, $(SOURCE))
@@ -40,7 +45,17 @@ libs: $(OBJECTS)
 	ar rs lib/libmstfuser.a objs/mstfuser.o objs/msttypes.o objs/mstoptim.o
 
 
+python: $(LDIR)/mstpython.so
+
+$(LDIR)/mstpython.so: $(ODIR)/mstpython.o
+	$(CC) $(PYLIB) -Wl,-rpath,$(PYLIBPATH) -shared $< -o $@
+
+$(ODIR)/mstpython.o: $(SDIR)/mstpython.cpp makefile
+	$(CC) $(PYOPTS) -c $< -o $@
+
+
+
 .PHONY: clean
 
 clean:
-	rm -f $(ODIR)/*.o
+	rm -f $(ODIR)/*.o $(ODIR)/*.so

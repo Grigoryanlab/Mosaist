@@ -510,7 +510,7 @@ Chain::Chain() {
   parent = NULL;
 }
 
-Chain::Chain(Chain& C) {
+Chain::Chain(const Chain& C) {
   numAtoms = C.numAtoms;
   parent = NULL;
   for (int i = 0; i < C.residueSize(); i++) {

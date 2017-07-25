@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
+#undef assert
 
 using namespace std;
 
@@ -118,15 +119,15 @@ class Chain {
 
   public:
     Chain();
-    Chain(Chain& C);
+    Chain(const Chain& C);
     Chain(string chainID, string segID);
     ~Chain();
 
     int residueSize() const { return residues.size(); }
     int positionSize() const { return residueSize(); }  // for interchangability with MSL
     int atomSize() const { return numAtoms; }
-    Residue& operator[](int i) { return *(residues[i]); }
-    Residue& getResidue(int i) { return (*this)[i]; }
+    Residue& operator[](int i) const { return *(residues[i]); }
+    Residue& getResidue(int i) const { return (*this)[i]; }
     vector<Residue*> getResidues() { return residues; }
     vector<Atom*> getAtoms();
     string getID() const { return cid; }
