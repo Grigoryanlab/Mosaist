@@ -170,13 +170,13 @@ class Residue {
 
   public:
     Residue();
-    Residue(Residue& R, bool copyAlt = true);
+    Residue(const Residue& R, bool copyAlt = true);
     Residue(string _resname, int _resnum, char _icode = ' ');
     ~Residue();
 
-    int atomSize() { return atoms.size(); }
+    int atomSize() const { return atoms.size(); }
     vector<Atom*> getAtoms() { return atoms; }
-    Atom& operator[](int i) { return *(atoms[i]); }
+    Atom& operator[](int i) const { return *(atoms[i]); }
     Atom& getAtom(int i) { return *(atoms[i]); }
     Chain* getChain() { return parent; }
     string getChainID(bool strict = true);
@@ -257,7 +257,7 @@ class Atom {
 
   public:
     Atom();
-    Atom(Atom& A, bool copyAlt = true);
+    Atom(const Atom& A, bool copyAlt = true);
     Atom(int _index, string _name, real _x, real _y, real _z, real _B, real _occ, bool _het, char _alt = ' ', Residue* _parent = NULL);
     ~Atom();
 

@@ -14,6 +14,22 @@ BOOST_PYTHON_MODULE(mstpython) {
     using namespace boost::python;
 
     // expose classes
+    class_<MST::Atom>("Atom",
+        init<>())
+        .def("getX", &MST::Atom::getX)
+        .def("getY", &MST::Atom::getY)
+        .def("getZ", &MST::Atom::getZ)
+        .def("getName", &MST::Atom::getName)
+    ;
+
+    class_<MST::Residue>("Residue",
+        init<>())
+        .def("atomSize", &MST::Residue::atomSize)
+        .def("getName", &MST::Residue::getName)
+        .def("getNum", &MST::Residue::getNum)
+        .def("getAtom", &MST::Residue::getAtom, return_value_policy<reference_existing_object>())
+    ;
+
     class_<MST::Chain>("Chain",
         init<>())
         .def("residueSize", &MST::Chain::residueSize)
@@ -22,6 +38,7 @@ BOOST_PYTHON_MODULE(mstpython) {
         .def("setID", &MST::Chain::setID)
         .def("getSegID", &MST::Chain::getSegID)
         .def("setSegID", &MST::Chain::setSegID)
+        .def("getResidue", &MST::Chain::getResidue, return_value_policy<reference_existing_object>())
     ;
 
     class_<MST::Structure>("Structure",

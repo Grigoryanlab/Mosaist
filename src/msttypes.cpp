@@ -623,7 +623,7 @@ Residue::Residue() {
   icode = ' ';
 }
 
-Residue::Residue(Residue& R, bool copyAlt) {
+Residue::Residue(const Residue& R, bool copyAlt) {
   parent = NULL;
   for (int i = 0; i < R.atomSize(); i++) {
     atoms.push_back(new Atom(R[i], copyAlt));
@@ -844,7 +844,7 @@ Atom::Atom() {
   alternatives = NULL;
 }
 
-Atom::Atom(Atom& A, bool copyAlt) {
+Atom::Atom(const Atom& A, bool copyAlt) {
   index = A.index;
   name = NULL;
   setName(A.name);
