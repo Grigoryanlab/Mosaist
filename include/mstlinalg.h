@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "msttypes.h"
+#undef assert
 
 using namespace std;
 

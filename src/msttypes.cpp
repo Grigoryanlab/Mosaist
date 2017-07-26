@@ -1088,6 +1088,10 @@ AtomPointerVector AtomPointerVector::clone() {
   return into;
 }
 
+AtomPointerVector AtomPointerVector::subvector(int beg, int end) {
+  return AtomPointerVector(vector<Atom*>(this->begin() + beg, this->begin() + end));
+}
+
 void AtomPointerVector::clone(AtomPointerVector& into) {
   int L = into.size();
   into.resize(L + this->size());

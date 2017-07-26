@@ -460,6 +460,7 @@ class AtomPointerVector : public vector<Atom*> {
 
     AtomPointerVector clone();
     void clone(AtomPointerVector& into);
+    AtomPointerVector subvector(int beg, int end);
 
     friend ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms) {
       for (int i = 0; i < _atoms.size(); i++) {
