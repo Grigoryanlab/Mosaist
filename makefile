@@ -1,5 +1,5 @@
 CC = g++
-CPPFLAGS=-O3 -std=c++11
+CPPFLAGS=-O3 -std=c++11 -fPIC
 ODIR = objs
 SDIR = src
 LDIR = lib
@@ -12,7 +12,7 @@ ifeq ($(uname),Linux)
 else
     PYLIBPATH = $(shell python-config --exec-prefix)/lib
 endif
-PYLIB = -L$(PYLIBPATH) -L$(LDIR) $(shell python-config --libs) -lboost_python -lmst
+PYLIB = -L$(PYLIBPATH) -L$(LDIR) $(shell python-config --libs) -lboost_python -Wl,-whole-archive -lmst -Wl,-no-whole-archive
 PYOPTS = $(shell python-config --includes) -O2 -fPIC -std=c++11 -I$(INCDIR)
 
 SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem
