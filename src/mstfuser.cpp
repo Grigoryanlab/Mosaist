@@ -89,7 +89,7 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
 double fusionEvaluator::eval(const vector<double>& point) {
   bool init = point.empty();
   if (init) initPoint.resize(0);
-  real bR = 0.01; real aR = 1.0; real dR = 1.0; real xyzR = 0.01; // randomness scale factors
+  mstreal bR = 0.01; mstreal aR = 1.0; mstreal dR = 1.0; mstreal xyzR = 0.01; // randomness scale factors
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
   int k = 0;
   Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;
@@ -335,21 +335,21 @@ AtomPointerVector fusionEvaluator::atomInstances(int ri, const string& ai) {
   return atoms;
 }
 
-real fusionEvaluator::bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean) {
+mstreal fusionEvaluator::bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean) {
   if (startWithMean && !negateStartWithMean) {
     return (fused.getResidue(ri).findAtom(ai))->distance(fused.getResidue(rj).findAtom(aj));
   }
   return bondInstances(ri, rj, ai, aj).mean();
 }
 
-real fusionEvaluator::angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak) {
+mstreal fusionEvaluator::angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak) {
   if (startWithMean) {
     return (fused.getResidue(ri).findAtom(ai))->angle(fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak));
   }
   return angleInstances(ri, rj, rk, ai, aj, ak).mean();
 }
 
-real fusionEvaluator::dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al) {
+mstreal fusionEvaluator::dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al) {
   if (startWithMean) {
     return (fused.getResidue(ri).findAtom(ai))->dihedral(fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak), fused.getResidue(rl).findAtom(al));
   }
@@ -543,7 +543,7 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int
 
 Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps, int Ni, int Nc, bool verbose) {
   // build a proximity search object
-  real closeDist = 2.0, pepBondMax = 2.0;
+  mstreal closeDist = 2.0, pepBondMax = 2.0;
   AtomPointerVector CAs(residues.size(), NULL), Ns(residues.size(), NULL), Cs(residues.size(), NULL);;
   for (int i = 0; i < residues.size(); i++) {
     Ns[i] = residues[i]->findAtom("N");

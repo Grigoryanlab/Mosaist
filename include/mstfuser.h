@@ -27,7 +27,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
     vector<double> guessPoint() { if (initPoint.empty()) eval(vector<double>()); return initPoint; }
     void setGuessPoint(const vector<double>& _initPoint) { initPoint = _initPoint; }
-    void noisifyGuessPoint(real _noise = 1.0) { noise = _noise; initPoint.resize(0); }
+    void noisifyGuessPoint(mstreal _noise = 1.0) { noise = _noise; initPoint.resize(0); }
     int numResidues() { return overlappingResidues.size(); }
     bool isAnchored() { return fixedResidues.size() > 0; }
     int numDF() {
@@ -49,20 +49,20 @@ class fusionEvaluator: public optimizerEvaluator {
 
   class icBound {
     public:
-      icBound(icType _type, real _minVal, real _maxVal, string _name = "") { type = _type; minVal = _minVal; maxVal = _maxVal; name = _name; }
-      icBound(icType _type, const pair<real, real>& b, string _name = "") { type = _type; minVal = b.first; maxVal = b.second; name = _name; }
+      icBound(icType _type, mstreal _minVal, mstreal _maxVal, string _name = "") { type = _type; minVal = _minVal; maxVal = _maxVal; name = _name; }
+      icBound(icType _type, const pair<mstreal, mstreal>& b, string _name = "") { type = _type; minVal = b.first; maxVal = b.second; name = _name; }
       icBound(const icBound& icb) { type = icb.type; minVal = icb.minVal; maxVal = icb.maxVal; name = icb.name; }
 
       icType type;
-      real minVal, maxVal;
+      mstreal minVal, maxVal;
       string name;
   };
 
   protected:
     AtomPointerVector atomInstances(int ri, const string& ai);
-    real bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean = false);
-    real angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak);
-    real dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al);
+    mstreal bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean = false);
+    mstreal angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak);
+    mstreal dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al);
     CartesianPoint bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache = false);
     CartesianPoint angleInstances(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak, bool addToCache = false);
     CartesianPoint dihedralInstances(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al, bool addToCache = false);
@@ -104,7 +104,7 @@ class fusionEvaluator: public optimizerEvaluator {
     double kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     vector<double> initPoint;
     bool verbose, startWithMean, optimCartesian;
-    real noise;
+    mstreal noise;
 };
 
 class Fuser {

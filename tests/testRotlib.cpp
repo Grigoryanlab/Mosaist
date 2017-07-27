@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     Residue& res = chain[MstUtils::randInt(chain.residueSize())];
     string aa = aas[MstUtils::randInt(aas.size())];
     int ri = MstUtils::randInt(R.numberOfRotamers(aa, res.getPhi(), res.getPsi()));
-    real prob = R.rotamerProbability(aa, ri, res.getPhi(), res.getPsi());
+    mstreal prob = R.rotamerProbability(aa, ri, res.getPhi(), res.getPsi());
     cout << "At position " << res << " placing rotamer " << ri << " of " << aa << ", with probability " << prob << endl;
     R.placeRotamer(res, aa, ri);
   }

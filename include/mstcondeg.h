@@ -21,7 +21,7 @@ class contactList {
       infos = other.infos;
       inContact = other.inContact;
     }
-    void addContact(Residue* _resi, Residue* _resj, real _degree, string _info = "", bool directional = false) {
+    void addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info = "", bool directional = false) {
       if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
         Residue* tmp = _resi; _resi = _resj; _resj = tmp;
       }
@@ -36,8 +36,8 @@ class contactList {
     int size() { return resi.size(); }
     Residue* residueA(int i) { return resi[i]; }
     Residue* residueB(int i) { return resj[i]; }
-    real degree(int i) { return degrees[i]; }
-    real degree(Residue* _resi, Residue* _resj);
+    mstreal degree(int i) { return degrees[i]; }
+    mstreal degree(Residue* _resi, Residue* _resj);
     string info(int i) { return infos[i]; }
     vector<pair<Residue*, Residue*> > getOrderedContacts();
 
@@ -57,7 +57,7 @@ class contactList {
 
     vector<Residue*> resi;
     vector<Residue*> resj;
-    vector<real> degrees;
+    vector<mstreal> degrees;
     vector<string> infos;
     fastmap<Residue*, fastmap<Residue*, int> > inContact;
     set<pair<Residue*, Residue*>, contComp> orderedContacts;
@@ -68,7 +68,7 @@ class ConFind {
     ConFind(string rotLibFile, Structure& S);
     ConFind(RotamerLibrary* _rotLib, Structure& S);
     ~ConFind();
-    void setFreedomParams(real _loCollProbCut, real _hiCollProbCut, int type) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; freedomType = type; }
+    void setFreedomParams(mstreal _loCollProbCut, mstreal _hiCollProbCut, int type) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; freedomType = type; }
 
     // precomputes all necessary info and data structures for computing on this Structure
     void cache(Structure& S);
@@ -84,31 +84,31 @@ class ConFind {
      * purposes of finding sidechain-to-sidechain contacts. */
     bool countsAsSidechain(Atom& a);
 
-    real contactDegree(Residue* resA, Residue* resB, bool cacheA = true, bool cacheB = true, bool checkNeighbors = true);
-    contactList getContacts(Residue* res, real cdcut = 0.0, contactList* list = NULL);
-    contactList getContacts(Structure& S, real cdcut = 0.0, contactList* list = NULL);
-    contactList getContacts(vector<Residue*>& residues, real cdcut = 0.0, contactList* list = NULL);
-    vector<Residue*> getContactingResidues(Residue* res, real cdcut = 0.0);
-    contactList getInterferences(vector<Residue*>& residues, real incut = 0.0, contactList* list = NULL);
+    mstreal contactDegree(Residue* resA, Residue* resB, bool cacheA = true, bool cacheB = true, bool checkNeighbors = true);
+    contactList getContacts(Residue* res, mstreal cdcut = 0.0, contactList* list = NULL);
+    contactList getContacts(Structure& S, mstreal cdcut = 0.0, contactList* list = NULL);
+    contactList getContacts(vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
+    vector<Residue*> getContactingResidues(Residue* res, mstreal cdcut = 0.0);
+    contactList getInterferences(vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
 
-    real getCrowdedness(Residue* res);
-    vector<real> getCrowdedness(vector<Residue*>& residues);
+    mstreal getCrowdedness(Residue* res);
+    vector<mstreal> getCrowdedness(vector<Residue*>& residues);
 
-    real getFreedom(Residue* res);
-    vector<real> getFreedom(vector<Residue*>& residues);
+    mstreal getFreedom(Residue* res);
+    vector<mstreal> getFreedom(vector<Residue*>& residues);
     void clearFreedom() { freedom.clear(); } // useful if one wants to force re-calculation (e.g., with new parameters)
 
     void openLogFile(string fname, bool append = false);
     void closeLogFile();
 
   protected:
-    real weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
+    mstreal weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
     void init(Structure& S);
     void setParams();
     /* given pre-computed collision probabilities, sums up freedom scores. NOTE,
      * does not check whether all the relevant contacting residues have been
      * visited, so must be called only at the right times (that's why protected) */
-    real computeFreedom(Residue* res);
+    mstreal computeFreedom(Residue* res);
     void collProbUpdateOn(Residue* res) { updateCollProb[res] = true; }
     void collProbUpdateOff(Residue* res) { updateCollProb[res] = false; }
 
@@ -118,19 +118,19 @@ class ConFind {
     AtomPointerVector backbone, ca;
     ProximitySearch *bbNN, *caNN;
     fastmap<Residue*, set<int> > permanentContacts;
-    fastmap<Residue*, real> fractionPruned;
-    fastmap<Residue*, real> freedom;
+    fastmap<Residue*, mstreal> fractionPruned;
+    fastmap<Residue*, mstreal> freedom;
     fastmap<Residue*, int> numLibraryRotamers;
     fastmap<Residue*, vector<rotamerID*> > survivingRotamers;
-    fastmap<Residue*, fastmap<Residue*, real> > degrees;
-    fastmap<Residue*, fastmap<rotamerID*, real> > collProb;
+    fastmap<Residue*, fastmap<Residue*, mstreal> > degrees;
+    fastmap<Residue*, fastmap<rotamerID*, mstreal> > collProb;
     fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
-    fastmap<Residue*, fastmap<Residue*, real> > interference; // interferance[resA][resB] will store home much the backbone of
+    fastmap<Residue*, fastmap<Residue*, mstreal> > interference; // interferance[resA][resB] will store home much the backbone of
                                                               // resB can potentially interfere with the amino-acid choice at resA
 
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
-    real dcut;                  // CA-AC distance cutoff beyond which we do not consider pairwise interactions
-    real clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively
+    mstreal dcut;                  // CA-AC distance cutoff beyond which we do not consider pairwise interactions
+    mstreal clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively
     fastmap<string, double> aaProp; // amino-acid propensities (in percent)
     bool doNotCountCB;          // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
     fstream rotOut;
@@ -139,7 +139,7 @@ class ConFind {
      * false, unless set internally as part of a relevant function (and then
      * unset before returning). */
     fastmap<Residue*, bool> updateCollProb;
-    real loCollProbCut, hiCollProbCut; // low and high collision probability cutoffs for computing freedom
+    mstreal loCollProbCut, hiCollProbCut; // low and high collision probability cutoffs for computing freedom
     int freedomType;                   // a switch between different formulas for computing freedom
 };
 

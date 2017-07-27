@@ -2,7 +2,7 @@
 
 vector<AtomPointerVector> TERMUtils::mostDesignableFragments(Structure& C, vector<Structure*>& TERMs, int n, CartesianPoint* cen, CartesianPoint* ext, string outBase, bool verb) {
   int N = 1000;      // examine top this many most promissing points to expand into regions
-  real dcut = 2.0;   // inter-atomic distance cutoff for counting neighbors
+  mstreal dcut = 2.0;   // inter-atomic distance cutoff for counting neighbors
 
   // this ProximitySearch object is for checking which residues are already contained within the central TERM (we want to bring new segments)
   AtomPointerVector centAtoms = C.getAtoms();
@@ -12,7 +12,7 @@ vector<AtomPointerVector> TERMUtils::mostDesignableFragments(Structure& C, vecto
   ProximitySearch* PS;
   if (cen == NULL) {
     // by default, look in a pad x pad x pad box around the center of the central TERM
-    real pad = 100;
+    mstreal pad = 100;
     PS = new ProximitySearch(centAtoms, 1.0, false, NULL, pad/2);
   } else {
     PS = new ProximitySearch((*cen)[0] - (*ext)[0], (*cen)[1] - (*ext)[1], (*cen)[2] - (*ext)[2], (*cen)[0] + (*ext)[0], (*cen)[1] + (*ext)[1], (*cen)[2] + (*ext)[2]);

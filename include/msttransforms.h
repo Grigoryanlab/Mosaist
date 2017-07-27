@@ -11,17 +11,17 @@ class Frame {
     Frame(); // same as the laboratory frame
     Frame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z);
     Frame(const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) : Frame(CartesianPoint(0, 0, 0), _X, _Y, _Z) {};
-    Frame(real _ox, real _oy, real _oz, real _xx, real _xy, real _xz, real _yx, real _yy, real _yz, real _zx, real _zy, real _zz);
+    Frame(mstreal _ox, mstreal _oy, mstreal _oz, mstreal _xx, mstreal _xy, mstreal _xz, mstreal _yx, mstreal _yy, mstreal _yz, mstreal _zx, mstreal _zy, mstreal _zz);
     Frame(Frame& other);
 
     CartesianPoint getX() const { return CartesianPoint(X[0], X[1], X[2]); }
     CartesianPoint getY() const { return CartesianPoint(Y[0], Y[1], Y[2]); }
     CartesianPoint getZ() const { return CartesianPoint(Z[0], Z[1], Z[2]); }
     CartesianPoint getO() const { return CartesianPoint(O[0], O[1], O[2]); }
-    real getX(int i) const { return X[i]; }
-    real getY(int i) const { return Y[i]; }
-    real getZ(int i) const { return Z[i]; }
-    real getO(int i) const { return O[i]; }
+    mstreal getX(int i) const { return X[i]; }
+    mstreal getY(int i) const { return Y[i]; }
+    mstreal getZ(int i) const { return Z[i]; }
+    mstreal getO(int i) const { return O[i]; }
 
     friend ostream & operator<<(ostream &_os, Frame& _F) {
       _os << "O: " << _F.O[0] << " " << _F.O[1] << " " << _F.O[2] << endl;
@@ -32,8 +32,8 @@ class Frame {
     }
 
   private:
-    real O[3];             // coordinates of the origin in the laboratory frame
-    real X[3], Y[3], Z[3]; // vectors corresponding to the X, Y, and Z axes in the laboratory frame
+    mstreal O[3];             // coordinates of the origin in the laboratory frame
+    mstreal X[3], Y[3], Z[3]; // vectors corresponding to the X, Y, and Z axes in the laboratory frame
 };
 
 class Transform {
@@ -43,18 +43,18 @@ class Transform {
     Transform(const Transform& other);
     Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, fillOrder order);
     Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, CartesianPoint D, fillOrder order);
-    Transform(vector<real> trans);
-    Transform(real* trans);
-    Transform(vector<vector<real> > rot);
-    Transform(real** rot);
-    Transform(vector<vector<real> > rot, vector<real> trans);
-    Transform(real** rot, real* trans);
+    Transform(vector<mstreal> trans);
+    Transform(mstreal* trans);
+    Transform(vector<vector<mstreal> > rot);
+    Transform(mstreal** rot);
+    Transform(vector<vector<mstreal> > rot, vector<mstreal> trans);
+    Transform(mstreal** rot, mstreal* trans);
     void makeIdentity();
-    void fill(vector<real>& A, vector<real>& B, vector<real>& C, vector<real>& D, fillOrder order);
-    void fill(vector<real>& A, vector<real>& B, vector<real>& C, fillOrder order);
+    void fill(vector<mstreal>& A, vector<mstreal>& B, vector<mstreal>& C, vector<mstreal>& D, fillOrder order);
+    void fill(vector<mstreal>& A, vector<mstreal>& B, vector<mstreal>& C, fillOrder order);
 
-    real& operator()(int i, int j);             // for access and setting
-    real operator()(int i, int j) const;        // for access only
+    mstreal& operator()(int i, int j);             // for access and setting
+    mstreal operator()(int i, int j) const;        // for access only
     Transform& operator*=(const Transform& rhs);
     const Transform operator*(const Transform& rhs) const;
     const CartesianPoint operator*(const CartesianPoint& rhs) const;
@@ -66,14 +66,14 @@ class Transform {
      * current transform. Assume the order of rotations is around X, then Y,
      * then Z. Code adopted from stackoverflow.org based on derivations in:
      * http://www.soi.city.ac.uk/~sbbh653/publications/euler.pdf */
-    void eulerAngles(real& x, real& y, real& z);
+    void eulerAngles(mstreal& x, mstreal& y, mstreal& z);
 
 
     CartesianPoint applyToCopy(CartesianPoint& p);
     void apply(CartesianPoint& p);
     void apply(Atom& a) { apply(&a); }
     void apply(Atom* a);
-    void apply(real& x, real& y, real& z);
+    void apply(mstreal& x, mstreal& y, mstreal& z);
     void apply(Residue& res) { apply(&res); }
     void apply(Residue* res);
     void apply(Chain& chain) { apply(&chain); }
@@ -92,49 +92,49 @@ class Transform {
       return _os;
     }
   private:
-    real M[4][4];         // transformation matrix in homogeneous coordinates
+    mstreal M[4][4];         // transformation matrix in homogeneous coordinates
 };
 
 
 class TransformFactory {
   public:
-    static Transform translate(real x, real y, real z);
+    static Transform translate(mstreal x, mstreal y, mstreal z);
     static Transform translate(const CartesianPoint& p);
 
     // rotations based on angle in degrees
-    static Transform rotateAroundX(real angle);
-    static Transform rotateAroundY(real angle);
-    static Transform rotateAroundZ(real angle);
+    static Transform rotateAroundX(mstreal angle);
+    static Transform rotateAroundY(mstreal angle);
+    static Transform rotateAroundZ(mstreal angle);
 
     // rotations based on cosine and sine values (sometimes, it is convenient not to compute the angle itself)
-    static Transform rotateAroundX(real s, real c);
-    static Transform rotateAroundY(real s, real c);
-    static Transform rotateAroundZ(real s, real c);
+    static Transform rotateAroundX(mstreal s, mstreal c);
+    static Transform rotateAroundY(mstreal s, mstreal c);
+    static Transform rotateAroundZ(mstreal s, mstreal c);
 
     // rotate around an arbitrary axis passing through the origin
-    static Transform rotateAroundAxis(real u, real v, real w, real a);
-    static Transform rotateAroundAxis(CartesianPoint& p, real a);
+    static Transform rotateAroundAxis(mstreal u, mstreal v, mstreal w, mstreal a);
+    static Transform rotateAroundAxis(CartesianPoint& p, mstreal a);
 
     // rotate around an arbitrary line passing through two given points
-    static Transform rotateAroundLine(real p1, real p2, real p3, real q1, real q2, real q3, real a);
-    static Transform rotateAroundLine(CartesianPoint& p, CartesianPoint& q, real a);
+    static Transform rotateAroundLine(mstreal p1, mstreal p2, mstreal p3, mstreal q1, mstreal q2, mstreal q3, mstreal a);
+    static Transform rotateAroundLine(CartesianPoint& p, CartesianPoint& q, mstreal a);
 
     // transformation matrices for aligning arbitrary axes with laboratory frame axes
-    static Transform alignVectorWithXAxis(real u, real v, real w);
+    static Transform alignVectorWithXAxis(mstreal u, mstreal v, mstreal w);
     static Transform alignVectorWithXAxis(CartesianPoint& p);
 
-    static Transform alignVectorWithYAxis(real u, real v, real w);
+    static Transform alignVectorWithYAxis(mstreal u, mstreal v, mstreal w);
     static Transform alignVectorWithYAxis(CartesianPoint& p);
 
-    static Transform alignVectorWithZAxis(real u, real v, real w);
+    static Transform alignVectorWithZAxis(mstreal u, mstreal v, mstreal w);
     static Transform alignVectorWithZAxis(CartesianPoint& p);
 
     // this transformation, when applied to points with coordinates in the from Frame
     // will produce coordinates corresponding the same points but in the to Frame
     static Transform switchFrames(const Frame& from, const Frame& to);
 
-    static const real degreesToRadians;
-    static const real radiansToDegrees;
+    static const mstreal degreesToRadians;
+    static const mstreal radiansToDegrees;
 };
 
 /* This class is for fast calculation of the RMSD between two transformations
@@ -150,13 +150,13 @@ class TransformRMSD {
 
     /* IMPORTANT: the transformations are interpreted as being
      * applied to the structure after it is centered at the origin. */
-    real getRMSD(Transform& T1, Transform& T2);   // RMSD between two transforms
-    real getRMSD(Transform& T1);                  // RMSD between the given transform and the identity transform
+    mstreal getRMSD(Transform& T1, Transform& T2);   // RMSD between two transforms
+    mstreal getRMSD(Transform& T1);                  // RMSD between the given transform and the identity transform
 
   protected:
 
   private:
-    real C[3][3];  // co-variance matrix of structure in question (normalized by the number of atoms)
+    mstreal C[3][3];  // co-variance matrix of structure in question (normalized by the number of atoms)
 };
 
 }

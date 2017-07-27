@@ -34,7 +34,7 @@ class MstOptions {
     bool isInt(const string& opt);
     int getInt(const string& opt, int defVal = 0);
     bool isReal(const string& opt);
-    real getReal(const string& opt, real defVal = 0.0);
+    mstreal getReal(const string& opt, mstreal defVal = 0.0);
     string getString(const string& opt, string defVal = "");
     bool getBool(const string& opt) { return isGiven(opt); }
     bool isGiven(const string& opt);

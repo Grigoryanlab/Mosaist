@@ -19,7 +19,7 @@ RotamerLibrary::~RotamerLibrary() {
 void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
   int nc, nb, na, nr;
   Residue* rot;
-  real x, y, z, phi, psi;
+  mstreal x, y, z, phi, psi;
   float val; // the binary file is written with single precision values, so read as floats and cast as necessary
   fstream inp;
   MstUtils::openFile(inp, rotLibFile, ios_base::in | ios_base::binary, "RotamerLibrary::readRotamerLibrary(string rotLibFile)");
@@ -31,10 +31,10 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     inp.read((char*) &na, sizeof(na)); // number of atoms in the side-chain of this amino acid
     inp.read((char*) &nb, sizeof(nb)); // number of phi/psi bins defined for this amino acid
     chidef[aa] = vector<vector<string> >(nc);
-    chi[aa] = vector<vector<vector<pair<real, real> > > >(nb);
+    chi[aa] = vector<vector<vector<pair<mstreal, mstreal> > > >(nb);
     rotamers[aa] = vector<Residue*>(nb, NULL);
-    prob[aa] = vector<vector<real> >(nb);
-    binFreq[aa] = vector<real>(nb);
+    prob[aa] = vector<vector<mstreal> >(nb);
+    binFreq[aa] = vector<mstreal>(nb);
 
     // read definitions of chi angles
     for (int i = 0; i < nc; i++) {
@@ -52,23 +52,23 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
     }
 
     // read phi/psi angles for each bin, record unique ones.
-    map<real, bool> uniquePhi, uniquePsi;
-    map<pair<real, real>, bool> uniqueBins;
-    vector<vector<real> > bins(nb);
+    map<mstreal, bool> uniquePhi, uniquePsi;
+    map<pair<mstreal, mstreal>, bool> uniqueBins;
+    vector<vector<mstreal> > bins(nb);
     for (int i = 0; i < nb; i++) {
-      bins[i] = vector<real>(3);
-      pair<real, real> bin;
+      bins[i] = vector<mstreal>(3);
+      pair<mstreal, mstreal> bin;
       inp.read((char*) &val, sizeof(val));
-      phi = angleToStandardRange((real) val);
+      phi = angleToStandardRange((mstreal) val);
       uniquePhi[phi] = true;
       bins[i][0] = phi;
       inp.read((char*) &val, sizeof(val));
-      psi = angleToStandardRange((real) val);
+      psi = angleToStandardRange((mstreal) val);
       uniquePsi[psi] = true;
       bins[i][1] = psi;
-      uniqueBins[pair<real, real>(phi, psi)] = true;
+      uniqueBins[pair<mstreal, mstreal>(phi, psi)] = true;
       inp.read((char*) &val, sizeof(val));
-      bins[i][2] = (real) val;
+      bins[i][2] = (mstreal) val;
     }
 
     // make sure the phi/psi bins are defined on a grid and bins are not repeated
@@ -105,21 +105,21 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
       for (int j = 0; j < nr; j++) {
         // read rotamer probability
         inp.read((char*) &val, sizeof(val));
-        prob[aa][i][j] = (real) val;
+        prob[aa][i][j] = (mstreal) val;
 
         // read chi and chi sigma values for the rotamer
         chi[aa][i][j].resize(nc);
         for (int k = 0; k < nc; k++) {
           inp.read((char*) &val, sizeof(val));
-          chi[aa][i][j][k].first = (real) val;
+          chi[aa][i][j][k].first = (mstreal) val;
           inp.read((char*) &val, sizeof(val));
-          chi[aa][i][j][k].second = (real) val;
+          chi[aa][i][j][k].second = (mstreal) val;
         }
         // read atom coordinates for the rotamer
         for (int k = 0; k < na; k++) {
-          inp.read((char*) &val, sizeof(val)); x = (real) val;
-          inp.read((char*) &val, sizeof(val)); y = (real) val;
-          inp.read((char*) &val, sizeof(val)); z = (real) val;
+          inp.read((char*) &val, sizeof(val)); x = (mstreal) val;
+          inp.read((char*) &val, sizeof(val)); y = (mstreal) val;
+          inp.read((char*) &val, sizeof(val)); z = (mstreal) val;
           if (j == 0) {
             (*rot)[k].setCoor(x, y, z);
           } else {
@@ -133,23 +133,23 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
   }
 }
 
-real RotamerLibrary::angleToStandardRange(real angle) {
+mstreal RotamerLibrary::angleToStandardRange(mstreal angle) {
   if ((angle >= -180) && (angle < 180)) return angle;
   return MstUtils::mod(angle + 180, 360.0) - 180;
 }
 
-int RotamerLibrary::numberOfRotamers(string aa, real phi, real psi, bool strict) {
+int RotamerLibrary::numberOfRotamers(string aa, mstreal phi, mstreal psi, bool strict) {
   int bi = getBackboneBin(aa, phi, psi, !strict);
   if (rotamers[aa][bi]->atomSize() == 0) return 1; // for GLY
   return rotamers[aa][bi]->getAtom(0).numAlternatives() + 1;
 }
 
-real RotamerLibrary::rotamerProbability(string aa, int ri, real phi, real psi, bool strict) {
+mstreal RotamerLibrary::rotamerProbability(string aa, int ri, mstreal phi, mstreal psi, bool strict) {
   int bi = getBackboneBin(aa, phi, psi, !strict);
   return prob[aa][bi][ri];
 }
 
-real RotamerLibrary::rotamerProbability(rotamerID* rot) {
+mstreal RotamerLibrary::rotamerProbability(rotamerID* rot) {
   return prob[rot->aminoAcid()][rot->binIndex()][rot->rotIndex()];
 }
 
@@ -278,7 +278,7 @@ bool RotamerLibrary::isHydrogen(string atomName) {
   return false;
 }
 
-int RotamerLibrary::getBackboneBin(string aa, real phi, real psi, bool assumeDefault) {
+int RotamerLibrary::getBackboneBin(string aa, mstreal phi, mstreal psi, bool assumeDefault) {
   if (binPhiCenters.find(aa) == binPhiCenters.end()) MstUtils::error("no PHI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
   if (binPsiCenters.find(aa) == binPsiCenters.end()) MstUtils::error("no PSI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
 
@@ -298,21 +298,21 @@ int RotamerLibrary::getBackboneBin(string aa, real phi, real psi, bool assumeDef
   return phiInd * binPsiCenters[aa].size() + psiInd;
 }
 
-pair<real, real> RotamerLibrary::getBinPhiPsi(string aa, int bi) {
+pair<mstreal, mstreal> RotamerLibrary::getBinPhiPsi(string aa, int bi) {
   if (binPhiCenters.find(aa) == binPhiCenters.end()) MstUtils::error("no PHI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
   if (binPsiCenters.find(aa) == binPsiCenters.end()) MstUtils::error("no PSI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
   if (bi >= binPhiCenters[aa].size() * binPsiCenters[aa].size()) MstUtils::error("bin index " + MstUtils::toString(bi) + " out of range", "RotamerLibrary::getBackboneBin");
 
   int phiInd = bi / binPsiCenters[aa].size();
   int psiInd = bi % binPsiCenters[aa].size();
-  return pair<real, real>(binPhiCenters[aa][phiInd], binPsiCenters[aa][psiInd]);
+  return pair<mstreal, mstreal>(binPhiCenters[aa][phiInd], binPsiCenters[aa][psiInd]);
 }
 
-int RotamerLibrary::findClosestAngle(vector<real>& array, real value) {
+int RotamerLibrary::findClosestAngle(vector<mstreal>& array, mstreal value) {
   MstUtils::assert(array.size() != 0, "empty vector passed", "RotamerLibrary::findClosestAngle");
   int minInd = 0;
-  real minDist = fabs(angleDiff(value, array[0]));
-  real dist;
+  mstreal minDist = fabs(angleDiff(value, array[0]));
+  mstreal dist;
   for (int i = 1; i < array.size(); i++) {
     dist = fabs(angleDiff(value, array[i]));
     if (minDist > dist) {
@@ -323,9 +323,9 @@ int RotamerLibrary::findClosestAngle(vector<real>& array, real value) {
   return minInd;
 }
 
-real RotamerLibrary::angleDiff(real a, real b) {
+mstreal RotamerLibrary::angleDiff(mstreal a, mstreal b) {
 
-  real da = MstUtils::mod((MstUtils::mod(a, 360.0) - MstUtils::mod(b, 360.0)), 360.0);
+  mstreal da = MstUtils::mod((MstUtils::mod(a, 360.0) - MstUtils::mod(b, 360.0)), 360.0);
   if (da > 180.0) da -= 360.0;
 
   return da;

@@ -73,7 +73,7 @@ int MstOptions::getInt(const string& opt, int defVal) {
   return MstUtils::toInt(givenOptions[opt]);
 }
 
-real MstOptions::getReal(const string& opt, real defVal) {
+mstreal MstOptions::getReal(const string& opt, mstreal defVal) {
   if (givenOptions.find(opt) == givenOptions.end()) return defVal;
   return MstUtils::toReal(givenOptions[opt]);
 }

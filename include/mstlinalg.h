@@ -11,30 +11,30 @@ namespace MST {
 
 class Matrix {
   public:
-    Matrix(int rows, int cols, real val = 0.0);
-    Matrix(const vector<vector<real> >& _M);
+    Matrix(int rows, int cols, mstreal val = 0.0);
+    Matrix(const vector<vector<mstreal> >& _M);
     Matrix(const Matrix& _M);
-    Matrix(const vector<real>& p, bool col = false); // by default makes row vectors
+    Matrix(const vector<mstreal>& p, bool col = false); // by default makes row vectors
     ~Matrix();
 
     int size(int dim = 1) const;
     int length() { return max(size(1), size(2)); }
     int numRows() const { return size(1); }
     int numCols() const { return size(2); }
-    real& operator()(int i, int j) { return *(M[i][j]); }
-    real operator()(int i, int j) const { return *(M[i][j]); }
+    mstreal& operator()(int i, int j) { return *(M[i][j]); }
+    mstreal operator()(int i, int j) const { return *(M[i][j]); }
 
     // single-subscript access (column-major order, as in Matlab)
-    real& operator()(int i) { int n = numRows(); return *(M[i % n][i / n]); }
-    real operator()(int i) const { int n = numRows(); return *(M[i % n][i / n]); }
-    real& operator[](int i) { int n = numRows(); return *(M[i % n][i / n]); }
-    real operator[](int i) const { int n = numRows(); return *(M[i % n][i / n]); }
+    mstreal& operator()(int i) { int n = numRows(); return *(M[i % n][i / n]); }
+    mstreal operator()(int i) const { int n = numRows(); return *(M[i % n][i / n]); }
+    mstreal& operator[](int i) { int n = numRows(); return *(M[i % n][i / n]); }
+    mstreal operator[](int i) const { int n = numRows(); return *(M[i % n][i / n]); }
 
     Matrix& operator=(const Matrix& _M);
-    Matrix& operator/=(const real& s);
-    Matrix& operator*=(const real& s);
-    const Matrix operator/(const real& s) const;
-    const Matrix operator*(const real& s) const;
+    Matrix& operator/=(const mstreal& s);
+    Matrix& operator*=(const mstreal& s);
+    const Matrix operator/(const mstreal& s) const;
+    const Matrix operator*(const mstreal& s) const;
     Matrix& operator*=(const Matrix& P);
     const Matrix operator*(const Matrix& P) const;
     Matrix& operator+=(const Matrix& P);
@@ -43,20 +43,20 @@ class Matrix {
     const Matrix operator-(const Matrix& P) const;
     const Matrix operator-() const;
     // so that we can also do scalar * Matrix (this is a global operator, not a member operator)
-    friend Matrix operator* (real s, const Matrix& M) { return M*s; }
+    friend Matrix operator* (mstreal s, const Matrix& M) { return M*s; }
 
     Matrix row(int i); // sub-matrix corresponding to the i-th row
     Matrix column(int i); // sub-matrix corresponding to the i-th column
 
     // when typecast as a vector<real>, appends all rows together
-    operator vector<real>() const;
+    operator vector<mstreal>() const;
 
     Matrix inverse();
     Matrix transpose();
     Matrix sum(int dim = 1, bool norm = false);
     Matrix mean(int dim = 1) { return sum(dim, true); }
-    real norm() const;   // Euclidean norm of the matrix
-    real norm2() const;  // Euclidean norm squared
+    mstreal norm() const;   // Euclidean norm of the matrix
+    mstreal norm2() const;  // Euclidean norm squared
 
     friend ostream & operator<<(ostream &_os, const Matrix& _M) {
       for (int i = 0; i < _M.numRows(); i++) {
@@ -69,11 +69,11 @@ class Matrix {
     }
 
   protected:
-    Matrix(const vector<vector<real*> >& _M, int rowBeg = 0, int rowEnd = -1, int colBeg = 0, int colEnd = -1);
+    Matrix(const vector<vector<mstreal*> >& _M, int rowBeg = 0, int rowEnd = -1, int colBeg = 0, int colEnd = -1);
     void setOwnFlag(bool _own) { own = _own; }
     bool getOwnFlag() { return own; }
     void clear();
-    vector<vector<real*> > M;
+    vector<vector<mstreal*> > M;
     bool own;                  // do I own the data in the matrix, or is my matrix a sub-matrix from some other matrix?
 };
 
@@ -81,8 +81,8 @@ class Matrix {
 // dimensions required to be unity.
 class Vector : public Matrix {
   public:
-    Vector(int numel, real val = 0.0, bool col = false) : Matrix(vector<real>(numel, val), col) {}
-    Vector(const vector<real>& p, bool col = false) : Matrix(p, col) {}
+    Vector(int numel, mstreal val = 0.0, bool col = false) : Matrix(vector<mstreal>(numel, val), col) {}
+    Vector(const vector<mstreal>& p, bool col = false) : Matrix(p, col) {}
     Vector(const Vector& V) : Matrix(V) {}
     Vector(const Matrix& _M) : Matrix(_M) { MstUtils::assert((_M.numRows() == 1) || (_M.numCols() == 1), "cannot construct a vector from a matrix with non-unitary dimensions", "Vector::Vector(const Matrix& _M)"); }
 };

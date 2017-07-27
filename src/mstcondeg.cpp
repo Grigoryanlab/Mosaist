@@ -75,7 +75,7 @@ void ConFind::cache(Residue* res) {
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
     MstUtils::error("cannot build rotamers at position " + MstUtils::toString(res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
   }
-  real phi = res->getPhi(false); real psi = res->getPsi(false);
+  mstreal phi = res->getPhi(false); mstreal psi = res->getPsi(false);
 
   // load rotamers of each amino acid
   int numRemRotsInPosition = 0; int totNumRotsInPosition = 0;
@@ -165,7 +165,7 @@ void ConFind::cache(Structure& S) {
   cache(residues);
 }
 
-real ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cacheB, bool checkNeighbors) {
+mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cacheB, bool checkNeighbors) {
   if ((degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end())) return degrees[resA][resB];
   if (cacheA) cache(resA);
   if (cacheB) cache(resB);
@@ -189,15 +189,15 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cach
   bool updateB = (updateCollProb.find(resB) != updateCollProb.end()) && updateCollProb[resB];
 
   // compute contact degree
-  real cd = 0;
+  mstreal cd = 0;
   for (fastmap<rotamerID*, fastmap<rotamerID*, bool> >::iterator itA = clashing.begin(); itA != clashing.end(); ++itA) {
     rotamerID* rotA = itA->first;
-    real rotProbA = rotLib->rotamerProbability(rotA);
-    real aaPropA = aaProp[rotA->aminoAcid()];
+    mstreal rotProbA = rotLib->rotamerProbability(rotA);
+    mstreal aaPropA = aaProp[rotA->aminoAcid()];
     for (fastmap<rotamerID*, bool>::iterator itB = itA->second.begin(); itB != itA->second.end(); ++itB) {
       rotamerID* rotB = itB->first;
-      real rotProbB = rotLib->rotamerProbability(rotB);
-      real aaPropB = aaProp[rotB->aminoAcid()];
+      mstreal rotProbB = rotLib->rotamerProbability(rotB);
+      mstreal aaPropB = aaProp[rotB->aminoAcid()];
       cd += aaPropA * aaPropB * rotProbA * rotProbB;
       if (updateA) collProb[resA][rotA] += aaPropB * rotProbB;
       if (updateB) collProb[resB][rotB] += aaPropA * rotProbA;
@@ -210,7 +210,7 @@ real ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cach
   return cd;
 }
 
-contactList ConFind::getContacts(Residue* res, real cdcut, contactList* list) {
+contactList ConFind::getContacts(Residue* res, mstreal cdcut, contactList* list) {
   vector<Residue*> neighborhood = getNeighbors(res);
   cache(neighborhood);
   contactList L;
@@ -220,7 +220,7 @@ contactList ConFind::getContacts(Residue* res, real cdcut, contactList* list) {
   collProbUpdateOn(res);
   for (int i = 0; i < neighborhood.size(); i++) {
     if (res == neighborhood[i]) continue;
-    real cd = contactDegree(res, neighborhood[i], false, false, false);
+    mstreal cd = contactDegree(res, neighborhood[i], false, false, false);
     if (cd > cdcut) list->addContact(res, neighborhood[i], cd);
   }
   collProbUpdateOff(res);
@@ -229,7 +229,7 @@ contactList ConFind::getContacts(Residue* res, real cdcut, contactList* list) {
   return *list;
 }
 
-vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
+vector<Residue*> ConFind::getContactingResidues(Residue* res, mstreal cdcut) {
   vector<Residue*> neighborhood = getNeighbors(res);
   cache(neighborhood);
 
@@ -238,7 +238,7 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
   collProbUpdateOn(res);
   for (int i = 0; i < neighborhood.size(); i++) {
     if (res == neighborhood[i]) continue;
-    real cd = contactDegree(res, neighborhood[i], false, false, false);
+    mstreal cd = contactDegree(res, neighborhood[i], false, false, false);
     if (cd > cdcut) partners.push_back(neighborhood[i]);
   }
   collProbUpdateOff(res);
@@ -247,7 +247,7 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, real cdcut) {
   return partners;
 }
 
-contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contactList* list) {
+contactList ConFind::getContacts(vector<Residue*>& residues, mstreal cdcut, contactList* list) {
   cache(residues);
   fastmap<Residue*, fastmap<Residue*, bool> > checked;
   fastmap<Residue*, bool> ofInterest;
@@ -264,7 +264,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
       if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
         if (ofInterest.find(resj) != ofInterest.end()) collProbUpdateOn(resj);
         checked[resj][resi] = true;
-        real cd = contactDegree(resi, resj, false, true, false);
+        mstreal cd = contactDegree(resi, resj, false, true, false);
         if (cd > cdcut) {
           list->addContact(resi, resj, cd);
         }
@@ -278,21 +278,21 @@ contactList ConFind::getContacts(vector<Residue*>& residues, real cdcut, contact
     // rotamers survive at the position but could be that some survive and never
     // clash), the collision probably map for this position will not exist, so
     // make it empty.
-    if (collProb.find(resi) == collProb.end()) collProb[resi] = fastmap<rotamerID*, real>();
+    if (collProb.find(resi) == collProb.end()) collProb[resi] = fastmap<rotamerID*, mstreal>();
     computeFreedom(resi);
   }
 
   return *list;
 }
 
-contactList ConFind::getInterferences(vector<Residue*>& residues, real incut, contactList* list) {
+contactList ConFind::getInterferences(vector<Residue*>& residues, mstreal incut, contactList* list) {
   cache(residues);
   contactList L;
 
   for (auto itA = interference.begin(); itA != interference.end(); ++itA) {
-    fastmap<Residue*, real>& interB = itA->second;
+    fastmap<Residue*, mstreal>& interB = itA->second;
     for (auto itB = interB.begin(); itB != interB.end(); ++itB) {
-      real in = itB->second;
+      mstreal in = itB->second;
       if (in >= incut) {
         list->addContact(itA->first, itB->first, in, "", true);
       }
@@ -301,7 +301,7 @@ contactList ConFind::getInterferences(vector<Residue*>& residues, real incut, co
   return *list;
 }
 
-contactList ConFind::getContacts(Structure& S, real cdcut, contactList* list) {
+contactList ConFind::getContacts(Structure& S, mstreal cdcut, contactList* list) {
   contactList L;
   if (list == NULL) list = &L;
   vector<Residue*> allRes = S.getResidues();
@@ -310,19 +310,19 @@ contactList ConFind::getContacts(Structure& S, real cdcut, contactList* list) {
   return *list;
 }
 
-real ConFind::getCrowdedness(Residue* res) {
+mstreal ConFind::getCrowdedness(Residue* res) {
   cache(res);
   return fractionPruned[res];
 }
 
-vector<real> ConFind::getCrowdedness(vector<Residue*>& residues) {
-  vector<real> crowdedness(residues.size());
+vector<mstreal> ConFind::getCrowdedness(vector<Residue*>& residues) {
+  vector<mstreal> crowdedness(residues.size());
   for (int i = 0; i < residues.size(); i++) crowdedness[i] = getCrowdedness(residues[i]);
   return crowdedness;
 }
 
-real ConFind::weightOfAvailableRotamers(Residue* res) {
-  real weight = 0;
+mstreal ConFind::weightOfAvailableRotamers(Residue* res) {
+  mstreal weight = 0;
   if (survivingRotamers.find(res) == survivingRotamers.end()) MstUtils::error("residue not cached: " + MstUtils::toString(res), "ConFind::weightOfAvailableRotamers");
   vector<rotamerID*>& rots = survivingRotamers[res];
   for (int i = 0; i < rots.size(); i++) {
@@ -332,31 +332,31 @@ real ConFind::weightOfAvailableRotamers(Residue* res) {
   return weight;
 }
 
-real ConFind::getFreedom(Residue* res) {
+mstreal ConFind::getFreedom(Residue* res) {
   if (freedom.find(res) == freedom.end()) getContacts(res);
   return freedom[res];
 }
 
-vector<real> ConFind::getFreedom(vector<Residue*>& residues) {
-  vector<real> freedoms(residues.size());
+vector<mstreal> ConFind::getFreedom(vector<Residue*>& residues) {
+  vector<mstreal> freedoms(residues.size());
   for (int i = 0; i < residues.size(); i++) freedoms[i] = getFreedom(residues[i]);
   return freedoms;
 }
 
-real ConFind::computeFreedom(Residue* res) {
+mstreal ConFind::computeFreedom(Residue* res) {
   if (freedom.find(res) != freedom.end()) return freedom[res];
   if (collProb.find(res) == collProb.end())
     MstUtils::error("residue not cached " + MstUtils::toString(res), "ConFind::computeFreedom");
 
   // rotamers are in this map only if they do actually collide, so those that
   // do not collide with anything thus can be assumed to have zero collision probability mass
-  fastmap<rotamerID*, real>& cp = collProb[res];
-  real n, n1, n2;
+  fastmap<rotamerID*, mstreal>& cp = collProb[res];
+  mstreal n, n1, n2;
   switch (freedomType) {
     case 1:
       // number of rotamers with < 0.5 collision probability mass
       n = survivingRotamers[res].size() - cp.size();
-      for (fastmap<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
+      for (fastmap<rotamerID*, mstreal>::iterator it = cp.begin(); it != cp.end(); ++it) {
         if (it->second/100 < 0.5) n += 1;
       }
       freedom[res] = n/numLibraryRotamers[res];
@@ -365,7 +365,7 @@ real ConFind::computeFreedom(Residue* res) {
     case 3:
       // a combination of the number of rotamers with < 0.5 and < 2.0 collision probability masses
       n1 = survivingRotamers[res].size() - cp.size(); n2 = n1;
-      for (fastmap<rotamerID*, real>::iterator it = cp.begin(); it != cp.end(); ++it) {
+      for (fastmap<rotamerID*, mstreal>::iterator it = cp.begin(); it != cp.end(); ++it) {
         if (it->second/100 < loCollProbCut) n1 += 1;
         if (it->second/100 < hiCollProbCut) n2 += 1;
       }
@@ -438,7 +438,7 @@ void ConFind::closeLogFile() {
   rotOut.close();
 }
 
-real contactList::degree(Residue* _resi, Residue* _resj) {
+mstreal contactList::degree(Residue* _resi, Residue* _resj) {
   if (inContact.find(_resi) == inContact.end()) return 0;
   if (inContact[_resi].find(_resj) == inContact[_resi].end()) return 0;
   return degrees[inContact[_resi][_resj]];

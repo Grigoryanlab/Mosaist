@@ -13,11 +13,11 @@ int main(int argc, char** argv) {
   string outBase(argv[2]);
 
   // test construction
-  vector<vector<real> > rot(3, vector<real>(3, 0));
+  vector<vector<mstreal> > rot(3, vector<mstreal>(3, 0));
   rot[0][0] = 1;
   rot[1][1] = 1;
   rot[2][2] = 1;
-  vector<real> trans(3, 1.5);
+  vector<mstreal> trans(3, 1.5);
   Transform TT(rot, trans);
   cout << "constructed:\n" << TT << endl;
 

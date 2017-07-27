@@ -8,35 +8,35 @@ Matrix::~Matrix() {
   if (own) clear();
 }
 
-Matrix::Matrix(int rows, int cols, real val) {
+Matrix::Matrix(int rows, int cols, mstreal val) {
   if ((rows < 0) || (cols < 0)) MstUtils::error("invalid dimensions specified: " + MstUtils::toString(rows) + " x " + MstUtils::toString(cols), "Matrix::Matrix");
-  M.resize(rows, vector<real*>(cols, NULL));
+  M.resize(rows, vector<mstreal*>(cols, NULL));
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
-      M[i][j] = new real(val);
+      M[i][j] = new mstreal(val);
     }
   }
   own = true;
 }
 
-Matrix::Matrix(const vector<vector<real> >& _M) {
+Matrix::Matrix(const vector<vector<mstreal> >& _M) {
   int rows = _M.size();
   int cols = (_M.size() > 0) ? _M[0].size() : 0;
-  M.resize(rows, vector<real*>(cols, NULL));
+  M.resize(rows, vector<mstreal*>(cols, NULL));
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
-      M[i][j] = new real(_M[i][j]);
+      M[i][j] = new mstreal(_M[i][j]);
     }
   }
   own = true;
 }
 
-Matrix::Matrix(const vector<vector<real*> >& _M, int rowBeg, int rowEnd, int colBeg, int colEnd) {
+Matrix::Matrix(const vector<vector<mstreal*> >& _M, int rowBeg, int rowEnd, int colBeg, int colEnd) {
   if (rowEnd < 0) rowEnd = _M.size() - 1;
   if (colEnd < 0) colEnd = ((_M.size() > 0) ? _M[0].size() : 0) - 1;
   int rows = rowEnd - rowBeg + 1;
   int cols = colEnd - colBeg + 1;
-  M.resize(rows, vector<real*>(cols, NULL));
+  M.resize(rows, vector<mstreal*>(cols, NULL));
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
       M[i][j] = _M[i + rowBeg][j + colBeg];
@@ -54,22 +54,22 @@ void Matrix::clear() {
 }
 
 Matrix::Matrix(const Matrix& _M) {
-  M.resize(_M.numRows(), vector<real*>(_M.numCols(), NULL));
+  M.resize(_M.numRows(), vector<mstreal*>(_M.numCols(), NULL));
   for (int i = 0; i < _M.numRows(); i++) {
     for (int j = 0; j < _M.numCols(); j++) {
-      M[i][j] = new real(_M(i,j));
+      M[i][j] = new mstreal(_M(i,j));
     }
   }
   own = true;
 }
 
-Matrix::Matrix(const vector<real>& p, bool col) {
+Matrix::Matrix(const vector<mstreal>& p, bool col) {
   if (col) {
-    M.resize(p.size(), vector<real*>(1));
-    for (int i = 0; i < p.size(); i++) M[i][0] = new real(p[i]);
+    M.resize(p.size(), vector<mstreal*>(1));
+    for (int i = 0; i < p.size(); i++) M[i][0] = new mstreal(p[i]);
   } else {
-    M.resize(1, vector<real*>(p.size()));
-    for (int i = 0; i < p.size(); i++) M[0][i] = new real(p[i]);
+    M.resize(1, vector<mstreal*>(p.size()));
+    for (int i = 0; i < p.size(); i++) M[0][i] = new mstreal(p[i]);
   }
   own = true;
 }
@@ -93,10 +93,10 @@ Matrix& Matrix::operator=(const Matrix& _M) {
       MstUtils::error("dimensions must agree when assigning to a sub-Matrix", "Matrix::operator=");
     } else {
       clear();
-      M.resize(_M.numRows(), vector<real*>(_M.numCols(), NULL));
+      M.resize(_M.numRows(), vector<mstreal*>(_M.numCols(), NULL));
       for (int i = 0; i < _M.numRows(); i++) {
         for (int j = 0; j < _M.numCols(); j++) {
-          M[i][j] = new real(_M(i, j));
+          M[i][j] = new mstreal(_M(i, j));
         }
       }
     }
@@ -110,7 +110,7 @@ Matrix& Matrix::operator=(const Matrix& _M) {
   return *this;
 }
 
-Matrix& Matrix::operator/=(const real& s) {
+Matrix& Matrix::operator/=(const mstreal& s) {
   for (int i = 0; i < M.size(); i++) {
     for (int j = 0; j < M[i].size(); j++) {
       *(M[i][j]) /= s;
@@ -119,7 +119,7 @@ Matrix& Matrix::operator/=(const real& s) {
   return *this;
 }
 
-Matrix& Matrix::operator*=(const real& s) {
+Matrix& Matrix::operator*=(const mstreal& s) {
   for (int i = 0; i < M.size(); i++) {
     for (int j = 0; j < M[i].size(); j++) {
       *(M[i][j]) *= s;
@@ -128,13 +128,13 @@ Matrix& Matrix::operator*=(const real& s) {
   return *this;
 }
 
-const Matrix Matrix::operator/(const real& s) const {
+const Matrix Matrix::operator/(const mstreal& s) const {
   Matrix R = *this;
   R /= s;
   return R;
 }
 
-const Matrix Matrix::operator*(const real& s) const {
+const Matrix Matrix::operator*(const mstreal& s) const {
   Matrix R = *this;
   R *= s;
   return R;
@@ -215,8 +215,8 @@ Matrix Matrix::column(int i) {
   return subMat;
 }
 
-Matrix::operator vector<real>() const {
-  vector<real> cat(numRows() * numCols());
+Matrix::operator vector<mstreal>() const {
+  vector<mstreal> cat(numRows() * numCols());
   int k = 0;
   for (int i = 0; i < numRows(); i++) {
     for (int j = 0; j < numCols(); j++) {
@@ -232,7 +232,7 @@ Matrix Matrix::inverse() {
   int N = size(1);
   Matrix Mi = *this;
   Matrix& Mo = *this;
-  real det;
+  mstreal det;
 
   switch(N) {
     case 0:
@@ -329,16 +329,16 @@ Matrix Matrix::sum(int dim, bool norm) {
   }
 }
 
-real Matrix::norm() const {
-  real n = 0;
+mstreal Matrix::norm() const {
+  mstreal n = 0;
   for (int i = 0; i < M.size(); i++) {
     for (int j = 0; j < M[i].size(); j++) n += (*(M[i][j])) * (*(M[i][j]));
   }
   return sqrt(n);
 }
 
-real Matrix::norm2() const {
-  real n = 0;
+mstreal Matrix::norm2() const {
+  mstreal n = 0;
   for (int i = 0; i < M.size(); i++) {
     for (int j = 0; j < M[i].size(); j++) n += (*(M[i][j])) * (*(M[i][j]));
   }

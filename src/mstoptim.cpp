@@ -127,7 +127,7 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
 
   // find best solution
   int bestPoint;
-  double bestScore = MstUtils::min((vector<real>) values, -1, -1, &bestPoint);
+  double bestScore = MstUtils::min((vector<mstreal>) values, -1, -1, &bestPoint);
   solution = simplex.row(bestPoint);
   return bestScore;
 }

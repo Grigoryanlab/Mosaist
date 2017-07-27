@@ -125,12 +125,12 @@ void Structure::readPDB(string pdbFile, string options) {
     string chainID = MstUtils::trim(line.substr(21, 1));
     int resnum = charmmFormat ? MstUtils::toInt(line.substr(23, 4)) : MstUtils::toInt(line.substr(22, 4));
     string icode = charmmFormat ? " " : line.substr(26, 1);
-    real x = MstUtils::toReal(line.substr(30, 8));
-    real y = MstUtils::toReal(line.substr(38, 8));
-    real z = MstUtils::toReal(line.substr(46, 8));
+    mstreal x = MstUtils::toReal(line.substr(30, 8));
+    mstreal y = MstUtils::toReal(line.substr(38, 8));
+    mstreal z = MstUtils::toReal(line.substr(46, 8));
     string segID = MstUtils::trim(line.substr(72, 4));
-    real B = MstUtils::toReal(line.substr(60, 6));
-    real occ = MstUtils::toReal(line.substr(54, 6));
+    mstreal B = MstUtils::toReal(line.substr(60, 6));
+    mstreal occ = MstUtils::toReal(line.substr(54, 6));
     bool het = (line.find("HETATM") == 0);
 
     // use segment ID's instead of chain ID's?
@@ -417,13 +417,13 @@ void Structure::renumber() {
   }
 }
 
-Structure Structure::reassignChainsByConnectivity(real maxPeptideBond) {
+Structure Structure::reassignChainsByConnectivity(mstreal maxPeptideBond) {
   Structure S;
   reassignChainsByConnectivity(S, maxPeptideBond);
   return S;
 }
 
-void Structure::reassignChainsByConnectivity(Structure& dest, real maxPeptideBond) {
+void Structure::reassignChainsByConnectivity(Structure& dest, mstreal maxPeptideBond) {
   vector<Residue*> residues = this->getResidues();
 	Chain* chain = dest.appendChain("A");
 	for (int i = 0; i < residues.size() - 1; i++) {
@@ -614,7 +614,7 @@ Residue* Chain::findResidue(string resname, int resnum, char icode) {
 
 /* --------- Residue --------- */
 
-const real Residue::badDihedral = 999.0;
+const mstreal Residue::badDihedral = 999.0;
 
 Residue::Residue() {
   resname = "UNK";
@@ -749,7 +749,7 @@ Residue* Residue::previousResidue() {
 }
 
 // C- N  CA  C
-real Residue::getPhi(bool strict) {
+mstreal Residue::getPhi(bool strict) {
   Residue* res1 = previousResidue();
   if (res1 == NULL) return badDihedral;
   Atom* A = res1->findAtom("C", false);
@@ -765,7 +765,7 @@ real Residue::getPhi(bool strict) {
 }
 
 // N  CA  C  N+
-real Residue::getPsi(bool strict) {
+mstreal Residue::getPsi(bool strict) {
   Residue* res1 = nextResidue();
   if (res1 == NULL) return badDihedral;
   Atom* A = findAtom("N", false);
@@ -781,7 +781,7 @@ real Residue::getPsi(bool strict) {
 }
 
 // CA-  C-  N  CA
-real Residue::getOmega(bool strict) {
+mstreal Residue::getOmega(bool strict) {
   Residue* res1 = previousResidue();
   if (res1 == NULL) return badDihedral;
   Atom* A = res1->findAtom("CA", false);
@@ -866,7 +866,7 @@ Atom::Atom(const Atom& A, bool copyAlt) {
   }
 }
 
-Atom::Atom(int _index, string _name, real _x, real _y, real _z, real _B, real _occ, bool _het, char _alt, Residue* _parent) {
+Atom::Atom(int _index, string _name, mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, bool _het, char _alt, Residue* _parent) {
   index = _index;
   name = NULL;
   setName(_name);
@@ -886,7 +886,7 @@ Atom::~Atom() {
   if (alternatives != NULL) delete alternatives;
 }
 
-real& Atom::operator[](int i) {
+mstreal& Atom::operator[](int i) {
   switch(i) {
     case 0:
       return x;
@@ -941,7 +941,7 @@ void Atom::makeAlternativeMain(int altInd) {
   x = targ.x; y = targ.y; z = targ.z; occ = targ.occ; B = targ.B; alt = targ.alt;
 }
 
-void Atom::addAlternative(real _x, real _y, real _z, real _B, real _occ, char _alt) {
+void Atom::addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, char _alt) {
   if (alternatives == NULL) {
     alternatives = new vector<altInfo>(0);
   }
@@ -981,31 +981,31 @@ string Atom::pdbLine(int resIndex, int atomIndex) {
   return (string) line;
 }
 
-real Atom::distance(const Atom& another) const {
+mstreal Atom::distance(const Atom& another) const {
   return sqrt((x - another.x)*(x - another.x) + (y - another.y)*(y - another.y) + (z - another.z)*(z - another.z));
 }
 
-real Atom::distance2(const Atom& another) const {
+mstreal Atom::distance2(const Atom& another) const {
   return (x - another.x)*(x - another.x) + (y - another.y)*(y - another.y) + (z - another.z)*(z - another.z);
 }
 
-real Atom::angle(const Atom& A, const Atom& B, bool radians) const {
+mstreal Atom::angle(const Atom& A, const Atom& B, bool radians) const {
   return CartesianGeometry::angle(*this, A, B, radians);
 }
 
-real Atom::angle(const Atom* A, const Atom* B, bool radians) const {
+mstreal Atom::angle(const Atom* A, const Atom* B, bool radians) const {
   return CartesianGeometry::angle(this, A, B, radians);
 }
 
-real Atom::dihedral(const Atom& A, const Atom& B, const Atom& C, bool radians) const {
+mstreal Atom::dihedral(const Atom& A, const Atom& B, const Atom& C, bool radians) const {
   return CartesianGeometry::dihedral(*this, A, B, C, radians);
 }
 
-real Atom::dihedral(const Atom* A, const Atom* B, const Atom* C, bool radians) const {
+mstreal Atom::dihedral(const Atom* A, const Atom* B, const Atom* C, bool radians) const {
   return CartesianGeometry::dihedral(this, A, B, C, radians);
 }
 
-bool Atom::build(const Atom& diA, const Atom& anA, const Atom& thA, real di, real an, real th, bool radians) {
+bool Atom::build(const Atom& diA, const Atom& anA, const Atom& thA, mstreal di, mstreal an, mstreal th, bool radians) {
   if (!radians) {
     an *= M_PI/180;
     th *= M_PI/180;
@@ -1017,12 +1017,12 @@ bool Atom::build(const Atom& diA, const Atom& anA, const Atom& thA, real di, rea
   // vector from anA to thA (C - D)
   CartesianPoint dDC = (CartesianPoint) anA - (CartesianPoint) thA;
 
-  real an2 = M_PI - an;
-  real th2 = M_PI + th;
-  real rsin = di * sin(an2);
-  real rcos = di * cos(an2);
-  real rsinsin = rsin * sin(th2);
-  real rsincos = rsin * cos(th2);
+  mstreal an2 = M_PI - an;
+  mstreal th2 = M_PI + th;
+  mstreal rsin = di * sin(an2);
+  mstreal rcos = di * cos(an2);
+  mstreal rsinsin = rsin * sin(th2);
+  mstreal rsincos = rsin * cos(th2);
 
   CartesianPoint c1 = uCB.cross(dDC);
 
@@ -1058,20 +1058,20 @@ void AtomPointerVector::center() {
   }
 }
 
-real AtomPointerVector::radiusOfGyration() {
+mstreal AtomPointerVector::radiusOfGyration() {
   CartesianPoint center = getGeometricCenter();
-  real s = 0;
+  mstreal s = 0;
   for (int i = 0; i < size(); i++) {
     s += CartesianPoint((*this)[i]).distance2(center);
   }
   return sqrt(s / size());
 }
 
-real AtomPointerVector::boundingSphereRadiusCent() {
+mstreal AtomPointerVector::boundingSphereRadiusCent() {
   CartesianPoint center = getGeometricCenter();
-  real r = 0;
+  mstreal r = 0;
   for (int i = 0; i < size(); i++) {
-    real dist = CartesianPoint((*this)[i]).distance(center);
+    mstreal dist = CartesianPoint((*this)[i]).distance(center);
     if (dist > r) r = dist;
   }
   return r;
@@ -1127,14 +1127,14 @@ CartesianPoint& CartesianPoint::operator-=(const CartesianPoint &rhs) {
   return *this;
 }
 
-CartesianPoint& CartesianPoint::operator*=(const real& s) {
+CartesianPoint& CartesianPoint::operator*=(const mstreal& s) {
   for (int i = 0; i < this->size(); i++) {
     (*this)[i] *= s;
   }
   return *this;
 }
 
-CartesianPoint& CartesianPoint::operator/=(const real& s) {
+CartesianPoint& CartesianPoint::operator/=(const mstreal& s) {
   for (int i = 0; i < this->size(); i++) {
     (*this)[i] /= s;
   }
@@ -1157,13 +1157,13 @@ const CartesianPoint CartesianPoint::operator-() const {
   return CartesianPoint(this->size(), 0) - *this;
 }
 
-const CartesianPoint CartesianPoint::operator*(const real& s) const {
+const CartesianPoint CartesianPoint::operator*(const mstreal& s) const {
   CartesianPoint result = *this;
   result *= s;
   return result;
 }
 
-const CartesianPoint CartesianPoint::operator/(const real& s) const {
+const CartesianPoint CartesianPoint::operator/(const mstreal& s) const {
   CartesianPoint result = *this;
   result /= s;
   return result;
@@ -1174,25 +1174,25 @@ CartesianPoint& CartesianPoint::operator=(const Atom& A) {
   return *this;
 }
 
-real CartesianPoint::norm() const {
-  real n = 0;
+mstreal CartesianPoint::norm() const {
+  mstreal n = 0;
   for (int i = 0; i < size(); i++) n += (*this)[i]*(*this)[i];
   return sqrt(n);
 }
 
-real CartesianPoint::mean() const {
+mstreal CartesianPoint::mean() const {
   return sum()/size();
 }
 
-real CartesianPoint::sum() const {
-  real s = 0;
+mstreal CartesianPoint::sum() const {
+  mstreal s = 0;
   for (int i = 0; i < size(); i++) s += (*this)[i];
   return s;
 }
 
-real CartesianPoint::median() const {
+mstreal CartesianPoint::median() const {
   if (size() == 0) return 0; // could also throw an error in this case
-  vector<real> vec = *this;
+  vector<mstreal> vec = *this;
   sort(vec.begin(), vec.end());
   if (vec.size() % 2 == 0) return (vec[vec.size() / 2] + vec[vec.size() / 2 - 1])/2;
   return vec[vec.size() / 2];
@@ -1210,10 +1210,10 @@ CartesianPoint CartesianPoint::cross(CartesianPoint other) const {
   return C;
 }
 
-real CartesianPoint::dot(CartesianPoint other) const {
+mstreal CartesianPoint::dot(CartesianPoint other) const {
   if (size() != other.size()) MstUtils::error("vector size mismatch", "CartesianPoint::dot");
 
-  real d = 0;
+  mstreal d = 0;
   for (int i = 0; i < size(); i++) {
     d += (*this)[i] * other[i];
   }
@@ -1221,18 +1221,18 @@ real CartesianPoint::dot(CartesianPoint other) const {
   return d;
 }
 
-real CartesianPoint::distance(const CartesianPoint& another) const {
+mstreal CartesianPoint::distance(const CartesianPoint& another) const {
   if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance(CartesianPoint&)");
-  real d = 0;
+  mstreal d = 0;
   for (int i = 0; i < this->size(); i++) {
     d += ((*this)[i] - another[i])*((*this)[i] - another[i]);
   }
   return sqrt(d);
 }
 
-real CartesianPoint::distance2(const CartesianPoint& another) const {
+mstreal CartesianPoint::distance2(const CartesianPoint& another) const {
   if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance2(CartesianPoint&)");
-  real d = 0;
+  mstreal d = 0;
   for (int i = 0; i < this->size(); i++) {
     d += ((*this)[i] - another[i])*((*this)[i] - another[i]);
   }
@@ -1240,7 +1240,7 @@ real CartesianPoint::distance2(const CartesianPoint& another) const {
 }
 
 /* --------- CartesianGeometry --------- */
-real CartesianGeometry::dihedral(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4, bool radians) {
+mstreal CartesianGeometry::dihedral(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4, bool radians) {
   CartesianPoint AB = _p1 - _p2;
   CartesianPoint CB = _p3 - _p2;
   CartesianPoint DC = _p4 - _p3;
@@ -1266,36 +1266,36 @@ real CartesianGeometry::dihedral(const CartesianPoint & _p1, const CartesianPoin
   return angle;
 }
 
-real CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4, bool radians) {
+mstreal CartesianGeometry::dihedral(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, const CartesianPoint * _p4, bool radians) {
   return dihedral(*_p1, *_p2, *_p3, *_p4, radians);
 }
 
-real CartesianGeometry::angle(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, bool radians) {
+mstreal CartesianGeometry::angle(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, bool radians) {
   CartesianPoint v21 = (_p1 - _p2).getUnit();
   CartesianPoint v23 = (_p3 - _p2).getUnit();
-  real c = v21.dot(v23);
+  mstreal c = v21.dot(v23);
   return atan2(sqrt(1 - c*c), c) * (radians ? 1 : 180/M_PI);
 }
 
-real CartesianGeometry::angle(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, bool radians) {
+mstreal CartesianGeometry::angle(const CartesianPoint * _p1, const CartesianPoint * _p2, const CartesianPoint * _p3, bool radians) {
   return angle(*_p1, *_p2, *_p3, radians);
 }
 
-real CartesianGeometry::angleDiff(real A, real B, bool radians) {
-  real PI = radians ? M_PI : 180.0;
-  real TWOPI = 2*PI;
-  real da = MstUtils::mod((MstUtils::mod(A, TWOPI) - MstUtils::mod(B, TWOPI)), TWOPI);
+mstreal CartesianGeometry::angleDiff(mstreal A, mstreal B, bool radians) {
+  mstreal PI = radians ? M_PI : 180.0;
+  mstreal TWOPI = 2*PI;
+  mstreal da = MstUtils::mod((MstUtils::mod(A, TWOPI) - MstUtils::mod(B, TWOPI)), TWOPI);
   if (da > PI) da -= TWOPI;
   return da;
 }
 
-real CartesianGeometry::angleDiffCCW(real A, real B, bool radians) {
-  real TWOPI = radians ? 2*M_PI : 360.0;
-  real da = MstUtils::mod((MstUtils::mod(A, TWOPI) - MstUtils::mod(B, TWOPI)), TWOPI);
+mstreal CartesianGeometry::angleDiffCCW(mstreal A, mstreal B, bool radians) {
+  mstreal TWOPI = radians ? 2*M_PI : 360.0;
+  mstreal da = MstUtils::mod((MstUtils::mod(A, TWOPI) - MstUtils::mod(B, TWOPI)), TWOPI);
   return da;
 }
 
-pair<real, real> CartesianGeometry::angleRange(const vector<real>& angles, bool radians) {
+pair<mstreal, mstreal> CartesianGeometry::angleRange(const vector<mstreal>& angles, bool radians) {
   int bestMin = 0; int bestMax = 0; double bestArc = (radians ? 2*M_PI : 360.0) + 1;
   for (int minInd = 0; minInd < angles.size(); minInd++) {
     int maxInd = 0; double arc = 0;
@@ -1309,12 +1309,12 @@ pair<real, real> CartesianGeometry::angleRange(const vector<real>& angles, bool 
       bestMin = minInd; bestMax = maxInd; bestArc = arc;
     }
   }
-  return pair<real, real>(angles[bestMin], angles[bestMax]);
+  return pair<mstreal, mstreal>(angles[bestMin], angles[bestMax]);
 }
 
-real CartesianGeometry::angleMean(const vector<real>& angles, bool radians) {
-  pair<real, real> minmax = angleRange(angles, radians);
-  real m = 0;
+mstreal CartesianGeometry::angleMean(const vector<mstreal>& angles, bool radians) {
+  pair<mstreal, mstreal> minmax = angleRange(angles, radians);
+  mstreal m = 0;
   for (int i = 0; i < angles.size(); i++) {
     m += angleDiffCCW(angles[i], minmax.first);
   }
@@ -1581,14 +1581,14 @@ AtomPointerVector selector::byChain(AtomPointerVector& selAtoms) {
 
 /* --------- RMSDCalculator --------- */
 
-vector<real> RMSDCalculator::lastTranslation() {
-    vector<real> trans(3, 0.0);
+vector<mstreal> RMSDCalculator::lastTranslation() {
+    vector<mstreal> trans(3, 0.0);
     for (int i = 0; i < 3; i++) trans[i] = t[i];
     return trans;
 }
 
-vector<vector<real> > RMSDCalculator::lastRotation() {
-    vector<vector<real> > rot(3);
+vector<vector<mstreal> > RMSDCalculator::lastRotation() {
+    vector<vector<mstreal> > rot(3);
     for (int i = 0; i < 3; i++) {
         rot[i].resize(3, 0);
         for (int j = 0; j < 3; j++ ) {
@@ -1598,7 +1598,7 @@ vector<vector<real> > RMSDCalculator::lastRotation() {
     return rot;
 }
 
-real RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot, bool* _suc) {
+mstreal RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot, bool* _suc) {
     _rmsd = 999999.0;
     if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
     else { if (_suc != NULL) *_suc = false; }
@@ -1610,7 +1610,7 @@ bool RMSDCalculator::align(const vector<Atom*> &_align, const vector<Atom*> &_re
     bool suc = Kabsch(_align, _ref, 1);
 
     if (suc) {
-        real x[3],x1[3];
+        mstreal x[3],x1[3];
         for(int k=0; k<_moveable.size(); k++) {
             x[0]=_moveable[k]->getX();
             x[1]=_moveable[k]->getY();
@@ -1643,16 +1643,16 @@ bool RMSDCalculator::align(const vector<Atom*> &_align, const vector<Atom*> &_re
 **************************************************************************/
 bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_ref, int mode) {
     int i, j, m, m1, l, k;
-    real e0, rms1, d, h, g;
-    real cth, sth, sqrth, p, det, sigma;
-    real xc[3], yc[3];
-    real a[3][3], b[3][3], r[3][3], e[3], rr[6], ss[6];
-    real sqrt3=1.73205080756888, tol=0.01;
+    mstreal e0, rms1, d, h, g;
+    mstreal cth, sth, sqrth, p, det, sigma;
+    mstreal xc[3], yc[3];
+    mstreal a[3][3], b[3][3], r[3][3], e[3], rr[6], ss[6];
+    mstreal sqrt3=1.73205080756888, tol=0.01;
     int ip[]={0, 1, 3, 1, 2, 4, 3, 4, 5};
     int ip2312[]={1, 2, 0, 1};
 
     int a_failed=0, b_failed=0;
-    real epsilon=0.00000001;
+    mstreal epsilon=0.00000001;
 
     int n=_ref.size();
     if(n != _align.size()) {
@@ -1695,8 +1695,8 @@ bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_r
         yc[2] += _ref[i]->getZ();
     }
     for(i=0; i<3; i++){
-        xc[i] = xc[i]/(real)n;
-        yc[i] = yc[i]/(real)n;
+        xc[i] = xc[i]/(mstreal)n;
+        yc[i] = yc[i]/(mstreal)n;
     }
 
     //compute e0 and matrix r
@@ -1732,8 +1732,8 @@ bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_r
         }
     }
 
-    real spur=(rr[0]+rr[2]+rr[5]) / 3.0;
-    real cof = (((((rr[2]*rr[5] - rr[4]*rr[4]) + rr[0]*rr[5]) \
+    mstreal spur=(rr[0]+rr[2]+rr[5]) / 3.0;
+    mstreal cof = (((((rr[2]*rr[5] - rr[4]*rr[4]) + rr[0]*rr[5]) \
           - rr[3]*rr[3]) + rr[0]*rr[2]) - rr[1]*rr[1]) / 3.0;
     det = det*det;
 
@@ -1937,32 +1937,32 @@ bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_r
     rms1 = (e0 - d) - d;
     if( rms1 < 0.0 ) rms1 = 0.0;
 
-    _rmsd=sqrt(rms1/(real)n);
+    _rmsd=sqrt(rms1/(mstreal)n);
 
     return true;
 }
 
-real RMSDCalculator::rmsd(const vector<Atom*>& A, const vector<Atom*>& B) {
+mstreal RMSDCalculator::rmsd(const vector<Atom*>& A, const vector<Atom*>& B) {
   if (A.size() != B.size())
     MstUtils::error("atom vectors of different length (" + MstUtils::toString(A.size()) + " and " + MstUtils::toString(B.size()) + ")", "RMSDCalculator::rmsd(vector<Atom*>&, vector<Atom*>&)");
 
-  real ret = 0;
+  mstreal ret = 0;
   for (int i = 0; i < A.size(); i++) {
     ret += A[i]->distance2(B[i]);
   }
   return sqrt(ret/A.size());
 }
 
-real RMSDCalculator::rmsd(const Structure& A, const Structure& B) {
+mstreal RMSDCalculator::rmsd(const Structure& A, const Structure& B) {
   vector<Atom*> atomsA = A.getAtoms();
   vector<Atom*> atomsB = B.getAtoms();
   return rmsd(atomsA, atomsB);
 }
 
-real RMSDCalculator::rmsdCutoff(const vector<int>& L, real rmsdMax, real L0) {
-  real a = (real) exp(-1./L0);
+mstreal RMSDCalculator::rmsdCutoff(const vector<int>& L, mstreal rmsdMax, mstreal L0) {
+  mstreal a = (mstreal) exp(-1./L0);
   int N = 0, n;
-  real c = 0;
+  mstreal c = 0;
 
   // disjoint segments are counted as independent, so their correlation
   // with respect to each other is zero
@@ -1976,7 +1976,7 @@ real RMSDCalculator::rmsdCutoff(const vector<int>& L, real rmsdMax, real L0) {
   return rmsdMax/sqrt(N/df);
 }
 
-real RMSDCalculator::rmsdCutoff(const Structure& S, real rmsdMax, real L0) {
+mstreal RMSDCalculator::rmsdCutoff(const Structure& S, mstreal rmsdMax, mstreal L0) {
   vector<int> L(S.chainSize());
   for (int i = 0; i < S.chainSize(); i++) L[i] = S[i].residueSize();
   return RMSDCalculator::rmsdCutoff(L, rmsdMax, L0);
@@ -1984,14 +1984,14 @@ real RMSDCalculator::rmsdCutoff(const Structure& S, real rmsdMax, real L0) {
 
 /* --------- ProximitySearch --------- */
 
-ProximitySearch::ProximitySearch(real _xlo, real _ylo, real _zlo, real _xhi, real _yhi, real _zhi, int _N) {
+ProximitySearch::ProximitySearch(mstreal _xlo, mstreal _ylo, mstreal _zlo, mstreal _xhi, mstreal _yhi, mstreal _zhi, int _N) {
   xlo = _xlo; ylo = _ylo; zlo = _zlo;
   xhi = _xhi; yhi = _yhi; zhi = _zhi;
   reinitBuckets(_N);
   setBinWidths();
 }
 
-ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, int _N, bool _addAtoms, vector<int>* tags, real pad) {
+ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, int _N, bool _addAtoms, vector<int>* tags, mstreal pad) {
   calculateExtent(_atoms);
   xlo -= pad; ylo -= pad; zlo -= pad;
   xhi += pad; yhi += pad; zhi += pad;
@@ -2004,7 +2004,7 @@ ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, int _N, bool _
   }
 }
 
-ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, real _characteristicDistance, bool _addAtoms, vector<int>* tags, real pad) {
+ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, mstreal _characteristicDistance, bool _addAtoms, vector<int>* tags, mstreal pad) {
   calculateExtent(_atoms);
   if (xlo == xhi) { xlo -= _characteristicDistance/2; xhi += _characteristicDistance/2; }
   if (ylo == yhi) { ylo -= _characteristicDistance/2; yhi += _characteristicDistance/2; }
@@ -2031,12 +2031,12 @@ ProximitySearch::~ProximitySearch() {
   for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
 }
 
-void ProximitySearch::calculateExtent(const Structure& S, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
+void ProximitySearch::calculateExtent(const Structure& S, mstreal& _xlo, mstreal& _ylo, mstreal& _zlo, mstreal& _xhi, mstreal& _yhi, mstreal& _zhi) {
   AtomPointerVector atoms = S.getAtoms();
   calculateExtent(atoms, _xlo, _ylo, _zlo, _xhi, _yhi, _zhi);
 }
 
-void ProximitySearch::calculateExtent(const AtomPointerVector& _atoms, real& _xlo, real& _ylo, real& _zlo, real& _xhi, real& _yhi, real& _zhi) {
+void ProximitySearch::calculateExtent(const AtomPointerVector& _atoms, mstreal& _xlo, mstreal& _ylo, mstreal& _zlo, mstreal& _xhi, mstreal& _yhi, mstreal& _zhi) {
   if (_atoms.size() == 0) { cout << "Error in ProximitySearch::calculateExtent() -- empty atom vector passed!\n"; exit(-1); }
   _xlo = _xhi = _atoms[0]->getX();
   _ylo = _yhi = _atoms[0]->getY();
@@ -2089,7 +2089,7 @@ bool ProximitySearch::isPointWithinGrid(CartesianPoint _p) {
   return true;
 }
 
-void ProximitySearch::pointBucket(real px, real py, real pz, int* i, int* j, int* k) {
+void ProximitySearch::pointBucket(mstreal px, mstreal py, mstreal pz, int* i, int* j, int* k) {
   *i = (int) floor((px - xlo)/xbw + 0.5);
   *j = (int) floor((py - ylo)/ybw + 0.5);
   *k = (int) floor((pz - zlo)/zbw + 0.5);
@@ -2100,12 +2100,12 @@ void ProximitySearch::limitIndex(int *ind) {
   if (*ind > N-1) *ind = N-1;
 }
 
-bool ProximitySearch::pointsWithin(const CartesianPoint& c, real dmin, real dmax, vector<int>* list, bool byTag) {
-  real cx = c.getX(); real cy = c.getY(); real cz = c.getZ();
+bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstreal dmax, vector<int>* list, bool byTag) {
+  mstreal cx = c.getX(); mstreal cy = c.getY(); mstreal cz = c.getZ();
   // first check if the point is outside of the bounding box of the point cloud by a sufficient amount
   if ((cx < xlo - dmax) || (cy < ylo - dmax) || (cz < zlo - dmax) || (cx > xhi + dmax) || (cy > yhi + dmax) || (cz > zhi + dmax)) return false;
 
-  real d2, dmin2, dmax2;
+  mstreal d2, dmin2, dmax2;
   int ci, cj, ck;
   int imax1, jmax1, kmax1, imax2, jmax2, kmax2; // external box (no point in looking beyond it, points there are too far)
   int imin1, jmin1, kmin1, imin2, jmin2, kmin2; // internal box (no point in looking within it, points there are too close)
@@ -2113,7 +2113,7 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, real dmin, real dmax
   pointBucket(cx - dmax, cy - dmax, cz - dmax, &imax1, &jmax1, &kmax1);
   pointBucket(cx + dmax, cy + dmax, cz + dmax, &imax2, &jmax2, &kmax2);
   if (dmin > 0) {
-    real sr3 = sqrt(3);
+    mstreal sr3 = sqrt(3);
     pointBucket(cx - dmin/sr3, cy - dmin/sr3, cz - dmin/sr3, &imin1, &jmin1, &kmin1);
     pointBucket(cx + dmin/sr3, cy + dmin/sr3, cz + dmin/sr3, &imin2, &jmin2, &kmin2);
     // need to trim the internal box to make sure it is fully contained within the sphere of radius dmin from the central point
@@ -2162,13 +2162,13 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, real dmin, real dmax
   return found;
 }
 
-vector<int> ProximitySearch::getPointsWithin(const CartesianPoint& c, real dmin, real dmax, bool byTag) {
+vector<int> ProximitySearch::getPointsWithin(const CartesianPoint& c, mstreal dmin, mstreal dmax, bool byTag) {
   vector<int> closeOnes;
   pointsWithin(c, dmin, dmax, &closeOnes, byTag);
   return closeOnes;
 }
 
-bool ProximitySearch::overlaps(ProximitySearch& other, real pad) {
+bool ProximitySearch::overlaps(ProximitySearch& other, mstreal pad) {
   if ((other.xlo > xhi + pad) || (xlo > other.xhi + pad) || (other.ylo > yhi + pad) || (ylo > other.yhi + pad) || (other.zlo > zhi + pad) || (zlo > other.zhi + pad)) {
     return false;
   }
@@ -2176,7 +2176,7 @@ bool ProximitySearch::overlaps(ProximitySearch& other, real pad) {
 }
 
 /* --------- Clusterer --------- */
-vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& units, real rmsdCut, int Nmax) {
+vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax) {
   coputedRMSDs.clear();
   vector<vector<int> > clusters;
   set<int> remIndices;
@@ -2209,7 +2209,7 @@ vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& unit
   return clusters;
 }
 
-vector<vector<int> > Clusterer::greedyClusterBruteForce(const vector<vector<Atom*> >& units, set<int> remIndices, real rmsdCut, int nClusts) {
+vector<vector<int> > Clusterer::greedyClusterBruteForce(const vector<vector<Atom*> >& units, set<int> remIndices, mstreal rmsdCut, int nClusts) {
   vector<vector<int> > clusters;
   while (remIndices.size() != 0) {
     // pick the best current centroid
@@ -2229,12 +2229,12 @@ vector<vector<int> > Clusterer::greedyClusterBruteForce(const vector<vector<Atom
   return clusters;
 }
 
-vector<int> Clusterer::elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, int from, real rmsdCut) {
-  vector<int> neigh; vector<real> rmsds;
+vector<int> Clusterer::elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, int from, mstreal rmsdCut) {
+  vector<int> neigh; vector<mstreal> rmsds;
   const vector<Atom*>& fromUnit = units[from];
   RMSDCalculator rCalc;
   for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
-    real r = rCalc.bestRMSD(fromUnit, units[*it]);
+    mstreal r = rCalc.bestRMSD(fromUnit, units[*it]);
     if (r <= rmsdCut) {
       neigh.push_back(*it);
       rmsds.push_back(r);
@@ -2413,14 +2413,14 @@ bool MstUtils::isReal(string num) {
   return (sscanf(num.c_str(), "%lf", &ret) != 0);
 }
 
-MST::real MstUtils::toReal(string num, bool strict) {
+MST::mstreal MstUtils::toReal(string num, bool strict) {
   double ret;
-  if ((sscanf(num.c_str(), "%lf", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to real", "MstUtils::toReal");
-  return (real) ret;
+  if ((sscanf(num.c_str(), "%lf", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to mstreal", "MstUtils::toReal");
+  return (mstreal) ret;
 }
 
-MST::real MstUtils::mod(MST::real num, MST::real den) {
-  return num - ((MST::real) floor((double) num / (double) den)) * den;
+MST::mstreal MstUtils::mod(MST::mstreal num, MST::mstreal den) {
+  return num - ((MST::mstreal) floor((double) num / (double) den)) * den;
 }
 
 string MstUtils::readNullTerminatedString(fstream& ifs) {

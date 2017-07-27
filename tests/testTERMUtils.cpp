@@ -5,10 +5,10 @@
 using namespace MST;
 
 int main(int argc, char** argv) {
-  real pad = 100;    // search for matching segments in a pad x pad x pad box around the center of the central unit
+  mstreal pad = 100;    // search for matching segments in a pad x pad x pad box around the center of the central unit
   int N = 1000;      // examine top this many most promissing points to expand into regions
   int n = 20;        // write this many best-scoring regions
-  real dcut = 2.0;   // inter-atomic distance cutoff for counting neighbors
+  mstreal dcut = 2.0;   // inter-atomic distance cutoff for counting neighbors
   int ri;
 
   if (argc < 2) {

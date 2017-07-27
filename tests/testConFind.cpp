@@ -353,7 +353,7 @@ int main(int argc, char *argv[]) {
     }
 
     // print freedoms
-    vector<real> freedoms = C.getFreedom(allRes);
+    vector<mstreal> freedoms = C.getFreedom(allRes);
     for (int k = 0; k < allRes.size(); k++) {
       Residue* res = allRes[k];
       out << "freedom\t" << res->getChainID() << "," << res->getNum() << "\t";

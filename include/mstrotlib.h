@@ -31,10 +31,10 @@ class RotamerLibrary {
 
     /* returns the index of the bin into which the given phi/psi value combination
      * maps for the given amino acid. */
-    int getBackboneBin(string aa, real phi, real psi, bool assumeDefault = true);
+    int getBackboneBin(string aa, mstreal phi, mstreal psi, bool assumeDefault = true);
 
     /* finds the phi/psi values corresponding to the given bin index for the given amino acid */
-    pair<real, real> getBinPhiPsi(string aa, int bi);
+    pair<mstreal, mstreal> getBinPhiPsi(string aa, int bi);
 
     /* places the specified rotamer into the given Residue. NOTE: the original residue
      * is modified, with some of its atoms potentially destroyed (as needed), so if you
@@ -56,16 +56,16 @@ class RotamerLibrary {
     static bool isHydrogen(Atom& atom) { return isHydrogen(atom.getName()); }
     static bool isHydrogen(Atom* atom) { return isHydrogen(atom->getName()); }
 
-    int numberOfRotamers(string aa, real phi = Residue::badDihedral, real psi = Residue::badDihedral, bool strict = false);
-    real rotamerProbability(string aa, int ri, real phi = Residue::badDihedral, real psi = Residue::badDihedral, bool strict = false);
-    real rotamerProbability(rotamerID& rot) { return rotamerProbability(&rot); }
-    real rotamerProbability(rotamerID* rot);
+    int numberOfRotamers(string aa, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);
+    mstreal rotamerProbability(string aa, int ri, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);
+    mstreal rotamerProbability(rotamerID& rot) { return rotamerProbability(&rot); }
+    mstreal rotamerProbability(rotamerID* rot);
     vector<string> availableAminoAcids() { return keys(rotamers); }
 
   protected:
     /* given an array of angles, stored in ascending order (i.e., in the counter-clockwise
      * direction), find the array index with the angle closest to the given angle */
-    int findClosestAngle(vector<real>& array, real value);
+    int findClosestAngle(vector<mstreal>& array, mstreal value);
 
     /* make newAtoms be a vector of atoms corresponding to the given rotamer, upon
      * transformation according to the given Transform. */
@@ -74,10 +74,10 @@ class RotamerLibrary {
     // computes the difference between two angles, choosing the closest direction
     // (i.e., either clockwise, indicated by a negative difference or counter-clockwise,
     // indicated by a positive difference). The order of subtraction is a - b.
-    real angleDiff(real a, real b);
+    mstreal angleDiff(mstreal a, mstreal b);
 
     // map a given angle, in degrees to the "standard" range of [-180, 180)
-    real angleToStandardRange(real angle);
+    mstreal angleToStandardRange(mstreal angle);
 
     // return a vector of keys given a map
     template<class T1, class T2>
@@ -102,12 +102,12 @@ class RotamerLibrary {
 
     /* rotamer probabilities. As above, the map is keyed by amino acid, the outer vector
      * goes over phi/psi bins and the inner vector over rotamers. */
-    map<string, vector<vector<real> > > prob;
+    map<string, vector<vector<mstreal> > > prob;
 
     /* for a given amino acid, binFreq[aa] stores the frequencies of each phi/psi bin. These
      * are stored as reals, so they can be either counts (i.e., number of occurrences) as with
      * Dunbrack's rotamer library or true frequencies (i.e., probabilities). */
-    map<string, vector<real> > binFreq;
+    map<string, vector<mstreal> > binFreq;
 
     /* the default phi/psi bin for each amino acid; assumed in the absence of a valid phi/psi pair. */
     map<string, int> defaultBin;
@@ -119,7 +119,7 @@ class RotamerLibrary {
      * chi["ARG"][i][13][2].first is the chi3 value for the 14th rotamer of ARG in phi/psi bin i
      * and
      * chi["ARG"][i][13][2].second -- is the standard deviation around this value (sigma). */
-    map<string, vector<vector<vector<pair<real, real> > > > > chi;
+    map<string, vector<vector<vector<pair<mstreal, mstreal> > > > > chi;
 
     /* definitions of chi angles (via atom names). The key is the amino acid name, the
      * outer vector is over chi angles and the inner vector is over atoms comprising each
@@ -131,8 +131,8 @@ class RotamerLibrary {
      * different amino acids. The two variables below store where the grid lines in phi
      * and psi lie, such that the total number of bins for amino-acid aa is
      * binPhiCenters[aa].size() * binPsiCenters[aa].size() */
-    map<string, vector<real> > binPhiCenters;
-    map<string, vector<real> > binPsiCenters;
+    map<string, vector<mstreal> > binPhiCenters;
+    map<string, vector<mstreal> > binPsiCenters;
 };
 
 }

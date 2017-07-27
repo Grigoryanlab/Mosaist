@@ -14,17 +14,17 @@ Frame::Frame() {
 Frame::Frame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) {
   MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3),
       "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)");
-  real xn = _X.norm(); real yn = _Y.norm(); real zn = _Z.norm();
+  mstreal xn = _X.norm(); mstreal yn = _Y.norm(); mstreal zn = _Z.norm();
   O[0] = _O[0]; O[1] = _O[1]; O[2] = _O[2];
   X[0] = _X[0]/xn; X[1] = _X[1]/xn; X[2] = _X[2]/xn;
   Y[0] = _Y[0]/yn; Y[1] = _Y[1]/yn; Y[2] = _Y[2]/yn;
   Z[0] = _Z[0]/zn; Z[1] = _Z[1]/zn; Z[2] = _Z[2]/zn;
 }
 
-Frame::Frame(real _ox, real _oy, real _oz, real _xx, real _xy, real _xz, real _yx, real _yy, real _yz, real _zx, real _zy, real _zz) {
-  real xn = sqrt(_xx*_xx + _xy*_xy + _xz*_xz);
-  real yn = sqrt(_yx*_yx + _yy*_yy + _yz*_yz);
-  real zn = sqrt(_zx*_zx + _zy*_zy + _zz*_zz);
+Frame::Frame(mstreal _ox, mstreal _oy, mstreal _oz, mstreal _xx, mstreal _xy, mstreal _xz, mstreal _yx, mstreal _yy, mstreal _yz, mstreal _zx, mstreal _zy, mstreal _zz) {
+  mstreal xn = sqrt(_xx*_xx + _xy*_xy + _xz*_xz);
+  mstreal yn = sqrt(_yx*_yx + _yy*_yy + _yz*_yz);
+  mstreal zn = sqrt(_zx*_zx + _zy*_zy + _zz*_zz);
   O[0] = _ox; O[1] = _oy; O[2] = _oz;
   X[0] = _xx/xn; X[1] = _xy/xn; X[2] = _xz/xn;
   Y[0] = _yx/yn; Y[1] = _yy/yn; Y[2] = _yz/yn;
@@ -47,17 +47,17 @@ Transform::Transform(const Transform& other) {
   }
 }
 
-void Transform::fill(vector<real>& A, vector<real>& B, vector<real>& C, vector<real>& D, fillOrder order) {
+void Transform::fill(vector<mstreal>& A, vector<mstreal>& B, vector<mstreal>& C, vector<mstreal>& D, fillOrder order) {
   if ((A.size() != 4) || (B.size() != 4) || (C.size() != 4) || (D.size() != 4)) {
     MstUtils::error("expected 4D vectors!", "Transform::Transform(CartesianPoint, CartesianPoint, CartesianPoint, CartesianPoint, fillOrder)");
   }
-  vector<real>* points[4];
+  vector<mstreal>* points[4];
   points[0] = &A;
   points[1] = &B;
   points[2] = &C;
   points[3] = &D;
   for (int i = 0; i < 4; i++) {
-    vector<real>* P = points[i];
+    vector<mstreal>* P = points[i];
     for (int j = 0; j < 4; j++) {
       if (order == fillOrder::byColumn) {
         (*this)(i, j) = (*P)[j];
@@ -68,17 +68,17 @@ void Transform::fill(vector<real>& A, vector<real>& B, vector<real>& C, vector<r
   }
 }
 
-void Transform::fill(vector<real>& A, vector<real>& B, vector<real>& C, fillOrder order) {
+void Transform::fill(vector<mstreal>& A, vector<mstreal>& B, vector<mstreal>& C, fillOrder order) {
   makeIdentity();
   if ((A.size() != 3) || (B.size() != 3) || (C.size() != 3)) {
     MstUtils::error("expected 3D vectors!", "Transform::Transform(CartesianPoint, CartesianPoint, CartesianPoint, fillOrder)");
   }
-  vector<real>* points[3];
+  vector<mstreal>* points[3];
   points[0] = &A;
   points[1] = &B;
   points[2] = &C;
   for (int i = 0; i < 3; i++) {
-    vector<real>* P = points[i];
+    vector<mstreal>* P = points[i];
     for (int j = 0; j < 3; j++) {
       if (order == fillOrder::byColumn) {
         (*this)(j, i) = (*P)[j];
@@ -106,7 +106,7 @@ Transform::Transform(CartesianPoint A, CartesianPoint B, CartesianPoint C, Carte
   fill(A, B, C, D, order);
 }
 
-Transform::Transform(vector<real> trans) {
+Transform::Transform(vector<mstreal> trans) {
   makeIdentity();
   if (trans.size() != 3) MstUtils::error("expected a 3D vector!", "Transform::Transform(vector<real>)");
   for (int i = 0; i < 3; i++) {
@@ -114,17 +114,17 @@ Transform::Transform(vector<real> trans) {
   }
 }
 
-Transform::Transform(real* trans) {
+Transform::Transform(mstreal* trans) {
   makeIdentity();
   for (int i = 0; i < 3; i++) (*this)(i, 3) = trans[i];
 }
 
-Transform::Transform(vector<vector<real> > rot) {
+Transform::Transform(vector<vector<mstreal> > rot) {
   if (rot.size() != 3) MstUtils::error("expected a 3x3 matrix!", "Transform::Transform(vector<vector<real> >)");
   fill(rot[0], rot[1], rot[2], byRow);
 }
 
-Transform::Transform(real** rot) {
+Transform::Transform(mstreal** rot) {
   makeIdentity();
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
@@ -133,7 +133,7 @@ Transform::Transform(real** rot) {
   }
 }
 
-Transform::Transform(vector<vector<real> > rot, vector<real> trans) {
+Transform::Transform(vector<vector<mstreal> > rot, vector<mstreal> trans) {
   if (rot.size() != 3) MstUtils::error("expected a 3x3 matrix!", "Transform::Transform(vector<vector<real> >, vector<real>)");
   if (trans.size() != 3) MstUtils::error("expected a 3D vector!", "Transform::Transform(vector<vector<real> >, vector<real>)");
   fill(rot[0], rot[1], rot[2], byRow);
@@ -142,7 +142,7 @@ Transform::Transform(vector<vector<real> > rot, vector<real> trans) {
   }
 }
 
-Transform::Transform(real** rot, real* trans) {
+Transform::Transform(mstreal** rot, mstreal* trans) {
   for (int i = 0; i < 3; i++) {
     (*this)(i, 3) = trans[i];
     (*this)(3, i) = 0;
@@ -163,12 +163,12 @@ void Transform::makeIdentity() {
   }
 }
 
-real& Transform::operator()(int i, int j) {
+mstreal& Transform::operator()(int i, int j) {
   if ((i < 0) || (j < 0) || (i > 3) || (j > 3)) MstUtils::error("element " + MstUtils::toString(i) + " x " + MstUtils::toString(j) + " out of range", "Transform::operator()");
   return M[i][j];
 }
 
-real Transform::operator()(int i, int j) const {
+mstreal Transform::operator()(int i, int j) const {
   if ((i < 0) || (j < 0) || (i > 3) || (j > 3)) MstUtils::error("element " + MstUtils::toString(i) + " x " + MstUtils::toString(j) + " out of range", "Transform::operator()");
   return M[i][j];
 }
@@ -240,7 +240,7 @@ Transform Transform::translation() {
   return T;
 }
 
-void Transform::eulerAngles(real& x, real& y, real& z) {
+void Transform::eulerAngles(mstreal& x, mstreal& y, mstreal& z) {
   // check for gimbal lock
   if (MstUtils::closeEnough((float) M[2][0], (float) -1.0)) {
     float z = 0; // gimbal lock, value of x doesn't matter
@@ -284,7 +284,7 @@ void Transform::apply(Atom* a) {
   a->setCoor(point);
 }
 
-void Transform::apply(real& x, real& y, real& z) {
+void Transform::apply(mstreal& x, mstreal& y, mstreal& z) {
   CartesianPoint point(x, y, z);
   point = (*this) * point;
   x = point[0]; y = point[1]; z = point[2];
@@ -325,10 +325,10 @@ void Transform::apply(const AtomPointerVector& vec) {
 /* --------- TransformFactory --------- */
 /* lots of valuable information was taken from http://web.cs.iastate.edu/~cs577/handouts/homogeneous-transform.pdf */
 
-const real TransformFactory::degreesToRadians = M_PI/180.0;
-const real TransformFactory::radiansToDegrees = 180.0/M_PI;
+const mstreal TransformFactory::degreesToRadians = M_PI/180.0;
+const mstreal TransformFactory::radiansToDegrees = 180.0/M_PI;
 
-Transform TransformFactory::translate(real x, real y, real z) {
+Transform TransformFactory::translate(mstreal x, mstreal y, mstreal z) {
   Transform T;
   T(0, 3) = x; T(1, 3) = y; T(2, 3) = z;
   return T;
@@ -339,50 +339,50 @@ Transform TransformFactory::translate(const CartesianPoint& p) {
   return translate(p[0], p[1], p[2]);
 }
 
-Transform TransformFactory::rotateAroundX(real angle) {
+Transform TransformFactory::rotateAroundX(mstreal angle) {
   return rotateAroundX(sin(angle * degreesToRadians), cos(angle * degreesToRadians));
 }
 
-Transform TransformFactory::rotateAroundY(real angle) {
+Transform TransformFactory::rotateAroundY(mstreal angle) {
   return rotateAroundY(sin(angle * degreesToRadians), cos(angle * degreesToRadians));
 }
 
-Transform TransformFactory::rotateAroundZ(real angle) {
+Transform TransformFactory::rotateAroundZ(mstreal angle) {
   return rotateAroundZ(sin(angle * degreesToRadians), cos(angle * degreesToRadians));
 }
 
-Transform TransformFactory::rotateAroundX(real s, real c) {
+Transform TransformFactory::rotateAroundX(mstreal s, mstreal c) {
   Transform T;
   T(1, 1) =  c; T(1, 2) = -s;
   T(2, 1) =  s; T(2, 2) =  c;
   return T;
 }
 
-Transform TransformFactory::rotateAroundY(real s, real c) {
+Transform TransformFactory::rotateAroundY(mstreal s, mstreal c) {
   Transform T;
   T(0, 0) =  c; T(0, 2) =  s;
   T(2, 0) = -s; T(2, 2) =  c;
   return T;
 }
 
-Transform TransformFactory::rotateAroundZ(real s, real c) {
+Transform TransformFactory::rotateAroundZ(mstreal s, mstreal c) {
   Transform T;
   T(0, 0) =  c; T(0, 1) = -s;
   T(1, 0) =  s; T(1, 1) =  c;
   return T;
 }
 
-Transform TransformFactory::rotateAroundAxis(real u, real v, real w, real a) {
+Transform TransformFactory::rotateAroundAxis(mstreal u, mstreal v, mstreal w, mstreal a) {
   if (sqrt(u*u + v*v) < 10E-10) {
     return rotateAroundZ(a);
   }
 
   // matrix for rotating vector (u,v,w) about Z-axis into XY-plane
-  real uv = sqrt(u*u + v*v);
+  mstreal uv = sqrt(u*u + v*v);
   Transform Rxz = rotateAroundZ(-v/uv, u/uv);
 
   // matrix for rotating vector (u,v,w) about Y-axis to the Z-axis
-  real uvw = sqrt(u*u + v*v + w*w);
+  mstreal uvw = sqrt(u*u + v*v + w*w);
   Transform Rxz2z = rotateAroundY(-uv/uvw, w/uvw);
 
   // matrix for rotating around vector (u,v,w) by angle a
@@ -390,37 +390,37 @@ Transform TransformFactory::rotateAroundAxis(real u, real v, real w, real a) {
 
 }
 
-Transform TransformFactory::rotateAroundAxis(CartesianPoint& p, real a) {
+Transform TransformFactory::rotateAroundAxis(CartesianPoint& p, mstreal a) {
   if (p.size() != 3) MstUtils::error("Rotation axis of unexpected dimension " + MstUtils::toString(p.size()), "TransformFactory::rotateAroundOrigAxis");
   return rotateAroundAxis(p[0], p[1], p[2], a);
 }
 
-Transform TransformFactory::rotateAroundLine(real p1, real p2, real p3, real q1, real q2, real q3, real a) {
-  real r1 = q1 - p1;
-  real r2 = q2 - p2;
-  real r3 = q3 - p3;
+Transform TransformFactory::rotateAroundLine(mstreal p1, mstreal p2, mstreal p3, mstreal q1, mstreal q2, mstreal q3, mstreal a) {
+  mstreal r1 = q1 - p1;
+  mstreal r2 = q2 - p2;
+  mstreal r3 = q3 - p3;
 
-  real sinThx = r2/sqrt(r2*r2 + r3*r3);
-  real cosThx = r3/sqrt(r2*r2 + r3*r3);
-  real sinThy = r1/sqrt(r1*r1 + r2*r2 + r3*r3);
-  real cosThy = sqrt((r2*r2 + r3*r3)/(r1*r1 + r2*r2 + r3*r3));
+  mstreal sinThx = r2/sqrt(r2*r2 + r3*r3);
+  mstreal cosThx = r3/sqrt(r2*r2 + r3*r3);
+  mstreal sinThy = r1/sqrt(r1*r1 + r2*r2 + r3*r3);
+  mstreal cosThy = sqrt((r2*r2 + r3*r3)/(r1*r1 + r2*r2 + r3*r3));
 
   return translate(p1, p2, p3) * rotateAroundX(-sinThx, cosThx) * rotateAroundY(sinThy, cosThy) *
          rotateAroundZ(sin(a * degreesToRadians), cos(a * degreesToRadians)) *
          rotateAroundY(-sinThy, cosThy) * rotateAroundX(sinThx, cosThx) * translate(-p1, -p2, -p3);
 }
 
-Transform TransformFactory::rotateAroundLine(CartesianPoint& p, CartesianPoint& q, real a) {
+Transform TransformFactory::rotateAroundLine(CartesianPoint& p, CartesianPoint& q, mstreal a) {
   if ((p.size() != 3) || (q.size() != 3)) {
     MstUtils::error("Rotation axes of unexpected dimension " + MstUtils::toString(p.size()) + " and " + MstUtils::toString(q.size()), "TransformFactory::rotateAroundLine");
   }
   return rotateAroundLine(p[0], p[1], p[2], q[0], q[1], q[2], a);
 }
 
-Transform TransformFactory::alignVectorWithXAxis(real u, real v, real w) {
+Transform TransformFactory::alignVectorWithXAxis(mstreal u, mstreal v, mstreal w) {
 //  return matRotY(90) x matAlignVectorWithZAxis(u, v, w);
-  real vw = sqrt(v*v + w*w);
-  real uvw = sqrt(u*u + v*v + w*w);
+  mstreal vw = sqrt(v*v + w*w);
+  mstreal uvw = sqrt(u*u + v*v + w*w);
   if (vw == 0) {
     return Transform();
   }
@@ -428,9 +428,9 @@ Transform TransformFactory::alignVectorWithXAxis(real u, real v, real w) {
   return rotateAroundZ(u/uvw, -vw/uvw) * rotateAroundX(v/vw, -w/vw);
 }
 
-Transform TransformFactory::alignVectorWithYAxis(real u, real v, real w) {
-  real uw = sqrt(u*u + w*w);
-  real uvw = sqrt(u*u + v*v + w*w);
+Transform TransformFactory::alignVectorWithYAxis(mstreal u, mstreal v, mstreal w) {
+  mstreal uw = sqrt(u*u + w*w);
+  mstreal uvw = sqrt(u*u + v*v + w*w);
   if (uw == 0) {
     return Transform();
   }
@@ -438,9 +438,9 @@ Transform TransformFactory::alignVectorWithYAxis(real u, real v, real w) {
   return rotateAroundX(v/uvw, -uw/uvw) * rotateAroundY(w/uw, -u/uw);
 }
 
-Transform TransformFactory::alignVectorWithZAxis(real u, real v, real w) {
-  real uv = sqrt(u*u + v*v);
-  real uvw = sqrt(u*u + v*v + w*w);
+Transform TransformFactory::alignVectorWithZAxis(mstreal u, mstreal v, mstreal w) {
+  mstreal uv = sqrt(u*u + v*v);
+  mstreal uvw = sqrt(u*u + v*v + w*w);
   if (uv == 0) {
     return Transform();
   }
@@ -491,7 +491,7 @@ TransformRMSD::TransformRMSD() {
 
 void TransformRMSD::init(const AtomPointerVector& atoms) {
   // compute origin
-  real Tr[3];
+  mstreal Tr[3];
   Tr[0] = 0; Tr[1] = 0; Tr[2] = 0;
   for (int i = 0; i < atoms.size(); i++) {
     Atom& a = *(atoms[i]);
@@ -522,8 +522,8 @@ void TransformRMSD::init(const Structure& S) {
   init(atoms);
 }
 
-real TransformRMSD::getRMSD(Transform& T1, Transform& T2) {
-  real rot = 0;
+mstreal TransformRMSD::getRMSD(Transform& T1, Transform& T2) {
+  mstreal rot = 0;
   // the translation component
   for (int i = 0; i < 3; i++) {
     rot += (T1(i, 3) - T2(i, 3)) * (T1(i, 3) - T2(i, 3));
@@ -531,7 +531,7 @@ real TransformRMSD::getRMSD(Transform& T1, Transform& T2) {
 
   // trace(R^{a,b} * C) (in the notation of Hildebrandt and co-workers, 10.1002/jcc.23513, eq. 3)
   Transform T = T1.rotation().inverse() * T2.rotation();
-  real trace = C[0][0] + C[1][1] + C[2][2];
+  mstreal trace = C[0][0] + C[1][1] + C[2][2];
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
       trace -= T(i, j)*C[j][i];
@@ -542,7 +542,7 @@ real TransformRMSD::getRMSD(Transform& T1, Transform& T2) {
   return sqrt(rot + trace);
 }
 
-real TransformRMSD::getRMSD(Transform& T1) {
+mstreal TransformRMSD::getRMSD(Transform& T1) {
   Transform I;
   return getRMSD(T1, I);
 }

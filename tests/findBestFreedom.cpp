@@ -234,15 +234,15 @@ void addName(vector<string>& legalNames, map<string, int>& aaToIndex, vector<str
 
 // ---- Main Program
 int main(int argc, char *argv[]) {
-  real lcpMin = 0.5;       // the lowest low collision probability (CP) cutoff value to consider
-  real lcpMax = 1.5;       // the highest low CP cutoff value to consider
-  real hcpMin = 1.5;       // the lowest high CP cutoff value to consider
-  real hcpMax = 2.5;       // the highest high CP cutoff value to consider
+  mstreal lcpMin = 0.5;       // the lowest low collision probability (CP) cutoff value to consider
+  mstreal lcpMax = 1.5;       // the highest low CP cutoff value to consider
+  mstreal hcpMin = 1.5;       // the lowest high CP cutoff value to consider
+  mstreal hcpMax = 2.5;       // the highest high CP cutoff value to consider
   int N = 21;              // number of grid points between min and max in each parameter
   int Nb = 50;             // number of freedom bins
 
-  vector<real> lcpVals(N), hcpVals(N);
-  vector<vector<vector<real > > > freedoms; // freedom value at each residue for each parameter combo
+  vector<mstreal> lcpVals(N), hcpVals(N);
+  vector<vector<vector<mstreal > > > freedoms; // freedom value at each residue for each parameter combo
   vector<int> AA;                           // aa at each position
   freedoms.resize(N);
   for (int i = 0; i < N; i++) freedoms[i].resize(N);
@@ -295,7 +295,7 @@ int main(int argc, char *argv[]) {
       for (int j = 0; j < N; j++) {
         C.setFreedomParams(lcpVals[i], hcpVals[j], 3);
         C.clearFreedom();
-        vector<real> structFreedoms = C.getFreedom(allRes);
+        vector<mstreal> structFreedoms = C.getFreedom(allRes);
         freedoms[i][j].insert(freedoms[i][j].end(), structFreedoms.begin(), structFreedoms.end());
       }
     }
@@ -309,22 +309,22 @@ int main(int argc, char *argv[]) {
 
   // now find the combination of parameters that maximizes the expected
   // freedom-based sequence recovery and find the
-  real maxSeqRec = 0; int bestI = -1; int bestJ = -1;
+  mstreal maxSeqRec = 0; int bestI = -1; int bestJ = -1;
   int pc = 1;
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-      vector<real>& F = freedoms[i][j];
+      vector<mstreal>& F = freedoms[i][j];
       vector<vector<int> > aaDist(Nb, vector<int>(NAATypes, 0));
       for (int k = 0; k < F.size(); k++) {
         int bi = int(min(F[k], 1 - 1.0/(2*Nb))*Nb); // since freedom is always [0, 1]
         aaDist[bi][AA[k]]++;
       }
-      real expSeqRec = 0; int Nall = 0;
+      mstreal expSeqRec = 0; int Nall = 0;
       for (int bi = 0; bi < Nb; bi++) {
         int Ntot = 0;
         for (int aai = 0; aai < NAATypes; aai++) Ntot += aaDist[bi][aai];
         Nall += Ntot;
-        real binExpSeqRec = 0;
+        mstreal binExpSeqRec = 0;
         for (int aai = 0; aai < NAATypes; aai++) {
           binExpSeqRec += ((aaDist[bi][aai] + pc) * 1.0 / (Ntot + pc*NAATypes)) * ((aaDist[bi][aai] + pc) * 1.0 / (Ntot + pc*NAATypes));
         }
@@ -340,7 +340,7 @@ int main(int argc, char *argv[]) {
   }
   cout << "BEST: expected sequence recovery is " << maxSeqRec << " for parameter combo " << lcpVals[bestI] << " x " << hcpVals[bestJ] << endl;
   cout << "Histogram:" << endl;
-  vector<real>& F = freedoms[bestI][bestJ];
+  vector<mstreal>& F = freedoms[bestI][bestJ];
   vector<int> hist(Nb, 0);
   for (int k = 0; k < F.size(); k++) {
     int bi = int(min(F[k], 1 - 1.0/(2*Nb))*Nb); // since freedom is always [0, 1]
