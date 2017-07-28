@@ -97,6 +97,12 @@ class Structure {
 
     int getResidueIndex(Residue* res);
 
+    /* == and != operators are needed to convert vector<Structure> into python
+     * lists via boost.python. This is because python lists are quite a bit more
+     * powerful than C++ vectors, enabling, for example, contains queries. */
+    bool operator==(const Structure& other) { return (this == &other); }
+    bool operator!=(const Structure& other) { return (this != &other); }
+
   protected:
     void incrementNumAtoms(int delta = 1) { numAtoms += delta; }
     void incrementNumResidues(int delta = 1) { numResidues += delta; }
