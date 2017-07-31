@@ -288,6 +288,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, mstreal cdcut, cont
 contactList ConFind::getInterferences(vector<Residue*>& residues, mstreal incut, contactList* list) {
   cache(residues);
   contactList L;
+  if (list == NULL) list = &L;
 
   for (auto itA = interference.begin(); itA != interference.end(); ++itA) {
     fastmap<Residue*, mstreal>& interB = itA->second;
