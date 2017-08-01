@@ -41,6 +41,7 @@ class fusionEvaluator: public optimizerEvaluator {
     int getBuildOrigin() { return buildOriginRes; }
     void setBuildOrigin(int _buildOriginRes) { buildOriginRes = _buildOriginRes; }
     Structure getStructure() { return fused; }
+    Structure getAlignedStructure();
     void setVerbose(bool _verbose) { verbose = _verbose; }
     int randomizeBuildOrigin() {
       buildOriginRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : MstUtils::randInt(0, numResidues() - 1);
@@ -71,7 +72,7 @@ class fusionEvaluator: public optimizerEvaluator {
     double harmonicPenalty(double val, const icBound& b);
 
   private:
-    Structure fused;
+    Structure fused, guess;
     vector<bool> fixed; // marks whether each residue is to be fixed or not
     vector<int> fixedResidues; // just a list of fixed residue indices. this is
                                // redundant with the above, but helpful to have

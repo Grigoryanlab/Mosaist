@@ -32,6 +32,7 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
     }
   }
   fused.renumber();
+  guess = fused; // save initial guess for later alignment (easier to visualize output)
 
   // orient so that the first atom is at the origin, the second is along the X-
   // axis and the third is in the XY plane
@@ -84,6 +85,13 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
   // initialize the random number number generator
   long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
   srand(x);
+}
+
+Structure fusionEvaluator::getAlignedStructure() {
+  Structure aligned = fused;
+  RMSDCalculator rc;
+  rc.align(aligned.getAtoms(), guess.getAtoms(), aligned);
+  return aligned;
 }
 
 double fusionEvaluator::eval(const vector<double>& point) {
@@ -538,7 +546,7 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int
     E.setVerbose(true);
   }
   E.eval(bestSolution);
-  return E.getStructure();
+  return E.getAlignedStructure();
 }
 
 Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps, int Ni, int Nc, bool verbose) {
@@ -579,9 +587,9 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
       for (int i = 0; i < resTopo[ri].size(); i++) {
         Residue* r = resTopo[ri][i];
         Atom* n = nc ? r->findAtom("N") : r->findAtom("C");
-        vector<int> neigh = nc ? psC.getPointsWithin(n->getCoor(), 0, pepBondMax) : psN.getPointsWithin(n->getCoor(), 0, pepBondMax);
+        vector<int> neigh = (nc ? psC.getPointsWithin(n->getCoor(), 0, pepBondMax) : psN.getPointsWithin(n->getCoor(), 0, pepBondMax));
         if (neigh.empty()) continue;
-        if (nc)  ntoc.insert(ntoc.begin(), resTopoIdx[residues[neigh[0]]]);
+        if (nc) ntoc.insert(ntoc.begin(), resTopoIdx[residues[neigh[0]]]);
         else ntoc.push_back(resTopoIdx[residues[neigh[0]]]);
         found = true;
         break;

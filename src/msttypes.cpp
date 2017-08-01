@@ -1041,6 +1041,14 @@ bool Atom::build(const Atom& diA, const Atom& anA, const Atom& thA, mstreal di, 
 
 /* --------- AtomPointerVector --------- */
 
+void AtomPointerVector::push_back(const Residue& R) {
+  int sz = this->size();
+  this->resize(sz + R.atomSize());
+  for (int i = 0; i < R.atomSize(); i++) {
+    (*this)[i + sz] = &(R[i]);
+  }
+}
+
 CartesianPoint AtomPointerVector::getGeometricCenter() {
   CartesianPoint C(3, 0);
   for (int i = 0; i < this->size(); i++) {

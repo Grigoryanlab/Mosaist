@@ -456,6 +456,10 @@ class AtomPointerVector : public vector<Atom*> {
     AtomPointerVector(const AtomPointerVector& other) : vector<Atom*>(other) { }
     AtomPointerVector(const vector<Atom*>& other) : vector<Atom*>(other) { }
 
+    using vector<Atom*>::push_back;    // base push_back of vector class
+    void push_back(const Residue& R);  // overloaded push_back for Residues
+    void push_back(const Residue* R) { push_back(*R); }
+
     CartesianPoint getGeometricCenter();
     void center();
     mstreal radiusOfGyration();
