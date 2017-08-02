@@ -551,7 +551,7 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int
 
 Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps, int Ni, int Nc, bool verbose) {
   // build a proximity search object
-  mstreal closeDist = 2.0, pepBondMax = 2.0;
+  mstreal closeDist = 2.0, pepBondMax = 2.0, pepBondMin = 0.5, pepBondIdeal = 1.3;
   AtomPointerVector CAs(residues.size(), NULL), Ns(residues.size(), NULL), Cs(residues.size(), NULL);;
   for (int i = 0; i < residues.size(); i++) {
     Ns[i] = residues[i]->findAtom("N");
@@ -587,10 +587,24 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
       for (int i = 0; i < resTopo[ri].size(); i++) {
         Residue* r = resTopo[ri][i];
         Atom* n = nc ? r->findAtom("N") : r->findAtom("C");
-        vector<int> neigh = (nc ? psC.getPointsWithin(n->getCoor(), 0, pepBondMax) : psN.getPointsWithin(n->getCoor(), 0, pepBondMax));
+        vector<int> neigh = (nc ? psC.getPointsWithin(n->getCoor(), pepBondMin, pepBondMax) : psN.getPointsWithin(n->getCoor(), pepBondMin, pepBondMax));
         if (neigh.empty()) continue;
-        if (nc) ntoc.insert(ntoc.begin(), resTopoIdx[residues[neigh[0]]]);
-        else ntoc.push_back(resTopoIdx[residues[neigh[0]]]);
+
+        // if more than one residue is within a peptide-bond distance, pick the
+        // one with the most close-to-ideal bond length
+        int next = neigh[0];
+        mstreal btol = fabs(n->distance(residues[next]->findAtom(nc ? "C" : "N")) - pepBondIdeal);
+        for (int ii = 0; ii < neigh.size(); ii++) {
+          mstreal tol = n->distance(residues[neigh[ii]]->findAtom(nc ? "C" : "N")) - pepBondIdeal;
+          if (btol > tol) {
+            next = neigh[ii];
+            btol = tol;
+          }
+        }
+
+        // now add neighbor on the correct side of the growing chain
+        if (nc) ntoc.insert(ntoc.begin(), resTopoIdx[residues[next]]);
+        else ntoc.push_back(resTopoIdx[residues[next]]);
         found = true;
         break;
       }
