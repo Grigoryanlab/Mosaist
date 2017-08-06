@@ -90,6 +90,7 @@ class ConFind {
     contactList getContacts(vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, mstreal cdcut = 0.0);
     contactList getInterferences(vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
+    contactList getInterferences(Structure& S, mstreal incut = 0.0, contactList* list = NULL);
 
     mstreal getCrowdedness(Residue* res);
     vector<mstreal> getCrowdedness(vector<Residue*>& residues);

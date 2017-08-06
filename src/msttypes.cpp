@@ -204,13 +204,13 @@ void Structure::readPDB(string pdbFile, string options) {
   ifh.close();
 }
 
-void Structure::writePDB(string pdbFile, string options) {
+void Structure::writePDB(string pdbFile, string options) const {
   fstream ofs; MstUtils::openFile(ofs, pdbFile, fstream::out, "Structure::writePDB(string, string)");
   writePDB(ofs, options);
   ofs.close();
 }
 
-void Structure::writePDB(fstream& ofs, string options) {
+void Structure::writePDB(fstream& ofs, string options) const {
   options = MstUtils::uc(options);
 
 ///  my $chainstr = shift; // probably want to implement this eventually. Or maybe some more generic selection mechanism based on regular expressions applied onto full atom strings.
@@ -360,6 +360,7 @@ void Structure::deleteChain(Chain* chain) {
 Residue& Structure::getResidue(int i) const {
   if ((i < 0) && (i >= residueSize()))
     MstUtils::error("residue index " + MstUtils::toString(i) + " out of range for Structure", "Structure::getResidue(int)");
+  int io = i;
   for (int ci = 0; ci < chainSize(); ci++) {
     Chain& chain = getChain(ci);
     if (i >= chain.residueSize()) {
@@ -368,7 +369,7 @@ Residue& Structure::getResidue(int i) const {
       return chain[i];
     }
   }
-  MstUtils::error("something strange happened when fetching residue " + MstUtils::toString(i) + "; most likely, various counters are inconsistent in Structure object", "Structure::getResidue(int)");
+  MstUtils::error("something strange happened when fetching residue " + MstUtils::toString(io) + " from Structure object that reports " + MstUtils::toString(this->residueSize()) + " residues; most likely, various counters are inconsistent in Structure object", "Structure::getResidue(int)");
   return *(new Residue()); // just to make the compiler happy and not throw a warning; this is never reached
 }
 
@@ -1383,9 +1384,6 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
         case (expressionTree::selProperty::NAME):
           if (atoms[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
           break;
-        case (expressionTree::selProperty::AROUND):
-          MstUtils::error("not implemented yet", "selector::select");
-          break;
         default:
           MstUtils::error("uknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
       }
@@ -1429,6 +1427,12 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
         if (tree->numChildren() != 1)
           MstUtils::error("poorly parsed expressoin: expected one operand for IS", "selector::select(expressionTree* )");
         select(tree->getChild(0), sel);
+        break;
+      case (expressionTree::logicalOp::AROUND):
+        if (tree->numChildren() != 1)
+          MstUtils::error("poorly parsed expressoin: expected one selection operand for AROUND", "selector::select(expressionTree* )");
+        select(tree->getChild(0), selA);
+        sel = around(selA, tree->getVal());
         break;
       default:
         MstUtils::error("uknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
@@ -1495,6 +1499,12 @@ expressionTree* selector::buildExpressionTree(string selStr) {
     root->setLogicalOperator(expressionTree::logicalOp::AND);
   } else if (MstUtils::stringsEqual(connector, "or")) {
     root->setLogicalOperator(expressionTree::logicalOp::OR);
+  } else if (MstUtils::stringsEqual(connector, "around")) {
+    root->setLogicalOperator(expressionTree::logicalOp::AROUND);
+    root->setVal(MstUtils::toReal(getNextSelectionToken(selStr)));
+    string extra = getNextSelectionToken(selStr);
+    MstUtils::assert(extra.empty(), "poorly formed selection expression: extra stuff after an 'around' operator; use parentheses as necessary.");
+    return root;
   } else {
     MstUtils::error("bad selection, unrecognized connector keyword '" + connector + "' after token '" + token + "'", "selector::buildExpressionTree(string)");
   }
@@ -1556,6 +1566,21 @@ AtomPointerVector selector::combine(AtomPointerVector& selA, AtomPointerVector& 
   for (map<Atom*, bool>::iterator it = inBothMap.begin(); it != inBothMap.end(); ++it, i++)
     inBoth[i] = it->first;
   return inBoth;
+}
+
+AtomPointerVector selector::around(AtomPointerVector& selAtoms, mstreal dcut) {
+  AtomPointerVector within;
+  mstreal dcut2 = dcut*dcut;
+  for (int i = 0; i < atoms.size(); i++) {
+    Atom* a = atoms[i];
+    for (int j = 0; j < selAtoms.size(); j++) {
+      if (a->distance2(selAtoms[j]) <= dcut2) {
+        within.push_back(a);
+        break;
+      }
+    }
+  }
+  return within;
 }
 
 AtomPointerVector selector::byRes(AtomPointerVector& selAtoms) {

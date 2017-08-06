@@ -48,8 +48,8 @@ class Structure {
     ~Structure();
 
     void readPDB(string pdbFile, string options = "");
-    void writePDB(string pdbFile, string options = "");
-    void writePDB(fstream& ofs, string options = "");
+    void writePDB(string pdbFile, string options = "") const;
+    void writePDB(fstream& ofs, string options = "") const;
     void reset();
     Structure& operator=(const Structure& A);
 
@@ -65,7 +65,7 @@ class Structure {
     vector<Atom*> getAtoms() const;
     vector<Residue*> getResidues();
     void setName(string _name) { name = _name; }
-    string getName() { return name; }
+    string getName() const { return name; }
     void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout
 
     // looks at the length of the peptide bond between adjacent residues to figure out where chains break
@@ -194,7 +194,7 @@ class Residue {
     Atom* findAtom(string _name, bool strict = true); // returns NULL if not found and if strict is false
     bool atomExists(string _name) { return (findAtom(_name, false) != NULL); } // mostly for interchangeability with MSL, better to use findAtom and check for NULL
     Chain* getParent() { return parent; }
-    Structure* getStructure() { return (parent == NULL) ? NULL : parent->getParent(); }
+    Structure* getStructure() const { return (parent == NULL) ? NULL : parent->getParent(); }
 
     void setName(const char* _name) { resname = (string) _name; }
     void setName(string _name) { resname = _name; }
@@ -482,8 +482,8 @@ class AtomPointerVector : public vector<Atom*> {
 
 class expressionTree {
   public:
-    enum selProperty { RESID = 1, RESNAME, CHAIN, SEGID, NAME, AROUND }; // selectable properties
-    enum logicalOp { AND = 1, OR, NOT, BYRES, BYCHAIN, IS };             // logical operators
+    enum selProperty { RESID = 1, RESNAME, CHAIN, SEGID, NAME };      // selectable properties
+    enum logicalOp { AND = 1, OR, NOT, BYRES, BYCHAIN, IS, AROUND };  // logical operators
 
     expressionTree(logicalOp _op = logicalOp::IS) { op = _op; }
     ~expressionTree() {
@@ -493,11 +493,13 @@ class expressionTree {
     void setLogicalOperator(logicalOp _op) { op = _op; }
     void setProperty(selProperty _type) { type = _type; }
     void setNum(int _num) { num = _num; }
+    void setVal(mstreal _val) { val = _val; }
     void setString(string _str) { str = _str; }
     void addChild(expressionTree* subtree) { children.push_back(subtree); }
     logicalOp getLogicalOperator() { return op; }
     selProperty getProperty() { return type; }
     int getNum() { return num; }
+    mstreal getVal() { return val; }
     string getString() { return str; }
     int numChildren() { return children.size(); }
     expressionTree* getChild(int i) { return children[i]; }
@@ -506,6 +508,7 @@ class expressionTree {
     logicalOp op;
     selProperty type;
     int num;
+    mstreal val;
     string str;
     vector<expressionTree*> children;
 };
@@ -517,6 +520,7 @@ class selector {
     vector<Residue*> selectRes(string selStr);
     void select(expressionTree* tree, AtomPointerVector& sel);
     expressionTree* buildExpressionTree(string selStr);
+    AtomPointerVector around(AtomPointerVector& selAtoms, mstreal dcut);
     AtomPointerVector byRes(AtomPointerVector& selAtoms);
     AtomPointerVector byChain(AtomPointerVector& selAtoms);
     AtomPointerVector invert(AtomPointerVector& selAtoms);
