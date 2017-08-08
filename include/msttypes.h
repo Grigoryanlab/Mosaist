@@ -44,7 +44,8 @@ class Structure {
     Structure(const Structure& S);
     Structure(Chain& C);
     Structure(Residue& R);
-    Structure(vector<Atom*>& atoms);
+    Structure(const vector<Atom*>& atoms);
+    Structure(const vector<Residue*>& residues);
     ~Structure();
 
     void readPDB(string pdbFile, string options = "");
@@ -92,7 +93,8 @@ class Structure {
 
     /* makes a copy of the residue, then decides where it is supposed to go and
      * inserts it into the Structure, creating a new Chain as needed. */
-    void addResidue(Residue* res);
+    Residue* addResidue(Residue* res);
+
     /* ----- functions that grow/shrink structure ----- */
 
     int getResidueIndex(Residue* res);
@@ -140,7 +142,7 @@ class Chain {
     string getSegID() const { return sid; }
     Structure* getParent() { return parent; }
     Structure* getStructure() { return getParent(); }
-    int getResidueIndex(Residue* res);
+    int getResidueIndex(const Residue* res);
 
     /* convenience functoins, not efficient (linear search). If you need to do this a lot,
      * call getResidues() and construct your own data structure (e.g., a map<>) for fast lookups. */
@@ -186,14 +188,14 @@ class Residue {
     Atom& getAtom(int i) { return *(atoms[i]); }
     Chain* getChain() { return parent; }
     string getChainID(bool strict = true);
-    string getName() { return resname; }
-    int getNum() { return resnum; }
-    char getIcode() { return icode; }
+    string getName() const { return resname; }
+    int getNum() const { return resnum; }
+    char getIcode() const { return icode; }
     bool isNamed(string& _name) { return (resname.compare(_name) == 0); }
     bool isNamed(const char* _name) { return (strcmp(resname.c_str(), _name) == 0); }
     Atom* findAtom(string _name, bool strict = true); // returns NULL if not found and if strict is false
     bool atomExists(string _name) { return (findAtom(_name, false) != NULL); } // mostly for interchangeability with MSL, better to use findAtom and check for NULL
-    Chain* getParent() { return parent; }
+    Chain* getParent() const { return parent; }
     Structure* getStructure() const { return (parent == NULL) ? NULL : parent->getParent(); }
 
     void setName(const char* _name) { resname = (string) _name; }
@@ -232,16 +234,20 @@ class Residue {
     mstreal getPsi(bool strict = true);
     mstreal getOmega(bool strict = true);
 
-    int getResidueIndex();
+    int getResidueIndex() const;
 
     static const mstreal badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
-    friend ostream & operator<<(ostream &_os, Residue& _res) {
+    friend ostream & operator<<(ostream &_os, const Residue& _res) {
       if (_res.getParent() != NULL) {
         _os << _res.getParent()->getID() << ",";
       }
       _os << _res.getNum() << " " << _res.getName();
       return _os;
+    }
+    // so that sets of residues, for example, are sorted in the right order
+    friend bool operator<(const Residue& r1, const Residue& r2) {
+      return r1.getResidueIndex() < r2.getResidueIndex();
     }
 
   protected:
@@ -721,6 +727,7 @@ class MstUtils {
     static MST::mstreal sign(MST::mstreal val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
+    static string join(const string& delim, const vector<string>& words);
     static string readNullTerminatedString(fstream& ifs);
     static string getDate();
 
@@ -732,9 +739,9 @@ class MstUtils {
     static MST::mstreal randUnit() { return ((MST::mstreal) rand() / RAND_MAX); }
 
     template <class T>
-    static string toString(T obj) { return toString(&obj); }
+    static string toString(const T& obj) { return toString(&obj); }
     template <class T>
-    static string toString(T* obj);
+    static string toString(const T* obj);
     template <class T>
     static vector<int> sortIndices(vector<T>& vec, bool descending = false);
     template <class T1, class T2>
@@ -760,7 +767,7 @@ class MstUtils {
 };
 
 template <class T>
-string MstUtils::toString(T* obj) {
+string MstUtils::toString(const T* obj) {
   stringstream ss;
   ss << *obj;
   return ss.str();

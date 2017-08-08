@@ -43,10 +43,16 @@ string MstSys::splitPath(const string& path, int outToken, string* dirPathPtr, s
   return ""; // just to make the compiler happy, this is never reached
 }
 
-bool MstSys::fileExists(const char *filename) {
+bool MstSys::fileExists(const char* filename) {
   struct stat buffer ;
   if (stat( filename, &buffer) == 0) return true;
   return false;
+}
+
+long MstSys::fileSize(const char* filename) {
+  struct stat stat_buf;
+  int rc = stat(filename, &stat_buf);
+  return rc == 0 ? stat_buf.st_size : -1;
 }
 
 bool MstSys::isDir(const char *filename) {

@@ -40,9 +40,14 @@ Structure::Structure(Residue& R) {
   newChain->appendResidue(new Residue(R));
 }
 
-Structure::Structure(vector<Atom*>& atoms) {
+Structure::Structure(const vector<Atom*>& atoms) {
   numResidues = numAtoms = 0;
   addAtoms(atoms);
+}
+
+Structure::Structure(const vector<Residue*>& residues) {
+  numResidues = numAtoms = 0;
+  for (int i = 0; i < residues.size(); i++) addResidue(residues[i]);
 }
 
 /* The assumption is that if a Structure is deleted, all
@@ -468,7 +473,7 @@ void Structure::addAtoms(vector<Atom*>* atoms) {
   for (int i = 0; i < atoms->size(); i++) addAtom((*atoms)[i]);
 }
 
-void Structure::addResidue(Residue* res) {
+Residue* Structure::addResidue(Residue* res) {
   if (res->getParent() == NULL) MstUtils::error("cannot add a disembodied Residue", "Structure::addResidue");
   Chain* oldChain = res->getParent();
 
@@ -482,6 +487,7 @@ void Structure::addResidue(Residue* res) {
   // append a copy of the given residue into the correct chain
   Residue* newResidue = new Residue(*res);
   newChain->appendResidue(newResidue);
+  return newResidue;
 }
 
 int Structure::getResidueIndex(Residue* res) {
@@ -546,10 +552,10 @@ vector<Atom*> Chain::getAtoms() {
   return vec;
 }
 
-int Chain::getResidueIndex(Residue* res) {
-  if (residueIndexInChain.find(res) == residueIndexInChain.end())
+int Chain::getResidueIndex(const Residue* res) {
+  if (residueIndexInChain.find((Residue*) res) == residueIndexInChain.end())
     MstUtils::error("passed residue does not appear in chain's index map", "Chain::residueIndexInChain");
-  return residueIndexInChain[res];
+  return residueIndexInChain[(Residue*) res];
 }
 
 void Chain::incrementNumAtoms(int delta) {
@@ -570,7 +576,7 @@ void Chain::appendResidue(Residue* R) {
 }
 
 void Chain::insertResidue(Residue* R, int index) {
-  if ((index < 0) || (index >= residues.size()))
+  if ((index < 0) || (index > residues.size()))
     MstUtils::error("residue index '" + MstUtils::toString(index) + "' out of range", "Chain::insertResidue(Residue*, int)");
   incrementNumAtoms(R->atomSize());
   if (parent != NULL) {
@@ -813,7 +819,7 @@ string Residue::getChainID(bool strict) {
   return parent->getID();
 }
 
-int Residue::getResidueIndex() {
+int Residue::getResidueIndex() const {
   Chain* parentChain = NULL; Structure* parentStructure = NULL;
   parentChain = getParent();
   if (parentChain != NULL) parentStructure = parentChain->getParent();
@@ -1584,15 +1590,19 @@ AtomPointerVector selector::around(AtomPointerVector& selAtoms, mstreal dcut) {
 }
 
 AtomPointerVector selector::byRes(AtomPointerVector& selAtoms) {
-  map<Residue*, bool> added;
+  set<Residue*> added;
   AtomPointerVector expanded;
   for (int i = 0; i < selAtoms.size(); i++) {
     Residue* res = selAtoms[i]->getParent();
     if (res == NULL) MstUtils::error("some atoms in selection are parentless", "selector::byRes");
     if (added.find(res) != added.end()) continue;
-    for (int j = 0; j < res->atomSize(); j++) expanded.push_back(&(res->getAtom(i)));
-    added[res] = true;
+    added.insert(res); // this will accumulate residues in the "natural" order (according to Residue::operator<)
   }
+  for (auto it = added.begin(); it != added.end(); ++it) {
+    Residue* res = *it;
+    for (int j = 0; j < res->atomSize(); j++) expanded.push_back(&(res->getAtom(j)));
+  }
+
   return expanded;
 }
 
@@ -2345,6 +2355,14 @@ vector<string> MstUtils::split(const string& str, string delimiters, bool skipTr
   vector<string> tokens;
   while (!strCopy.empty()) tokens.push_back(nextToken(strCopy, delimiters, skipTrailingDelims));
   return tokens;
+}
+
+string MstUtils::join(const string& delim, const vector<string>& words) {
+  string joined;
+  if (words.empty()) return joined;
+  joined = words[0];
+  for (int i = 1; i < words.size(); i++) joined += delim + words[i];
+  return joined;
 }
 
 FILE* MstUtils::openFileC (const char* filename, const char* mode, string from) {

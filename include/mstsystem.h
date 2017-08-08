@@ -11,6 +11,8 @@ class MstSys {
 
     static bool fileExists(const char *filename);
     static bool fileExists(const string filename) { return fileExists(filename.c_str()); }
+    static long fileSize(const char* filename);
+    static long fileSize(const string filename) { return fileSize(filename.c_str()); }
     static bool isDir(const char *filename);
     static bool isDir(const string& filename) { return isDir(filename.c_str()); }
     static int csystem(const string& cmd, bool checkError = true, int success = 0, const string& from = "");
