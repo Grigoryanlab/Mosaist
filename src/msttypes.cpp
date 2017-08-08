@@ -2064,6 +2064,19 @@ ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, mstreal _chara
   }
 }
 
+ProximitySearch::ProximitySearch(const ProximitySearch& ps) {
+  N = ps.N;
+  xlo = ps.xlo; ylo = ps.ylo; zlo = ps.zlo;
+  xhi = ps.xhi; yhi = ps.yhi; zhi = ps.zhi;
+  xbw = ps.xbw; ybw = ps.ybw; zbw = ps.zbw;
+  buckets = ps.buckets;
+  pointTags = pointTags;
+  pointList.resize(ps.pointList.size(), NULL);
+  for (int i = 0; i < ps.pointList.size(); i++) {
+    pointList[i] = new CartesianPoint(*(ps.pointList[i]));
+  }
+}
+
 void ProximitySearch::setBinWidths() {
   xbw = (xhi - xlo)/(N - 1);
   ybw = (yhi - ylo)/(N - 1);

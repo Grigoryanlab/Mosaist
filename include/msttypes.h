@@ -578,6 +578,8 @@ class RMSDCalculator {
 
 class ProximitySearch {
   public:
+    ProximitySearch() { xlo = ylo = zlo = xhi = yhi = zhi = xbw = ybw = zbw = 0.0; N = 0;}
+    ProximitySearch(const ProximitySearch& ps);
     ProximitySearch(mstreal _xlo, mstreal _ylo, mstreal _zlo, mstreal _xhi, mstreal _yhi, mstreal _zhi, int _N = 20);
     ProximitySearch(const AtomPointerVector& _atoms, int _N, bool _addAtoms = true, vector<int>* tags = NULL, mstreal pad = 0);
     ProximitySearch(const AtomPointerVector& _atoms, mstreal _characteristicDistance, bool _addAtoms = true, vector<int>* tags = NULL, mstreal pad = 0);

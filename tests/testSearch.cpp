@@ -40,6 +40,7 @@ class optList {
 
     void setOptions(const vector<mstreal>& _costs, bool add = false);
     void addOption(int k);
+    void removeAllOptions();
     void removeOption(int k);
     mstreal bestCost() { return costs[bestCostRank]; }
     int bestChoice() { return rankToIdx[bestCostRank]; }
@@ -119,6 +120,11 @@ void optList::removeOption(int k) {
   }
 }
 
+void optList::removeAllOptions() {
+  for (int i = 0; i < isIn.size(); i++) isIn[i] = false;
+  numIn = 0;
+  bestCostRank = -1;
+}
 
 class MASTER {
   public:
@@ -129,15 +135,16 @@ class MASTER {
     void prepForSearch();
     void setRMSDCutoff(mstreal cut);
     void setSearchType(int _searchType);
-    int numOptions() { return remOptions[curSeg].size(); }
-    bool outOfOptions() { return remOptions[curSeg].empty(); }
+    bool outOfOptions() { return remOptions[0].empty(); }
     bool visitNextOption();
 
   protected:
     static bool parseChain(const Chain& S, AtomPointerVector& searchable);
-    mstreal currentAlignmentResidual(bool recompute); // TODO
-    template <class T>
-    void inPlaceSetDifference(set<int, T> in, const vector<int>& notin);
+    mstreal currentAlignmentResidual(bool compute);
+    mstreal lowBoundOnRemainder(bool compute);
+    int resToAtomIdx(int resIdx) { return resIdx * searchableAtoms.size(); }
+    int atomToResIdx(int atomIdx) { return atomIdx / searchableAtoms.size(); }
+    void fillTargetMask();
 
   private:
     Structure queryStruct, targetStruct;
@@ -168,20 +175,34 @@ class MASTER {
     // the residual of the above alignment, computed and stored
     mstreal currResidual;
 
+    // the bound on the parts remaining to align, computed and stored
+    mstreal currRemBound;
+
+    // center-to-center distances between segments of the query
+    vector<vector<mstreal> > centToCentDist;
+
     // set of solutions, sorted by RMSD
     set<pair<vector<int, mstreal> > solutions; // TODO: need to store target info, order added, and implemenet comparison
 
     // ProximitySearch for finding nearby centroids of target segments
-    vector<ProximitySearch> ps; // TODO: make a default and copy constructors for ProximitySearch
+    vector<ProximitySearch> ps;
 
     // various solution constraints
     mstreal rmsdCut, residualCut;
+
+    // Atom subsets needed at different recursion levels. So queryMasks[i] stores
+    // all atoms of the first i+1 segments of the query combined. The same for
+    // targetMasks, although (of course), the content of the latter will change
+    // depending on the alignment
+    vector<AtomPointerVector> queryMasks, targetMasks;
+
+    RMSDCalculator RC;
 };
 
 int main(int argc, char *argv[]) {
   MASTER S;
-  S.setQuery("query.pdb");
-  S.setTarget("target.pdb");
+  S.setQuery("/tmp/query.pdb");
+  S.setTarget("/tmp/target.pdb");
   S.prepForSearch();
   S.setRMSDCutoff(1.0);
 
@@ -192,7 +213,6 @@ int main(int argc, char *argv[]) {
 
 
 MASTER::~MASTER() {
-  if (ps != NULL) delete(ps);
 }
 
 void MASTER::setRMSDCutoff(mstreal cut) {
@@ -280,7 +300,6 @@ void MASTER::prepForSearch() {
   solutions.resize(0);
 
   // align every segment onto every admissible location on the target
-  RMSDCalculator rc;
   segmentResiduals.resize(query.size());
   ps.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
@@ -294,7 +313,7 @@ void MASTER::prepForSearch() {
       // 2. updating just one atom involves a simple centroid adjustment, rather than recalculation
       // 3. is there a speedup to be gained from re-calculating RMSD with one atom updated only?
       AtomPointerVector targSeg = target.subvector(j*atomsPerRes, j*atomsPerRes + query[i].size() - 1);
-      segmentResiduals[i][j] = pow(rc.bestRMSD(query[i], targSeg), 2) * targSeg.size();
+      segmentResiduals[i][j] = pow(RC.bestRMSD(query[i], targSeg), 2) * targSeg.size();
       ps[i].addPoint(targSeg.getGeometricCenter(), j);
     }
   }
@@ -310,6 +329,7 @@ void MASTER::prepForSearch() {
 
   // current residual starts with 0, since nothing is aligned yet
   currResidual = 0;
+  currRemBound = boundOnRemainder(true);
 
   // initialize center-to-center tolerances
   ccTol.resize(query.size());
@@ -319,18 +339,49 @@ void MASTER::prepForSearch() {
       ccTol[i][j] = centToCentTol(i, j);
     }
   }
+
+  // make room for various atom masks
+  queryMasks.resize(query.size());
+  targetMasks.resize(query.size());
+  for (int L = 0; L < query.size(); L++) {
+    for (int i = 0; i < L; i++) {
+      for (int j = 0; j < query[i].atomSize(); j++) {
+        queryMasks[L].push_back(query[i][j]);
+        targetMasks[L].push_back(NULL);
+      }
+    }
+  }
+
+  // center-to-center distances
+  centToCentDist.resize(query.size(), vector<mstreal>(query.suze(), 0));
+  for (int i = 0; i < query.size(); i++) {
+    for (int j = i+1; j < query.size(); j++) {
+      centToCentDist[i][j] = query[i].getGeometricCenter().distance(query[j].getGeometricCenter());
+      centToCentDist[j][i] = centToCentDist[i][j];
+    }
+  }
 }
 
-mstreal MASTER::lowBoundOnRemainder() {
-  mstreal bound;
-  for (int i = level; i < query.size(); i++) bound += remOptions[recLevel][i].bestCost();
-  return bound;
+mstreal MASTER::boundOnRemainder(bool compute) {
+  if (compute) {
+    currRemBound = 0;
+    for (int i = level; i < query.size(); i++) currRemBound += remOptions[recLevel][i].bestCost();
+  }
+  return currRemBound;
 }
 
 mstreal MASTER::centToCentTol(int i, int j) {
-  // the second parameter to currentAlignmentResidual means do not recalculate
   // TODO: validate the bound
-  return sqrt((((residualCut - currentAlignmentResidual(false) - lowBoundOnRemainder(false ??))) * (query[i].size() + query[j].size())) / (query[i].size() * query[j].size()));
+  return sqrt((((residualCut - currentAlignmentResidual(false) - boundOnRemainder(false))) * (query[i].size() + query[j].size())) / (query[i].size() * query[j].size()));
+}
+
+void MASTER::fillTargetMask() {
+  int N = targetMasks[recLevel].size();
+  int n = query[recLevel].atomSize();
+  int si = resToAtomIdx(currAlignment[recLevel]);
+  for (int i = 0; i < n; i++) {
+    targetMasks[recLevel][N - n + i] = target[si + i];
+  }
 }
 
 bool MASTER::visitNextOption() {
@@ -338,44 +389,46 @@ bool MASTER::visitNextOption() {
   // 1. pick the best choice (from available ones) for the current segment, and
   // remove it from the list of options
   if (remOptions[recLevel][recLevel].empty()) {
-    upRecLevel();
-    return false;
+    currAlignment[recLevel] = -1;
+    if (recLevel > 0) {
+      for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i - recLevel].removeAllOptions();
+      recLevel--;
+      return false; // search exhausted
+    }
+    return true;
   }
   currAlignment[recLevel] = remOptions[recLevel][recLevel].bestChoice();
+  fillTargetMask();
   remOptions[recLevel][recLevel].removeOption(currAlignment[recLevel]);
 
   // 2. compute the total residual from the current alignment
   mstreal curBound = currentAlignmentResidual(true) + lowBoundOnRemainder(true);
   if (curBound > residualCut) {
-    return false;
+    return true;
   }
 
   // 3. update remOptions[recLevel+1][recLevel+1...end] based on the
   // choice in 1. Note that the set of options on the next recursion level is a
   // subset of the set of options on the previous level.
-  // TODO: MUST DECIDE WHEN TO DO A PROXIMITY SEARCH VERSUS WHEN TO DO A SUBSET
-  recLevel++;
-  int remSegs = query.size() - recLevel;
+  int nextLevel = recLevel + 1;
+  int remSegs = query.size() - nextLevel;
   if (remSegs > 0) {
     mstreal dij, de, dU, dL, d;
     while (true) {
       bool updated = false;
-      for (int i = recLevel; i < query.size(); i++) {
+      for (int i = nextLevel; i < query.size(); i++) {
         // IDEA: write a function in RMSDCalculator that does optimization only over
         // rotation, not centering (just skips the centering part). Then, pre-center
         // all the query sub-structures at all recursion levels and store them. Will
-        // not have to do this later during optimization. Also, create ROOM for storing
-        // target atoms at all recursion levels, but these will have to be assigned
-        // each time you do total RMSD. Actually, just the last segment added will need
-        // to be assigned. Finally, because you can use the function that does not
+        // not have to do this later during optimization. Finally, because you can use the function that does not
         // center, you can make sure that when you are scanning individual segments,
         // you are centering them once to compute the centroids and not again in the
         // RMSDCalculator.
 
-        optList& remSet = remOptions[recLevel][i - recLevel];
-        for (int j = 0; j < recLevel; j++) {                    // j runs over already placed segments
+        optList& remSet = remOptions[nextLevel][i - nextLevel];
+        for (int j = 0; j < nextLevel; j++) {                    // j runs over already placed segments
           CartesianPoint cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
-          dij = centToCentDist[i][j];                        // TODO: need to populate this upon loading the query
+          dij = centToCentDist[i][j];
           de = centToCentTol(i, j);
           mstreal& dePrev = ccTol[j][i];
           dU = dij - de; dL = dij + de;
@@ -413,38 +466,14 @@ bool MASTER::visitNextOption() {
   return true;
 }
 
-void MASTER::upRecLevel() {
-  if (recLevel > 0) {
-    currAlignment[recLevel] = -1;
-    segmentResidualsInAlignment[recLevel] = -1;
-    recLevel--;
+mstreal MASTER::currentAlignmentResidual(bool compute) {
+  if (compute) {
+    if (recLevel == 0) {
+      currResidual = segmentResiduals[recLevel][currAlignment[recLevel]];
+    } else {
+      mstreal rmsd = RC.bestRMSD(queryMasks[recLevel], targetMasks[recLevel]);
+      currResidual = rmsd*rmsd;
+    }
   }
-}
-
-mstreal MASTER::currentAlignmentResidual(bool recompute) {
-  if (!recompute) return currResidual;
-  if (recLevel == 0) currResidual = segmentResiduals[recLevel][currAlignment[recLevel]];
-  // JOIN THE APPROPRIATE segments
-  // COMPUTE RMSD
-  // TODO: ??????????????
   return currResidual;
-}
-
-template <class T>
-void MASTER::inPlaceSetDifference(set<int, T> in, const vector<int>& notin) {
-  std::set<int, T>::iterator it = in.begin();
-  int i = 0;
-  while ((it != in.end()) && (i != notin.size())) {
-      if (*it < *it2) {
-          set_1.erase(it1++);
-      } else if (*it2 < *it1) {
-          ++it2;
-      } else { // *it1 == *it2
-              ++it1;
-              ++it2;
-      }
-  }
-  // Anything left in set_1 from here on did not appear in set_2,
-  // so we remove it.
-  set_1.erase(it1, set_1.end());
 }
