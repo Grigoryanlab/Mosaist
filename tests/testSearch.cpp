@@ -52,12 +52,10 @@ class MASTER {
     int searchType, atomsPerRes;
     vector<string> searchableAtoms;
 
-    // remOptions[L][i] is a set of alignments for segment L+i at recursion level
-    // L, which are stored sorted by their own residual. This sorting is achieved
-    // via a comparator lambda function that looks into segmentResiduals (to be
-    // defined during search prep). Note that segments 0 through L-1 have already
+    // remOptions[L][i] are the remaining possible alignment indices for segment
+    // L+i at recursion level L. Note that segments 0 through L-1 have already
     // been place at recursion level L.
-    vector<vector<set<int, bool(*)(int,int)> > > remOptions;
+    vector<vector<unordered_map<int> > > remOptions;
 
     // ccTol[i][j], j > i, is the acceptable tolerance (the delta) on the
     // center-to-center distance between segments i and j at recursion level j
@@ -203,8 +201,9 @@ void MASTER::prepForSearch() {
   // initialize remOptions and fill it for the first recursion level only
   remOptions.resize(query.size());
   for (int L = 0; L < query.size(); L++) {
-    for (int i = L; i < query.size(); i++) {
-      remOptions[L].push_back(set<int, bool(*)(int, int)([&i, &segmentResiduals](int a, int b){ segmentResiduals[i][a] < segmentResiduals[i][b] }));
+    remOptions[L].resize(query.size() - L);
+    for (int k = 0; k < segmentResiduals[i].size(); k++) {
+      remOptions[0][i].insert(k);
     }
   }
   for (int i = 0; i < query.size(); i++) {
