@@ -22,6 +22,104 @@ struct compSolutions {
   }
 };
 
+/* A class for storing a sub-set of a fixed set of options, each with a fixed
+ * cost. The options are stored sorted by cost, so that the best option is
+ * alwasys quickly availabe. Insertion is constant time. Deletion is constant
+ * on average. */
+class optList {
+  public:
+    /* Takes an unsorted list of costs and initializes all necessary interal
+     * structures. Elements of the set of options will be known externally by
+     * their index into this array (the world index), although internally costs
+     * will also be stored (plus mappings between the two orders), so that the
+     * best available option will always be known. If second argument given as
+     * true, will start with all options being available. Otherwise, none will
+     * be marked as available. */
+    optList(const vector<mstreal>& _costs, bool add = false) { setOptions(_costs, add); }
+    optList() { bestCostRank = -1; numIn = 0; }
+
+    void setOptions(const vector<mstreal>& _costs, bool add = false);
+    void addOption(int k);
+    void removeOption(int k);
+    mstreal bestCost() { return costs[bestCostRank]; }
+    int bestChoice() { return rankToIdx[bestCostRank]; }
+    int totNumOptions() { return costs.size(); }
+    int numOptions() { return numIn; }
+    bool empty() { return (numIn == 0); }
+
+  private:
+    // costs, sorted in ascending order
+    vector<mstreal> costs;
+
+    // is each option (by world index) currently available?
+    vector<bool> isIn;
+
+    // back-and-forth mappings between rank by cost (ascending order) and the
+    // flat index known to the word
+    vector<int> idxToRank, rankToIdx;
+
+    // of the available options, the lowest-cost rank
+    int bestCostRank;
+
+    // number of currently available options
+    int numIn;
+};
+
+void optList::setOptions(const vector<mstreal>& _costs, bool add) {
+  // sort costs and keep track of indices to know the rank-to-index mapping
+  rankToIdx.resize(_costs.size());
+  for (int i = 0; i < rankToIdx.size(); i++) rankToIdx[i] = i;
+  sort(rankToIdx.begin(), rankToIdx.end(), [&_costs](int i, int j) { return costs[i] < costs[j]; });
+  costs.resize(_costs.size());
+  for (int i = 0; i < rankToIdx.size(); i++) costs[i] = _costs[rankToIdx[i]];
+
+  // sort the the rank-to-index mapping and keep track of indices to know the index-to-rank mapping
+  idxToRank.resize(costs.size());
+  for (int i = 0; i < idxToRank.size(); i++) idxToRank[i] = i;
+  sort(idxToRank.begin(), idxToRank.end(), [&rankToIdx](int i, int j) { return costs[i] < costs[j]; });
+
+  // either include or exclude all options to start off, as instructed
+  isIn.resize(costs.size(), add);
+  if (add) {
+    bestCostRank = 0;
+    numIn = costs.size();
+  } else {
+    bestCostRank = -1;
+    numIn = 0;
+  }
+}
+
+void optList::addOption(int k) {
+  // if ((k < 0) || (k >= costs.size())) MstUtils::error("out-of-range index specified: " + MstUtils::toString(k), "optList::insertOption(int)");
+  if (!isIn[k]) {
+    numIn++;
+    isIn[k] = true;
+    // update best, if the newly inserted option is better
+    if ((bestCostRank < 0) || (costs[bestCostRank] > costs[idxToRank[k]])) {
+      bestCostRank = idxToRank[k];
+    }
+  }
+}
+
+void optList::removeOption(int k) {
+  // if ((k < 0) || (k >= costs.size())) MstUtils::error("out-of-range index specified: " + MstUtils::toString(k), "optList::removeOption(int)");
+  if (isIn[k]) {
+    numIn--;
+    isIn[k] = false;
+    // find new best, if this was the best
+    if (bestCostRank == idxToRank[k]) {
+      bestCostRank = -1;
+      for (int i = bestCostRank; i < costs.size(); i++) {
+        if (isIn[i]) { bestCostRank = i; break; }
+      }
+    }
+    if ((bestCostRank < 0) || (costs[bestCostRank] > costs[idxToRank[k]])) {
+      bestCostRank = idxToRank[k];
+    }
+  }
+}
+
+
 class MASTER {
   public:
     ~MASTER();
@@ -38,6 +136,8 @@ class MASTER {
   protected:
     static bool parseChain(const Chain& S, AtomPointerVector& searchable);
     mstreal currentAlignmentResidual(bool recompute); // TODO
+    template <class T>
+    void inPlaceSetDifference(set<int, T> in, const vector<int>& notin);
 
   private:
     Structure queryStruct, targetStruct;
@@ -52,10 +152,11 @@ class MASTER {
     int searchType, atomsPerRes;
     vector<string> searchableAtoms;
 
-    // remOptions[L][i] are the remaining possible alignment indices for segment
-    // L+i at recursion level L. Note that segments 0 through L-1 have already
-    // been place at recursion level L.
-    vector<vector<unordered_map<int> > > remOptions;
+    // remOptions[L][i] is a set of alignments for segment L+i at recursion level
+    // L, which are stored sorted by their own residual, through the optList
+    // data structure. Note that segments 0 through L-1 have already been place
+    // at recursion level L.
+    vector<vector<optList> > > remOptions;
 
     // ccTol[i][j], j > i, is the acceptable tolerance (the delta) on the
     // center-to-center distance between segments i and j at recursion level j
@@ -198,17 +299,12 @@ void MASTER::prepForSearch() {
     }
   }
 
-  // initialize remOptions and fill it for the first recursion level only
+  // initialize remOptions; all options are available at top level
   remOptions.resize(query.size());
   for (int L = 0; L < query.size(); L++) {
     remOptions[L].resize(query.size() - L);
-    for (int k = 0; k < segmentResiduals[i].size(); k++) {
-      remOptions[0][i].insert(k);
-    }
-  }
-  for (int i = 0; i < query.size(); i++) {
-    for (int k = 0; k < segmentResiduals[i].size(); k++) {
-      remOptions[0][i].insert(k);
+    for (int i = L; i < query.size(); i++) {
+      remOptions[L][i].setOptions(segmentResiduals[i], L == 0);
     }
   }
 
@@ -227,7 +323,7 @@ void MASTER::prepForSearch() {
 
 mstreal MASTER::lowBoundOnRemainder() {
   mstreal bound;
-  for (int i = level; i < query.size(); i++) bound += remOptions[recLevel][i].begin().second;
+  for (int i = level; i < query.size(); i++) bound += remOptions[recLevel][i].bestCost();
   return bound;
 }
 
@@ -245,8 +341,8 @@ bool MASTER::visitNextOption() {
     upRecLevel();
     return false;
   }
-  currAlignment[recLevel] = remOptions[recLevel][recLevel].begin().first;
-  remOptions[recLevel][recLevel].erase(remOptions[recLevel][recLevel].begin());
+  currAlignment[recLevel] = remOptions[recLevel][recLevel].bestChoice();
+  remOptions[recLevel][recLevel].removeOption(currAlignment[recLevel]);
 
   // 2. compute the total residual from the current alignment
   mstreal curBound = currentAlignmentResidual(true) + lowBoundOnRemainder(true);
@@ -265,13 +361,6 @@ bool MASTER::visitNextOption() {
     while (true) {
       bool updated = false;
       for (int i = recLevel; i < query.size(); i++) {
-        // TODO: GREAT IDEA. Instead of doing proximity searches with ever decreasing
-        // tollerances around a given distance, do a proximity search for the atoms
-        // that used to be included and would not be included now (the range of distances
-        // that falls between the old and new tollerances). That way, if the change
-        // was not significant, the search will not be significant. Will need to do
-        // a set diff in the end.
-
         // IDEA: write a function in RMSDCalculator that does optimization only over
         // rotation, not centering (just skips the centering part). Then, pre-center
         // all the query sub-structures at all recursion levels and store them. Will
@@ -283,7 +372,7 @@ bool MASTER::visitNextOption() {
         // you are centering them once to compute the centroids and not again in the
         // RMSDCalculator.
 
-        auto& remSet = remOptions[recLevel][i - recLevel];
+        optList& remSet = remOptions[recLevel][i - recLevel];
         for (int j = 0; j < recLevel; j++) {                    // j runs over already placed segments
           CartesianPoint cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
           dij = centToCentDist[i][j];                        // TODO: need to populate this upon loading the query
@@ -294,34 +383,22 @@ bool MASTER::visitNextOption() {
 
           // The first time we do a proximity search to find some options for
           // segment i. But if we already have some options for the segment, we
-          // need to do a set difference to remove some options
+          // need to do a set difference to remove no-longer-valid ones
           if (numLocs == 0) {
             vector<int> okLocations;
             ps[i].pointsWithin(cj, dij - de, dij + de, okLocations);
-            remSet.insert(okLocations.begin(), okLocations.end());  // TODO: this will not work in C++!!!
+            for (int k = 0; k < okLocations.size(); k++) {
+              remSet.addOption(okLocations[k]);
+            }
           } else {
-            vector<int> badLocations;
-            ps[i].pointsWithin(cj, dij - dePrev, dij - de, badLocations); // TODO: [] or ()?
-            ps[i].pointsWithin(cj, dij + de, dij + dePrev, badLocations); // TODO: does this keep accumulating?
-            remSet.erase(badLocations.begin(), badLocations.end());  // TODO: this will not work in C++!!!
-          }
-          dePrev = dij;
-
-          // The first time we do a proximity search to find some options for
-          // segment i. But if we already have some options for the segment, we
-          // just iterate over them to figure out which ones are within the new
-          // distance tollerance of the current centroid of segnemt j.
-          if (numLocs == 0) {
-          } else {
-            for (auto it = remSet.begin(); it != remSet.end(); ) {
-              d = cj.distance(ps[i].getPoint(*it));
-              if ((d > dU) || (d < dL)) {
-                remSet.erase(it++);
-              } else {
-                ++it;
-              }
+            vector<int> badLocations; mstreal eps = 10E-8;
+            ps[i].pointsWithin(cj, dij - dePrev, dij - de - eps, badLocations);
+            ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, badLocations);
+            for (int k = 0; k < badLocations.size(); k++) {
+              remSet.removeOption(badLocations[k]);
             }
           }
+          dePrev = dij;
           if (numLocs != remSet.size()) updated = true;
         }
       }
@@ -351,4 +428,23 @@ mstreal MASTER::currentAlignmentResidual(bool recompute) {
   // COMPUTE RMSD
   // TODO: ??????????????
   return currResidual;
+}
+
+template <class T>
+void MASTER::inPlaceSetDifference(set<int, T> in, const vector<int>& notin) {
+  std::set<int, T>::iterator it = in.begin();
+  int i = 0;
+  while ((it != in.end()) && (i != notin.size())) {
+      if (*it < *it2) {
+          set_1.erase(it1++);
+      } else if (*it2 < *it1) {
+          ++it2;
+      } else { // *it1 == *it2
+              ++it1;
+              ++it2;
+      }
+  }
+  // Anything left in set_1 from here on did not appear in set_2,
+  // so we remove it.
+  set_1.erase(it1, set_1.end());
 }
