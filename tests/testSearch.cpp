@@ -1,6 +1,7 @@
 #include "msttypes.h"
 #include "mstoptions.h"
 #include "msttransforms.h"
+#include <chrono>
 
 using namespace MST;
 
@@ -313,7 +314,7 @@ void FASST::addTarget(const string& pdbFile) {
   for (int i = 0; i < targetStruct->chainSize(); i++) {
     parseChain(targetStruct->getChain(i), target);
   }
-  MstUtils::assert(target.size() > 0, "empty target passed", "FASST::setTarget");
+  MstUtils::assert(target.size() > 0, "empty target in file '" + pdbFile + "'", "FASST::setTarget");
 
   // orient the target structure in common frame (remember the transform)
   tr.push_back(TransformFactory::translate(-target.getGeometricCenter()));
@@ -477,7 +478,7 @@ void FASST::search() {
   solutions.clear();
 auto begin = chrono::high_resolution_clock::now();
 for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
-  prepForSearch(currentTarget);
+//  prepForSearch(currentTarget);
 }
 auto end = chrono::high_resolution_clock::now();
 cout << "prep time " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << std::endl;
