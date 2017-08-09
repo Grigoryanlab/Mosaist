@@ -642,6 +642,7 @@ class ProximitySearch {
     vector<vector<vector<vector<int> > > > buckets;
     vector<CartesianPoint*> pointList;
     vector<int> pointTags;
+    vector<vector<int>*> fullBuckets; // keeps track of buckets
 };
 
 template<class T>

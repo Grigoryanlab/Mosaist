@@ -2141,7 +2141,9 @@ void ProximitySearch::addPoint(const CartesianPoint& _p, int tag) {
   pointBucket(_p[0], _p[1], _p[2], &i, &j, &k);
   if ((i < 0) || (j < 0) || (k < 0) || (i > N-1) || (j > N-1) || (k > N-1)) { cout << "Error: point " << _p << " out of range for ProximitySearch object!\n"; exit(-1); }
   CartesianPoint* p = new CartesianPoint(_p);
-  buckets[i][j][k].push_back(pointList.size());
+  vector<int>& bijk = buckets[i][j][k];
+  if (bijk.empty()) fullBuckets.push_back(&bijk);
+  bijk.push_back(pointList.size());
   pointList.push_back(p);
   pointTags.push_back(tag);
 }
@@ -2151,7 +2153,9 @@ void ProximitySearch::addPoint(mstreal xc, mstreal yc, mstreal zc, int tag) {
   pointBucket(xc, yc, zc, &i, &j, &k);
   if ((i < 0) || (j < 0) || (k < 0) || (i > N-1) || (j > N-1) || (k > N-1)) { cout << "Error: point " << xc << " " << yc << " " << zc << " out of range for ProximitySearch object!\n"; exit(-1); }
   CartesianPoint* p = new CartesianPoint(xc, yc, zc);
-  buckets[i][j][k].push_back(pointList.size());
+  vector<int>& bijk = buckets[i][j][k];
+  if (bijk.empty()) fullBuckets.push_back(&bijk);
+  bijk.push_back(pointList.size());
   pointList.push_back(p);
   pointTags.push_back(tag);
 }
@@ -2167,13 +2171,8 @@ void ProximitySearch::dropAllPoints() {
   for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
   pointList.resize(0);
   pointTags.resize(0);
-  for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
-      for (int k = 0; k < N; k++) {
-        buckets[i][j][k].resize(0);
-      }
-    }
-  }
+  for (int i = 0; i < fullBuckets.size(); i++) fullBuckets[i]->resize(0);
+  fullBuckets.resize(0);
 }
 
 bool ProximitySearch::isPointWithinGrid(CartesianPoint _p) {

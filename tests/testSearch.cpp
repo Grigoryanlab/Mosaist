@@ -376,7 +376,7 @@ void FASST::setSearchType(int _searchType) {
 }
 
 void FASST::rebuildProximityGrids() {
-  mstreal d0 = 6.0; // characteristic distance for the proximity search
+  mstreal d0 = 5.0; // characteristic distance for the proximity search
   if (xlo == xhi) { xlo -= d0/2; xhi += d0/2; }
   if (ylo == yhi) { ylo -= d0/2; yhi += d0/2; }
   if (zlo == zhi) { zlo -= d0/2; zhi += d0/2; }
@@ -476,18 +476,13 @@ mstreal FASST::centToCentTol(int i, int j, bool recomputeResidual, bool recomput
 
 void FASST::search() {
   solutions.clear();
-auto begin = chrono::high_resolution_clock::now();
-for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
-//  prepForSearch(currentTarget);
-}
-auto end = chrono::high_resolution_clock::now();
-cout << "prep time " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << std::endl;
-//return;
-
-begin = chrono::high_resolution_clock::now();
+  auto begin = chrono::high_resolution_clock::now();
+  int prepTime = 0;
   for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
-//printf("%d/%d\n", currentTarget+1, (int) targets.size());
+    auto beginPrep = chrono::high_resolution_clock::now();
     prepForSearch(currentTarget);
+    auto endPrep = chrono::high_resolution_clock::now();
+    prepTime += chrono::duration_cast<std::chrono::microseconds>(endPrep-beginPrep).count();
     AtomPointerVector& target = targets[currentTarget];
     while (true) {
       // Have to do three things:
@@ -589,8 +584,12 @@ begin = chrono::high_resolution_clock::now();
       }
     }
   }
-end = chrono::high_resolution_clock::now();
-cout << "search time " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << std::endl;
+  auto end = chrono::high_resolution_clock::now();
+  int searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
+  prepTime = prepTime/1000;
+  cout << "prep time " << prepTime << " ms" << std::endl;
+  cout << "search time " << searchTime << " ms" << std::endl;
+  cout << "prep time was " << (100.0*prepTime/searchTime) << " % of the total" << std::endl;
 }
 
 mstreal FASST::currentAlignmentResidual(bool compute) {
