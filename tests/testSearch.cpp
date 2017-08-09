@@ -1,4 +1,6 @@
 #include "msttypes.h"
+#include "mstoptions.h"
+#include "msttransforms.h"
 
 using namespace MST;
 
@@ -40,7 +42,12 @@ class optList {
 
     void setOptions(const vector<mstreal>& _costs, bool add = false);
     void addOption(int k);
+    // after this, the only remaining allowed options will be those that were
+    // allowed before AND are in the specified list
+    void intersectOptions(const vector<int>& opts);
     void removeAllOptions();
+    // copy the valid options from a different set of the same options
+    void copyIn(const optList& opt);
     void removeOption(int k);
     mstreal bestCost() { return costs[bestCostRank]; }
     int bestChoice() { return rankToIdx[bestCostRank]; }
@@ -125,31 +132,50 @@ void optList::removeAllOptions() {
   bestCostRank = -1;
 }
 
-class MASTER {
+void optList::copyIn(const optList& opt) {
+  isIn = opt.isIn;
+  bestCostRank = opt.bestCostRank;
+  numIn = opt.numIn;
+}
+
+void optList::intersectOptions(const vector<int>& opts) {
+  vector<bool> isGiven(isIn.size(), false);
+  for (int i = 0; i < opts.size(); i++) isGiven[opts[i]] = true;
+  for (int i = 0; i < isIn.size(); i++) {
+    if (isIn[i] && !isGiven[i]) removeOption(i);
+  }
+}
+
+/* FASST -- Fast Algorithm for Searching STructure */
+class FASST {
   public:
-    ~MASTER();
-    MASTER() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(2); }
+    ~FASST();
+    FASST() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(2); updateGrids = false; }
     void setQuery(const string& pdbFile);
-    void setTarget(const string& pdbFile);
-    void prepForSearch();
+    void addTarget(const string& pdbFile);
+    void addTargets(const vector<string>& pdbFiles);
     void setRMSDCutoff(mstreal cut);
     void setSearchType(int _searchType);
-    bool visitNextOption();
+    void search();
     int numSolutions() { return solutions.size(); }
 
   protected:
+    void prepForSearch(int ti);
     bool parseChain(const Chain& S, AtomPointerVector& searchable);
     mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
     int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
-    void fillTargetMask();
-    mstreal centToCentTol(int i, int j);
+    mstreal centToCentTol(int i, int j, bool recomputeResidual = false, bool recomputeBound = false);
+    void rebuildProximityGrids();
 
   private:
-    Structure queryStruct, targetStruct;
-    vector<AtomPointerVector> query;   // just the part of the query that will be sought, split by segment
-    AtomPointerVector target;          // just the part of the target structure that will be searched over
+    Structure queryStruct;
+    vector<Structure*> targetStructs;
+    vector<AtomPointerVector> query;      // just the part of the query that will be sought, split by segment
+    vector<AtomPointerVector> targets;    // just the part of the target structure that will be searched over
+    mstreal xlo, ylo, zlo, xhi, yhi, zhi; // bounding box of the search database
+    vector<Transform> tr;                 // transformations from the original frame to the common frames of reference for each target
 
     // segmentResiduals[i][j] is the residual of the alignment of segment i, in which
     // its starting residue aligns with the residue index j in the target
@@ -165,9 +191,9 @@ class MASTER {
     // at recursion level L.
     vector<vector<optList> > remOptions;
 
-    // ccTol[i][j], j > i, is the acceptable tolerance (the delta) on the
-    // center-to-center distance between segments i and j at recursion level j
-    vector<vector<mstreal> > ccTol;
+    // ccTol[L][i][j], j > i, is the acceptable tolerance (the delta) on the
+    // center-to-center distance between segments i and j at recursion level L
+    vector<vector<vector<mstreal> > > ccTol;
 
     // alignment indices for segments visited up to the current recursion level
     vector<int> currAlignment;
@@ -196,28 +222,39 @@ class MASTER {
     // depending on the alignment
     vector<AtomPointerVector> queryMasks, targetMasks;
 
+    // every time a new target is added, this flag will be set so we will know
+    // to update proximity grids required for the search
+    bool updateGrids;
+
     RMSDCalculator RC;
 };
 
 int main(int argc, char *argv[]) {
-  MASTER S;
-  S.setQuery("/tmp/query.pdb");
-  S.setTarget("/tmp/target.pdb");
-  S.prepForSearch();
-  S.setRMSDCutoff(2.0);
+  MstOptions op;
+  op.setTitle("Implements the FASSA (FAst Structure Search Algorithm). Options:");
+  op.addOption("q", "query PDB file.", true);
+  op.addOption("d", "a database file with a list of PDB files.", true);
+  op.setOptions(argc, argv);
 
-  while (S.visitNextOption()) {}
+  FASST S;
+  cout << "Building the database..." << endl;
+  S.setQuery(op.getString("q"));
+  S.addTargets(MstUtils::fileToArray(op.getString("d")));
+  S.setRMSDCutoff(2.0);
+  cout << "Searching..." << endl;
+  S.search();
   cout << "found " << S.numSolutions() << " solutions" << endl;
 }
 
 
-MASTER::~MASTER() {
+FASST::~FASST() {
   // need to delete atoms only on the lowest level of recursion, because at
   // higher levels we point to the same atoms
-  targetMasks.back().deletePointers();
+  if (targetMasks.size()) targetMasks.back().deletePointers();
+  for (int i = 0; i < targetStructs.size(); i++) delete targetStructs[i];
 }
 
-void MASTER::setRMSDCutoff(mstreal cut) {
+void FASST::setRMSDCutoff(mstreal cut) {
   rmsdCut = cut;
   residualCut = cut*cut*query.size();
 }
@@ -230,7 +267,7 @@ void MASTER::setRMSDCutoff(mstreal cut) {
  * stored in flat arrays for efficiency. But these could presumably be
  * interpreted differently. E.g., only some residue matches (parents of atoms)
  * may be accepted or some of the atoms can be dummy/empty ones. */
-void MASTER::setQuery(const string& pdbFile) {
+void FASST::setQuery(const string& pdbFile) {
   queryStruct.reset();
   queryStruct.readPDB(pdbFile);
   // auto-splitting segments by connectivity, but can do diffeerntly
@@ -239,26 +276,67 @@ void MASTER::setQuery(const string& pdbFile) {
   for (int i = 0; i < queryStruct.chainSize(); i++) {
     query[i].resize(0);
     if (!parseChain(queryStruct[i], query[i])) {
-      MstUtils::error("could not set query, because some atoms for the specified search type were missing", "MASTER::setQuery");
+      MstUtils::error("could not set query, because some atoms for the specified search type were missing", "FASST::setQuery");
     }
-    MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "MASTER::setQuery");
+    MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "FASST::setQuery");
   }
   currAlignment.resize(query.size(), -1);
-}
-
-void MASTER::setTarget(const string& pdbFile) {
-  targetStruct.reset();
-  targetStruct.readPDB(pdbFile);
-  target.resize(0);
-  // we don't care about the chain topology of the target, so append all residues
-  for (int i = 0; i < targetStruct.chainSize(); i++) {
-    parseChain(targetStruct[i], target);
-  }
-  MstUtils::assert(target.size() > 0, "empty target passed", "MASTER::setTarget");
   setRMSDCutoff(rmsdCut); // update the max residual
+
+  // center-to-center distances in the qyery
+  centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
+  for (int i = 0; i < query.size(); i++) {
+    for (int j = i+1; j < query.size(); j++) {
+      centToCentDist[i][j] = query[i].getGeometricCenter().distance(query[j].getGeometricCenter());
+      centToCentDist[j][i] = centToCentDist[i][j];
+    }
+  }
+
+  // set query masks (subsets of query segments involved at each recursion level)
+  queryMasks.resize(query.size());
+  for (int i = 0; i < query.size(); i++) {
+    for (int L = i; L < query.size(); L++) {
+      for (int j = 0; j < query[i].size(); j++) {
+        queryMasks[L].push_back(query[i][j]);
+      }
+    }
+  }
+  updateGrids = true;
 }
 
-bool MASTER::parseChain(const Chain& C, AtomPointerVector& searchable) {
+void FASST::addTarget(const string& pdbFile) {
+  Structure* targetStruct = new Structure(pdbFile, "QUIET");
+  targetStructs.push_back(targetStruct);
+  targets.push_back(AtomPointerVector());
+  AtomPointerVector& target = targets.back();
+  // we don't care about the chain topology of the target, so append all residues
+  for (int i = 0; i < targetStruct->chainSize(); i++) {
+    parseChain(targetStruct->getChain(i), target);
+  }
+  MstUtils::assert(target.size() > 0, "empty target passed", "FASST::setTarget");
+
+  // orient the target structure in common frame (remember the transform)
+  tr.push_back(TransformFactory::translate(-target.getGeometricCenter()));
+  tr.back().apply(*targetStruct);
+
+  // update extent for when will be creating proximity search objects
+  mstreal _xlo, _ylo, _zlo, _xhi, _yhi, _zhi;
+  ProximitySearch::calculateExtent(*targetStruct, _xlo, _ylo, _zlo, _xhi, _yhi, _zhi);
+  if (targetStructs.size() == 1) {
+    xlo = _xlo; ylo = _ylo; zlo = _zlo;
+    xhi = _xhi; yhi = _yhi; zhi = _zhi;
+  } else {
+    xlo = min(xlo, _xlo); ylo = min(ylo, _ylo); zlo = min(zlo, _zlo);
+    xhi = max(xhi, _xhi); yhi = max(yhi, _yhi); zhi = max(zhi, _zhi);
+  }
+  updateGrids = true;
+}
+
+void FASST::addTargets(const vector<string>& pdbFiles) {
+  for (int i = 0; i < pdbFiles.size(); i++) addTarget(pdbFiles[i]);
+}
+
+bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable) {
   bool foundAll = true;
   for (int i = 0; i < C.residueSize(); i++) {
     Residue& res = C.getResidue(i);
@@ -275,13 +353,13 @@ bool MASTER::parseChain(const Chain& C, AtomPointerVector& searchable) {
         break;
       }
       default:
-        MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "MASTER::parseStructure");
+        MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "FASST::parseStructure");
     }
   }
   return foundAll;
 }
 
-void MASTER::setSearchType(int _searchType) {
+void FASST::setSearchType(int _searchType) {
   searchType = _searchType;
   switch(searchType) {
     case 1:
@@ -291,22 +369,39 @@ void MASTER::setSearchType(int _searchType) {
       searchableAtoms =  {"N", "CA", "C", "O"};
       break;
     default:
-      MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "MASTER::setSearchType");
+      MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "FASST::setSearchType");
   }
   atomsPerRes = searchableAtoms.size();
 }
 
-void MASTER::prepForSearch() {
-  if ((query.size() == 0) || (target.size() == 0)) {
-    MstUtils::error("query and target must be set before starting search", "MASTER::prepForSearch");
+void FASST::rebuildProximityGrids() {
+  mstreal d0 = 6.0; // characteristic distance for the proximity search
+  if (xlo == xhi) { xlo -= d0/2; xhi += d0/2; }
+  if (ylo == yhi) { ylo -= d0/2; yhi += d0/2; }
+  if (zlo == zhi) { zlo -= d0/2; zhi += d0/2; }
+  int N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/d0));
+  ps.clear(); ps.resize(query.size());
+  for (int i = 0; i < query.size(); i++) {
+    ps[i] = ProximitySearch(xlo, ylo, zlo, xhi, yhi, zhi, N);
   }
-  solutions.clear();
+  updateGrids = false;
+}
+
+void FASST::prepForSearch(int ti) {
+  recLevel = 0;
+  AtomPointerVector& target = targets[ti];
+  if ((query.size() == 0) || (target.size() == 0)) {
+    MstUtils::error("query and target must be set before starting search", "FASST::prepForSearch");
+  }
+
+  // if the search database has changed since the last search, update
+  if (updateGrids) rebuildProximityGrids();
 
   // align every segment onto every admissible location on the target
+  mstreal xc, yc, zc;
   segmentResiduals.resize(query.size());
-  ps.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
-    ps[i] = ProximitySearch(target, 3.0, false);
+    ps[i].dropAllPoints();
     AtomPointerVector& seg = query[i];
     int Na = atomToResIdx(target.size()) - atomToResIdx(seg.size()) + 1; // number of possible alignments
     segmentResiduals[i].resize(Na);
@@ -316,13 +411,15 @@ void MASTER::prepForSearch() {
       // 2. updating just one atom involves a simple centroid adjustment, rather than recalculation
       // 3. is there a speedup to be gained from re-calculating RMSD with one atom updated only?
       AtomPointerVector targSeg = target.subvector(resToAtomIdx(j), resToAtomIdx(j) + query[i].size());
-      segmentResiduals[i][j] = pow(RC.bestRMSD(query[i], targSeg), 2) * targSeg.size();
-      ps[i].addPoint(targSeg.getGeometricCenter(), j);
+      mstreal rmsd = RC.bestRMSD(query[i], targSeg);
+      segmentResiduals[i][j] = rmsd * rmsd * targSeg.size();
+      targSeg.getGeometricCenter(xc, yc, zc);
+      ps[i].addPoint(xc, yc, zc, j);
     }
   }
 
   // initialize remOptions; all options are available at top level
-  remOptions.resize(query.size());
+  remOptions.clear(); remOptions.resize(query.size());
   for (int L = 0; L < query.size(); L++) {
     remOptions[L].resize(query.size());
     for (int i = L; i < query.size(); i++) {
@@ -338,21 +435,17 @@ void MASTER::prepForSearch() {
   currRemBound = boundOnRemainder(true);
 
   // initialize center-to-center tolerances
-  ccTol.resize(query.size());
+  ccTol.clear(); ccTol.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
-    ccTol[i].resize(query.size(), -1.0); // unnecessary (unused) entries will stay as -1
-    for (int j = i+1; j < query.size(); j++) {
-      ccTol[i][j] = centToCentTol(i, j);
-    }
+    ccTol[i].resize(query.size(), vector<mstreal>(query.size(), -1.0)); // unnecessary (unused) entries will stay as -1
   }
 
-  // make room for various atom masks
-  queryMasks.resize(query.size());
-  targetMasks.resize(query.size());
+  // make room for target atom masks at different recursion levels
+  if (targetMasks.size()) targetMasks.back().deletePointers();
+  targetMasks.clear(); targetMasks.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
     for (int L = i; L < query.size(); L++) {
       for (int j = 0; j < query[i].size(); j++) {
-        queryMasks[L].push_back(query[i][j]);
         if (L > i) {
           // for any repeated atoms on this level, make sure to point to the
           // same atoms as the mask on the previous level
@@ -364,18 +457,9 @@ void MASTER::prepForSearch() {
       }
     }
   }
-
-  // center-to-center distances
-  centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
-  for (int i = 0; i < query.size(); i++) {
-    for (int j = i+1; j < query.size(); j++) {
-      centToCentDist[i][j] = query[i].getGeometricCenter().distance(query[j].getGeometricCenter());
-      centToCentDist[j][i] = centToCentDist[i][j];
-    }
-  }
 }
 
-mstreal MASTER::boundOnRemainder(bool compute) {
+mstreal FASST::boundOnRemainder(bool compute) {
   if (compute) {
     currRemBound = 0;
     for (int i = recLevel + 1; i < query.size(); i++) currRemBound += remOptions[recLevel][i].bestCost();
@@ -383,102 +467,132 @@ mstreal MASTER::boundOnRemainder(bool compute) {
   return currRemBound;
 }
 
-mstreal MASTER::centToCentTol(int i, int j) {
-  // TODO: validate the bound
-  return sqrt((((residualCut - currentAlignmentResidual(false) - boundOnRemainder(false))) * (query[i].size() + query[j].size())) / (query[i].size() * query[j].size()));
+mstreal FASST::centToCentTol(int i, int j, bool recomputeResidual, bool recomputeBound) {
+  mstreal remRes = residualCut - currentAlignmentResidual(recomputeResidual) - boundOnRemainder(recomputeBound);
+  if (remRes < 0) return -1.0;
+  return sqrt((remRes * (query[i].size() + query[j].size())) / (query[i].size() * query[j].size()));
 }
 
-void MASTER::fillTargetMask() {
-  int N = targetMasks[recLevel].size();
-  int n = query[recLevel].size();
-  int si = resToAtomIdx(currAlignment[recLevel]);
-  for (int i = 0; i < n; i++) {
-    targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getCoor());
-  }
+void FASST::search() {
+  solutions.clear();
+auto begin = chrono::high_resolution_clock::now();
+for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
+  prepForSearch(currentTarget);
 }
+auto end = chrono::high_resolution_clock::now();
+cout << "prep time " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << std::endl;
+//return;
 
-bool MASTER::visitNextOption() {
-  // Have to do three things:
-  // 1. pick the best choice (from available ones) for the current segment,
-  // remove it from the list of options, and move onto the next recursion level
-  if (remOptions[recLevel][recLevel].empty()) {
-    currAlignment[recLevel] = -1;
-    if (recLevel > 0) {
-      for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][recLevel].removeAllOptions();
-      recLevel--;
-      return false; // search exhausted
-    }
-    return true;
-  }
-  currAlignment[recLevel] = remOptions[recLevel][recLevel].bestChoice();
-  fillTargetMask();
-  remOptions[recLevel][recLevel].removeOption(currAlignment[recLevel]);
-
-  // 2. compute the total residual from the current alignment
-  mstreal curBound = currentAlignmentResidual(true) + boundOnRemainder(true);
-  if (curBound > residualCut) {
-    return true;
-  }
-
-  // 3. update update remaining options for subsequent segments based on the
-  // newly made choice. The set of options on the next recursion level is a
-  // subset of the set of options on the previous level.
-  int remSegs = query.size() - (recLevel + 1);
-  if (remSegs > 0) {
-    recLevel++;
-    mstreal dij, de, dU, dL, d;
+begin = chrono::high_resolution_clock::now();
+  for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
+//printf("%d/%d\n", currentTarget+1, (int) targets.size());
+    prepForSearch(currentTarget);
+    AtomPointerVector& target = targets[currentTarget];
     while (true) {
-      bool updated = false;
-      for (int i = recLevel; i < query.size(); i++) {
-        // IDEA: write a function in RMSDCalculator that does optimization only over
-        // rotation, not centering (just skips the centering part). Then, pre-center
-        // all the query sub-structures at all recursion levels and store them. Will
-        // not have to do this later during optimization. Finally, because you can use the function that does not
-        // center, you can make sure that when you are scanning individual segments,
-        // you are centering them once to compute the centroids and not again in the
-        // RMSDCalculator.
-
-        optList& remSet = remOptions[recLevel][recLevel];
-        for (int j = 0; j < recLevel; j++) {                    // j runs over already placed segments
-          CartesianPoint cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
-          dij = centToCentDist[i][j];
-          de = centToCentTol(i, j);
-          mstreal& dePrev = ccTol[j][i];
-          dU = dij - de; dL = dij + de;
-          int numLocs = remSet.size();
-
-          // The first time we do a proximity search to find some options for
-          // segment i. But if we already have some options for the segment, we
-          // need to do a set difference to remove no-longer-valid ones
-          if (numLocs == 0) {
-            vector<int> okLocations;
-            ps[i].pointsWithin(cj, dij - de, dij + de, &okLocations);
-            for (int k = 0; k < okLocations.size(); k++) {
-              remSet.addOption(okLocations[k]);
-            }
-          } else {
-            vector<int> badLocations; mstreal eps = 10E-8;
-            ps[i].pointsWithin(cj, dij - dePrev, dij - de - eps, &badLocations);
-            ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, &badLocations);
-            for (int k = 0; k < badLocations.size(); k++) {
-              remSet.removeOption(badLocations[k]);
-            }
-          }
-          dePrev = dij;
-          if (numLocs != remSet.size()) updated = true;
+      // Have to do three things:
+      // 1. pick the best choice (from available ones) for the current segment,
+      // remove it from the list of options, and move onto the next recursion level
+      if (remOptions[recLevel][recLevel].empty()) {
+        currAlignment[recLevel] = -1;
+        if (recLevel > 0) {
+          // for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i].removeAllOptions();
+          recLevel--;
+          continue;
+        } else {
+          break; // search exhausted
         }
       }
-      if (!updated) break;
-    }
-  } else {
-    // if at the lowest recursion level already, then record the solution
-    solutions.insert(pair<vector<int>, mstreal>(currAlignment, currResidual));
-  }
+      currAlignment[recLevel] = remOptions[recLevel][recLevel].bestChoice();
+      remOptions[recLevel][recLevel].removeOption(currAlignment[recLevel]);
+      // fill up sub-alignment with target atoms
+      int N = targetMasks[recLevel].size();
+      int n = query[recLevel].size();
+      int si = resToAtomIdx(currAlignment[recLevel]);
+      for (int i = 0; i < n; i++) {
+        targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getCoor());
+      }
 
-  return true;
+      // 2. compute the total residual from the current alignment
+      mstreal curBound = currentAlignmentResidual(true) + boundOnRemainder(true);
+      if (curBound > residualCut) continue;
+
+      // 3. update update remaining options for subsequent segments based on the
+      // newly made choice. The set of options on the next recursion level is a
+      // subset of the set of options on the previous level.
+      int remSegs = query.size() - (recLevel + 1);
+      if (remSegs > 0) {
+        recLevel++;
+        // copy remaining options from the previous recursion level. This way,
+        // we can compute bounds on this level and can do set intersections to
+        // further narrow this down
+        for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
+        mstreal dij, de, d;
+        for (int c = 0; true; c++) {
+          bool updated = false, levelExhausted = false;
+          for (int i = recLevel; i < query.size(); i++) {
+            // IDEA: write a function in RMSDCalculator that does optimization only over
+            // rotation, not centering (just skips the centering part). Then, pre-center
+            // all the query sub-structures at all recursion levels and store them. Will
+            // not have to do this later during optimization. Finally, because you can use the function that does not
+            // center, you can make sure that when you are scanning individual segments,
+            // you are centering them once to compute the centroids and not again in the
+            // RMSDCalculator.
+
+            optList& remSet = remOptions[recLevel][i];
+            for (int j = 0; j < recLevel; j++) {                    // j runs over already placed segments
+              CartesianPoint cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
+              dij = centToCentDist[i][j];
+              de = centToCentTol(i, j);
+              mstreal dePrev = ((c == 0) ? ccTol[recLevel-1][j][i] : ccTol[recLevel][j][i]);
+              int numLocs = remSet.size();
+
+              // If the set of options for the current segment was arrived at,
+              // in part, by limiting center-to-center distances, then we will
+              // tighten that list by removing options that are outside of the
+              // range allowed at this recursion level. Otherwise, we will do a
+              // general proximity search given the current tolerance and will
+              // tighten the list that way.
+              if (dePrev < 0) {
+                vector<int> okLocations;
+                ps[i].pointsWithin(cj, dij - de, dij + de, &okLocations);
+                remSet.intersectOptions(okLocations);
+              } else {
+                vector<int> badLocations; mstreal eps = 10E-8;
+                ps[i].pointsWithin(cj, dij - dePrev, dij - de - eps, &badLocations);
+                ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, &badLocations);
+                for (int k = 0; k < badLocations.size(); k++) {
+                  remSet.removeOption(badLocations[k]);
+                }
+              }
+              ccTol[recLevel][j][i] = de;
+              if (numLocs != remSet.size()) {
+                // this both updates the bound and checks that there are still
+                // feasible solutions left
+                if ((remSet.empty()) || (currResidual + boundOnRemainder(true) > residualCut)) {
+                  boundOnRemainder(true);
+                  recLevel--;
+                  levelExhausted = true;
+                  break;
+                }
+                updated = true;
+              }
+            }
+            if (levelExhausted) break;
+          }
+          if (levelExhausted) break;
+          if (!updated) break;
+        }
+      } else {
+        // if at the lowest recursion level already, then record the solution
+        solutions.insert(pair<vector<int>, mstreal>(currAlignment, currResidual));
+      }
+    }
+  }
+end = chrono::high_resolution_clock::now();
+cout << "search time " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << std::endl;
 }
 
-mstreal MASTER::currentAlignmentResidual(bool compute) {
+mstreal FASST::currentAlignmentResidual(bool compute) {
   if (compute) {
     if (recLevel == 0) {
       currResidual = segmentResiduals[recLevel][currAlignment[recLevel]];

@@ -109,7 +109,7 @@ void Structure::readPDB(string pdbFile, string options) {
   if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
   if (options.find("IGNORE-ICODES") != string::npos) iCodesAsSepResidues = true;
   if (options.find("IGNORE-TER") != string::npos) ignoreTER = true;
-  if (options.find("QUITE") != string::npos) verbose = false;
+  if (options.find("QUIET") != string::npos) verbose = false;
 
   // read line by line
   string line;
@@ -1063,6 +1063,16 @@ CartesianPoint AtomPointerVector::getGeometricCenter() {
   }
   C /= this->size();
   return C;
+}
+
+void AtomPointerVector::getGeometricCenter(mstreal& xc, mstreal& yc, mstreal& zc) {
+  xc = 0; yc = 0; zc = 0;
+  Atom* a;
+  for (int i = 0; i < this->size(); i++) {
+    a = (*this)[i];
+    xc += (*a)[0]; yc += (*a)[1]; zc += (*a)[2];
+  }
+  xc /= size(); yc /= size(); zc /= size();
 }
 
 void AtomPointerVector::center() {
@@ -2065,16 +2075,7 @@ ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, mstreal _chara
 }
 
 ProximitySearch::ProximitySearch(const ProximitySearch& ps) {
-  N = ps.N;
-  xlo = ps.xlo; ylo = ps.ylo; zlo = ps.zlo;
-  xhi = ps.xhi; yhi = ps.yhi; zhi = ps.zhi;
-  xbw = ps.xbw; ybw = ps.ybw; zbw = ps.zbw;
-  buckets = ps.buckets;
-  pointTags = pointTags;
-  pointList.resize(ps.pointList.size(), NULL);
-  for (int i = 0; i < ps.pointList.size(); i++) {
-    pointList[i] = new CartesianPoint(*(ps.pointList[i]));
-  }
+  *this = ps;
 }
 
 void ProximitySearch::setBinWidths() {
@@ -2085,6 +2086,21 @@ void ProximitySearch::setBinWidths() {
 
 ProximitySearch::~ProximitySearch() {
   for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
+}
+
+ProximitySearch& ProximitySearch::operator=(const ProximitySearch& ps) {
+  N = ps.N;
+  xlo = ps.xlo; ylo = ps.ylo; zlo = ps.zlo;
+  xhi = ps.xhi; yhi = ps.yhi; zhi = ps.zhi;
+  xbw = ps.xbw; ybw = ps.ybw; zbw = ps.zbw;
+  buckets = ps.buckets;
+  pointTags = pointTags;
+  for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
+  pointList.resize(ps.pointList.size());
+  for (int i = 0; i < ps.pointList.size(); i++) {
+    pointList[i] = new CartesianPoint(*(ps.pointList[i]));
+  }
+  return *this;
 }
 
 void ProximitySearch::calculateExtent(const Structure& S, mstreal& _xlo, mstreal& _ylo, mstreal& _zlo, mstreal& _xhi, mstreal& _yhi, mstreal& _zhi) {
@@ -2114,18 +2130,27 @@ void ProximitySearch::reinitBuckets(int _N) {
     buckets[i].resize(N);
     for (int j = 0; j < N; j++) {
       buckets[i][j].resize(N);
-      for (int k = 0; k < N; k++) { buckets[i][j][k].resize(0); }
     }
   }
   pointList.resize(0);
   pointTags.resize(0);
 }
 
-void ProximitySearch::addPoint(CartesianPoint _p, int tag) {
+void ProximitySearch::addPoint(const CartesianPoint& _p, int tag) {
   int i, j, k;
-  pointBucket(&_p, &i, &j, &k);
+  pointBucket(_p[0], _p[1], _p[2], &i, &j, &k);
   if ((i < 0) || (j < 0) || (k < 0) || (i > N-1) || (j > N-1) || (k > N-1)) { cout << "Error: point " << _p << " out of range for ProximitySearch object!\n"; exit(-1); }
   CartesianPoint* p = new CartesianPoint(_p);
+  buckets[i][j][k].push_back(pointList.size());
+  pointList.push_back(p);
+  pointTags.push_back(tag);
+}
+
+void ProximitySearch::addPoint(mstreal xc, mstreal yc, mstreal zc, int tag) {
+  int i, j, k;
+  pointBucket(xc, yc, zc, &i, &j, &k);
+  if ((i < 0) || (j < 0) || (k < 0) || (i > N-1) || (j > N-1) || (k > N-1)) { cout << "Error: point " << xc << " " << yc << " " << zc << " out of range for ProximitySearch object!\n"; exit(-1); }
+  CartesianPoint* p = new CartesianPoint(xc, yc, zc);
   buckets[i][j][k].push_back(pointList.size());
   pointList.push_back(p);
   pointTags.push_back(tag);
@@ -2135,6 +2160,19 @@ void ProximitySearch::addAtoms(AtomPointerVector& apv, vector<int>* tags) {
   if ((tags != NULL) && (apv.size() != tags->size())) MstUtils::error("different number of atoms and tags specified!", "ProximitySearch::addAtoms");
   for (int i = 0; i < apv.size(); i++) {
     addPoint(apv[i], (tags == NULL) ? i : (*tags)[i]);
+  }
+}
+
+void ProximitySearch::dropAllPoints() {
+  for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
+  pointList.resize(0);
+  pointTags.resize(0);
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      for (int k = 0; k < N; k++) {
+        buckets[i][j][k].resize(0);
+      }
+    }
   }
 }
 

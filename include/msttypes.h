@@ -467,6 +467,7 @@ class AtomPointerVector : public vector<Atom*> {
     void push_back(const Residue* R) { push_back(*R); }
 
     CartesianPoint getGeometricCenter();
+    void getGeometricCenter(mstreal& xc, mstreal& yc, mstreal& zc);
     void center();
     mstreal radiusOfGyration();
     // computes the smallest radius of a sphere centered at the centroid of the
@@ -584,6 +585,7 @@ class ProximitySearch {
     ProximitySearch(const AtomPointerVector& _atoms, int _N, bool _addAtoms = true, vector<int>* tags = NULL, mstreal pad = 0);
     ProximitySearch(const AtomPointerVector& _atoms, mstreal _characteristicDistance, bool _addAtoms = true, vector<int>* tags = NULL, mstreal pad = 0);
     ~ProximitySearch();
+    ProximitySearch& operator=(const ProximitySearch& ps);
 
     mstreal getXLow() { return xlo; }
     mstreal getYLow() { return ylo; }
@@ -597,11 +599,13 @@ class ProximitySearch {
     mstreal distance(int i, int j) { return pointList[i]->distance(pointList[j]); }
 
     void reinitBuckets(int _N);
-    void addPoint(CartesianPoint _p, int tag);
+    void addPoint(const CartesianPoint& _p, int tag);
+    void addPoint(mstreal xc, mstreal yc, mstreal zc, int tag);
     void addAtoms(AtomPointerVector& apv, vector<int>* tags = NULL);
+    void dropAllPoints();
     bool isPointWithinGrid(CartesianPoint _p);
     void pointBucket(CartesianPoint* p, int* i, int* j, int* k) { pointBucket(p->getX(), p->getY(), p->getZ(), i, j, k); }
-    void pointBucket(CartesianPoint p, int* i, int* j, int* k) { pointBucket(p.getX(), p.getY(), p.getZ(), i, j, k); }
+    void pointBucket(const CartesianPoint& p, int* i, int* j, int* k) { pointBucket(p.getX(), p.getY(), p.getZ(), i, j, k); }
     void pointBucket(mstreal px, mstreal py, mstreal pz, int* i, int* j, int* k);
     void limitIndex(int *ind);
     mstreal gridSpacingX() { return (xhi - xlo)/N; }
