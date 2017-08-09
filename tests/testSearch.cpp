@@ -46,6 +46,7 @@ class optList {
     int bestChoice() { return rankToIdx[bestCostRank]; }
     int totNumOptions() { return costs.size(); }
     int numOptions() { return numIn; }
+    int size() { return numIn; }
     bool empty() { return (numIn == 0); }
 
   private:
@@ -68,16 +69,16 @@ class optList {
 
 void optList::setOptions(const vector<mstreal>& _costs, bool add) {
   // sort costs and keep track of indices to know the rank-to-index mapping
+  costs = _costs;
   rankToIdx.resize(_costs.size());
   for (int i = 0; i < rankToIdx.size(); i++) rankToIdx[i] = i;
-  sort(rankToIdx.begin(), rankToIdx.end(), [&_costs](int i, int j) { return costs[i] < costs[j]; });
-  costs.resize(_costs.size());
+  sort(rankToIdx.begin(), rankToIdx.end(), [this](int i, int j) { return costs[i] < costs[j]; });
   for (int i = 0; i < rankToIdx.size(); i++) costs[i] = _costs[rankToIdx[i]];
 
   // sort the the rank-to-index mapping and keep track of indices to know the index-to-rank mapping
   idxToRank.resize(costs.size());
   for (int i = 0; i < idxToRank.size(); i++) idxToRank[i] = i;
-  sort(idxToRank.begin(), idxToRank.end(), [&rankToIdx](int i, int j) { return costs[i] < costs[j]; });
+  sort(idxToRank.begin(), idxToRank.end(), [this](int i, int j) { return rankToIdx[i] < rankToIdx[j]; });
 
   // either include or exclude all options to start off, as instructed
   isIn.resize(costs.size(), add);
@@ -109,13 +110,11 @@ void optList::removeOption(int k) {
     isIn[k] = false;
     // find new best, if this was the best
     if (bestCostRank == idxToRank[k]) {
+      int oldBestRank = bestCostRank;
       bestCostRank = -1;
-      for (int i = bestCostRank; i < costs.size(); i++) {
-        if (isIn[i]) { bestCostRank = i; break; }
+      for (int r = oldBestRank + 1; r < costs.size(); r++) {
+        if (isIn[rankToIdx[r]]) { bestCostRank = r; break; }
       }
-    }
-    if ((bestCostRank < 0) || (costs[bestCostRank] > costs[idxToRank[k]])) {
-      bestCostRank = idxToRank[k];
     }
   }
 }
@@ -129,22 +128,23 @@ void optList::removeAllOptions() {
 class MASTER {
   public:
     ~MASTER();
-    MASTER() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(2); ps = NULL; }
+    MASTER() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(2); }
     void setQuery(const string& pdbFile);
     void setTarget(const string& pdbFile);
     void prepForSearch();
     void setRMSDCutoff(mstreal cut);
     void setSearchType(int _searchType);
-    bool outOfOptions() { return remOptions[0].empty(); }
     bool visitNextOption();
+    int numSolutions() { return solutions.size(); }
 
   protected:
-    static bool parseChain(const Chain& S, AtomPointerVector& searchable);
-    mstreal currentAlignmentResidual(bool compute);
-    mstreal lowBoundOnRemainder(bool compute);
-    int resToAtomIdx(int resIdx) { return resIdx * searchableAtoms.size(); }
-    int atomToResIdx(int atomIdx) { return atomIdx / searchableAtoms.size(); }
+    bool parseChain(const Chain& S, AtomPointerVector& searchable);
+    mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
+    mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
+    int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
+    int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
     void fillTargetMask();
+    mstreal centToCentTol(int i, int j);
 
   private:
     Structure queryStruct, targetStruct;
@@ -159,11 +159,11 @@ class MASTER {
     int searchType, atomsPerRes;
     vector<string> searchableAtoms;
 
-    // remOptions[L][i] is a set of alignments for segment L+i at recursion level
+    // remOptions[L][i] is a set of alignments for segment i (i >= L) at recursion level
     // L, which are stored sorted by their own residual, through the optList
     // data structure. Note that segments 0 through L-1 have already been place
     // at recursion level L.
-    vector<vector<optList> > > remOptions;
+    vector<vector<optList> > remOptions;
 
     // ccTol[i][j], j > i, is the acceptable tolerance (the delta) on the
     // center-to-center distance between segments i and j at recursion level j
@@ -182,7 +182,7 @@ class MASTER {
     vector<vector<mstreal> > centToCentDist;
 
     // set of solutions, sorted by RMSD
-    set<pair<vector<int, mstreal> > solutions; // TODO: need to store target info, order added, and implemenet comparison
+    set<pair<vector<int>, mstreal> > solutions; // TODO: need to store target info, order added, and implemenet comparison
 
     // ProximitySearch for finding nearby centroids of target segments
     vector<ProximitySearch> ps;
@@ -204,15 +204,17 @@ int main(int argc, char *argv[]) {
   S.setQuery("/tmp/query.pdb");
   S.setTarget("/tmp/target.pdb");
   S.prepForSearch();
-  S.setRMSDCutoff(1.0);
+  S.setRMSDCutoff(2.0);
 
-  while (!S.outOfOptions()) {
-    S.visitNextOption();
-  }
+  while (S.visitNextOption()) {}
+  cout << "found " << S.numSolutions() << " solutions" << endl;
 }
 
 
 MASTER::~MASTER() {
+  // need to delete atoms only on the lowest level of recursion, because at
+  // higher levels we point to the same atoms
+  targetMasks.back().deletePointers();
 }
 
 void MASTER::setRMSDCutoff(mstreal cut) {
@@ -236,12 +238,12 @@ void MASTER::setQuery(const string& pdbFile) {
   query.resize(queryStruct.chainSize());
   for (int i = 0; i < queryStruct.chainSize(); i++) {
     query[i].resize(0);
-    if (!MASTER::parseChain(queryStruct[i], query[i])) {
+    if (!parseChain(queryStruct[i], query[i])) {
       MstUtils::error("could not set query, because some atoms for the specified search type were missing", "MASTER::setQuery");
     }
+    MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "MASTER::setQuery");
   }
   currAlignment.resize(query.size(), -1);
-  segmentResidualsInAlignment.resize(query.size(), -1);
 }
 
 void MASTER::setTarget(const string& pdbFile) {
@@ -250,26 +252,28 @@ void MASTER::setTarget(const string& pdbFile) {
   target.resize(0);
   // we don't care about the chain topology of the target, so append all residues
   for (int i = 0; i < targetStruct.chainSize(); i++) {
-    MASTER::parseChain(targetStruct[i], target);
+    parseChain(targetStruct[i], target);
   }
+  MstUtils::assert(target.size() > 0, "empty target passed", "MASTER::setTarget");
   setRMSDCutoff(rmsdCut); // update the max residual
 }
 
 bool MASTER::parseChain(const Chain& C, AtomPointerVector& searchable) {
   bool foundAll = true;
-  for (int i = 0; i < S.residueSize(); i++) {
-    Residue& res = S.getResidue(i);
+  for (int i = 0; i < C.residueSize(); i++) {
+    Residue& res = C.getResidue(i);
     switch(searchType) {
       case 1:
-      case 2:
+      case 2: {
         AtomPointerVector bb;
         for (int k = 0; k < searchableAtoms.size(); k++) {
           Atom* a = res.findAtom(searchableAtoms[k], false);
           if (a == NULL) { foundAll = false; break; }
           bb.push_back(a);
         }
-        if (bb.size() == bba.size()) searchable.insert(searchable.end(), bb.begin(), bb.end());
-        break
+        if (bb.size() == searchableAtoms.size()) searchable.insert(searchable.end(), bb.begin(), bb.end());
+        break;
+      }
       default:
         MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "MASTER::parseStructure");
     }
@@ -285,8 +289,7 @@ void MASTER::setSearchType(int _searchType) {
       break;
     case 2:
       searchableAtoms =  {"N", "CA", "C", "O"};
-      atomsPerRes = 4;
-      break
+      break;
     default:
       MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "MASTER::setSearchType");
   }
@@ -297,22 +300,22 @@ void MASTER::prepForSearch() {
   if ((query.size() == 0) || (target.size() == 0)) {
     MstUtils::error("query and target must be set before starting search", "MASTER::prepForSearch");
   }
-  solutions.resize(0);
+  solutions.clear();
 
   // align every segment onto every admissible location on the target
   segmentResiduals.resize(query.size());
   ps.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
     ps[i] = ProximitySearch(target, 3.0, false);
-    vector<Residue>& seg = query[i];
-    int Na = min(target.size(), target.size() - seg.size() + 1)/atomsPerRes; // number of possible alignments
+    AtomPointerVector& seg = query[i];
+    int Na = atomToResIdx(target.size()) - atomToResIdx(seg.size()) + 1; // number of possible alignments
     segmentResiduals[i].resize(Na);
     for (int j = 0; j < Na; j++) {
       // NOTE: can save on this in several ways:
       // 1. the centroid calculation is effectively already done inside RMSDCalculator::bestRMSD
       // 2. updating just one atom involves a simple centroid adjustment, rather than recalculation
       // 3. is there a speedup to be gained from re-calculating RMSD with one atom updated only?
-      AtomPointerVector targSeg = target.subvector(j*atomsPerRes, j*atomsPerRes + query[i].size() - 1);
+      AtomPointerVector targSeg = target.subvector(resToAtomIdx(j), resToAtomIdx(j) + query[i].size());
       segmentResiduals[i][j] = pow(RC.bestRMSD(query[i], targSeg), 2) * targSeg.size();
       ps[i].addPoint(targSeg.getGeometricCenter(), j);
     }
@@ -321,8 +324,11 @@ void MASTER::prepForSearch() {
   // initialize remOptions; all options are available at top level
   remOptions.resize(query.size());
   for (int L = 0; L < query.size(); L++) {
-    remOptions[L].resize(query.size() - L);
+    remOptions[L].resize(query.size());
     for (int i = L; i < query.size(); i++) {
+      // remOptions[L][i], where i < L, will hold an empty list of options, but
+      // it won't be used and it is more convenient to access without thinking
+      // of offsets (a tiny bit of memory waste for convenience)
       remOptions[L][i].setOptions(segmentResiduals[i], L == 0);
     }
   }
@@ -343,17 +349,24 @@ void MASTER::prepForSearch() {
   // make room for various atom masks
   queryMasks.resize(query.size());
   targetMasks.resize(query.size());
-  for (int L = 0; L < query.size(); L++) {
-    for (int i = 0; i < L; i++) {
-      for (int j = 0; j < query[i].atomSize(); j++) {
+  for (int i = 0; i < query.size(); i++) {
+    for (int L = i; L < query.size(); L++) {
+      for (int j = 0; j < query[i].size(); j++) {
         queryMasks[L].push_back(query[i][j]);
-        targetMasks[L].push_back(NULL);
+        if (L > i) {
+          // for any repeated atoms on this level, make sure to point to the
+          // same atoms as the mask on the previous level
+          targetMasks[L].push_back(targetMasks[L-1][targetMasks[L-1].size() - query[i].size() + j]);
+        } else {
+          // and only create new atoms for the last segment
+          targetMasks[L].push_back(new Atom(*(query[i][j])));
+        }
       }
     }
   }
 
   // center-to-center distances
-  centToCentDist.resize(query.size(), vector<mstreal>(query.suze(), 0));
+  centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
   for (int i = 0; i < query.size(); i++) {
     for (int j = i+1; j < query.size(); j++) {
       centToCentDist[i][j] = query[i].getGeometricCenter().distance(query[j].getGeometricCenter());
@@ -365,7 +378,7 @@ void MASTER::prepForSearch() {
 mstreal MASTER::boundOnRemainder(bool compute) {
   if (compute) {
     currRemBound = 0;
-    for (int i = level; i < query.size(); i++) currRemBound += remOptions[recLevel][i].bestCost();
+    for (int i = recLevel + 1; i < query.size(); i++) currRemBound += remOptions[recLevel][i].bestCost();
   }
   return currRemBound;
 }
@@ -377,21 +390,21 @@ mstreal MASTER::centToCentTol(int i, int j) {
 
 void MASTER::fillTargetMask() {
   int N = targetMasks[recLevel].size();
-  int n = query[recLevel].atomSize();
+  int n = query[recLevel].size();
   int si = resToAtomIdx(currAlignment[recLevel]);
   for (int i = 0; i < n; i++) {
-    targetMasks[recLevel][N - n + i] = target[si + i];
+    targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getCoor());
   }
 }
 
 bool MASTER::visitNextOption() {
   // Have to do three things:
-  // 1. pick the best choice (from available ones) for the current segment, and
-  // remove it from the list of options
+  // 1. pick the best choice (from available ones) for the current segment,
+  // remove it from the list of options, and move onto the next recursion level
   if (remOptions[recLevel][recLevel].empty()) {
     currAlignment[recLevel] = -1;
     if (recLevel > 0) {
-      for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i - recLevel].removeAllOptions();
+      for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][recLevel].removeAllOptions();
       recLevel--;
       return false; // search exhausted
     }
@@ -402,21 +415,21 @@ bool MASTER::visitNextOption() {
   remOptions[recLevel][recLevel].removeOption(currAlignment[recLevel]);
 
   // 2. compute the total residual from the current alignment
-  mstreal curBound = currentAlignmentResidual(true) + lowBoundOnRemainder(true);
+  mstreal curBound = currentAlignmentResidual(true) + boundOnRemainder(true);
   if (curBound > residualCut) {
     return true;
   }
 
-  // 3. update remOptions[recLevel+1][recLevel+1...end] based on the
-  // choice in 1. Note that the set of options on the next recursion level is a
+  // 3. update update remaining options for subsequent segments based on the
+  // newly made choice. The set of options on the next recursion level is a
   // subset of the set of options on the previous level.
-  int nextLevel = recLevel + 1;
-  int remSegs = query.size() - nextLevel;
+  int remSegs = query.size() - (recLevel + 1);
   if (remSegs > 0) {
+    recLevel++;
     mstreal dij, de, dU, dL, d;
     while (true) {
       bool updated = false;
-      for (int i = nextLevel; i < query.size(); i++) {
+      for (int i = recLevel; i < query.size(); i++) {
         // IDEA: write a function in RMSDCalculator that does optimization only over
         // rotation, not centering (just skips the centering part). Then, pre-center
         // all the query sub-structures at all recursion levels and store them. Will
@@ -425,8 +438,8 @@ bool MASTER::visitNextOption() {
         // you are centering them once to compute the centroids and not again in the
         // RMSDCalculator.
 
-        optList& remSet = remOptions[nextLevel][i - nextLevel];
-        for (int j = 0; j < nextLevel; j++) {                    // j runs over already placed segments
+        optList& remSet = remOptions[recLevel][recLevel];
+        for (int j = 0; j < recLevel; j++) {                    // j runs over already placed segments
           CartesianPoint cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
           dij = centToCentDist[i][j];
           de = centToCentTol(i, j);
@@ -439,14 +452,14 @@ bool MASTER::visitNextOption() {
           // need to do a set difference to remove no-longer-valid ones
           if (numLocs == 0) {
             vector<int> okLocations;
-            ps[i].pointsWithin(cj, dij - de, dij + de, okLocations);
+            ps[i].pointsWithin(cj, dij - de, dij + de, &okLocations);
             for (int k = 0; k < okLocations.size(); k++) {
               remSet.addOption(okLocations[k]);
             }
           } else {
             vector<int> badLocations; mstreal eps = 10E-8;
-            ps[i].pointsWithin(cj, dij - dePrev, dij - de - eps, badLocations);
-            ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, badLocations);
+            ps[i].pointsWithin(cj, dij - dePrev, dij - de - eps, &badLocations);
+            ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, &badLocations);
             for (int k = 0; k < badLocations.size(); k++) {
               remSet.removeOption(badLocations[k]);
             }
@@ -457,10 +470,9 @@ bool MASTER::visitNextOption() {
       }
       if (!updated) break;
     }
-    recLevel++;
   } else {
     // if at the lowest recursion level already, then record the solution
-    solutions.insert(pair<vector<int, mstreal>(currAlignment, currResidual));
+    solutions.insert(pair<vector<int>, mstreal>(currAlignment, currResidual));
   }
 
   return true;
