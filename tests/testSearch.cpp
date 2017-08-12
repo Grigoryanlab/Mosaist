@@ -5,24 +5,30 @@
 
 using namespace MST;
 
-struct compAlignments {
-  // Compare by RMSD first, and if the same, then by alignment index. NOTE: for
-  // a given segment, no two different alignments can have the same index.
-  bool operator() (const pair<int, mstreal>& lhs, const pair<int, mstreal>& rhs) const {
-    if (lhs.second == rhs.second) return lhs.first < rhs.first;
-    return lhs.second < rhs.second;
-  }
-};
-
-struct compSolutions {
-  bool operator() (const pair<vector<int>, mstreal>& lhs, const pair<vector<int>, mstreal>& rhs) const {
-    if (lhs.second == rhs.second) return lhs.first < rhs.first;
-    int dim = lhs.first.size();
-    for (int i = 0; i < dim - 1; i++) {
-      if (lhs.first[i] != rhs.first[i]) return lhs.first[i] < rhs.first[i];
+class fasstSolution {
+  public:
+    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, const string& _target, int _foundOrder) {
+      alignment = _alignment; rmsd = _rmsd; target = _target; foundOrder = _foundOrder;
     }
-    return lhs.first.back() < rhs.first.back();
-  }
+    fasstSolution(const fasstSolution& _sol) {
+      alignment = _sol.alignment; rmsd = _sol.rmsd; target = _sol.target; foundOrder = _sol.foundOrder;
+    }
+
+    friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
+      if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
+      return si.foundOrder < sj.foundOrder;
+    }
+
+    friend ostream& operator<<(ostream &_os, const fasstSolution& _sol) {
+      _os << std::setprecision(6) << std::fixed << _sol.rmsd << " " << _sol.target << " [" << MstUtils::vecToString(_sol.alignment, ", ") << "]";
+      return _os;
+    }
+
+  private:
+    vector<int> alignment;
+    mstreal rmsd;
+    string target;
+    int foundOrder;
 };
 
 /* A class for storing a sub-set of a fixed set of options, each with a fixed
@@ -151,14 +157,15 @@ void optList::intersectOptions(const vector<int>& opts) {
 class FASST {
   public:
     ~FASST();
-    FASST() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(2); updateGrids = false; }
+    FASST() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(2); querySize = 0; updateGrids = false; }
     void setQuery(const string& pdbFile);
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
     void setRMSDCutoff(mstreal cut);
     void setSearchType(int _searchType);
     void search();
-    int numSolutions() { return solutions.size(); }
+    int numMatches() { return solutions.size(); }
+    set<fasstSolution> getMatches() { return solutions; }
 
   protected:
     void prepForSearch(int ti);
@@ -184,7 +191,8 @@ class FASST {
 
     int recLevel;
     int searchType, atomsPerRes;
-    vector<string> searchableAtoms;
+    vector<string> searchableAtomTypes;
+    int querySize;
 
     // remOptions[L][i] is a set of alignments for segment i (i >= L) at recursion level
     // L, which are stored sorted by their own residual, through the optList
@@ -209,7 +217,7 @@ class FASST {
     vector<vector<mstreal> > centToCentDist;
 
     // set of solutions, sorted by RMSD
-    set<pair<vector<int>, mstreal> > solutions; // TODO: need to store target info, order added, and implemenet comparison
+    set<fasstSolution> solutions;
 
     // ProximitySearch for finding nearby centroids of target segments
     vector<ProximitySearch> ps;
@@ -244,7 +252,11 @@ int main(int argc, char *argv[]) {
   S.setRMSDCutoff(2.0);
   cout << "Searching..." << endl;
   S.search();
-  cout << "found " << S.numSolutions() << " solutions" << endl;
+  cout << "found " << S.numMatches() << " matches:" << endl;
+  set<fasstSolution> matches = S.getMatches();
+  for (auto it = matches.begin(); it != matches.end(); ++it) {
+    cout << *it << endl;
+  }
 }
 
 
@@ -257,7 +269,7 @@ FASST::~FASST() {
 
 void FASST::setRMSDCutoff(mstreal cut) {
   rmsdCut = cut;
-  residualCut = cut*cut*query.size();
+  residualCut = cut*cut*querySize;
 }
 
 /* This function sets up the query, in the process deciding which part of the
@@ -271,6 +283,7 @@ void FASST::setRMSDCutoff(mstreal cut) {
 void FASST::setQuery(const string& pdbFile) {
   queryStruct.reset();
   queryStruct.readPDB(pdbFile);
+  querySize = 0;
   // auto-splitting segments by connectivity, but can do diffeerntly
   queryStruct = queryStruct.reassignChainsByConnectivity();
   query.resize(queryStruct.chainSize());
@@ -280,6 +293,7 @@ void FASST::setQuery(const string& pdbFile) {
       MstUtils::error("could not set query, because some atoms for the specified search type were missing", "FASST::setQuery");
     }
     MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "FASST::setQuery");
+    querySize += query[i].size();
   }
   currAlignment.resize(query.size(), -1);
   setRMSDCutoff(rmsdCut); // update the max residual
@@ -345,12 +359,12 @@ bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable) {
       case 1:
       case 2: {
         AtomPointerVector bb;
-        for (int k = 0; k < searchableAtoms.size(); k++) {
-          Atom* a = res.findAtom(searchableAtoms[k], false);
+        for (int k = 0; k < searchableAtomTypes.size(); k++) {
+          Atom* a = res.findAtom(searchableAtomTypes[k], false);
           if (a == NULL) { foundAll = false; break; }
           bb.push_back(a);
         }
-        if (bb.size() == searchableAtoms.size()) searchable.insert(searchable.end(), bb.begin(), bb.end());
+        if (bb.size() == searchableAtomTypes.size()) searchable.insert(searchable.end(), bb.begin(), bb.end());
         break;
       }
       default:
@@ -364,23 +378,23 @@ void FASST::setSearchType(int _searchType) {
   searchType = _searchType;
   switch(searchType) {
     case 1:
-      searchableAtoms =  {"CA"};
+      searchableAtomTypes =  {"CA"};
       break;
     case 2:
-      searchableAtoms =  {"N", "CA", "C", "O"};
+      searchableAtomTypes =  {"N", "CA", "C", "O"};
       break;
     default:
       MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "FASST::setSearchType");
   }
-  atomsPerRes = searchableAtoms.size();
+  atomsPerRes = searchableAtomTypes.size();
 }
 
 void FASST::rebuildProximityGrids() {
-  mstreal d0 = 5.0; // characteristic distance for the proximity search
-  if (xlo == xhi) { xlo -= d0/2; xhi += d0/2; }
-  if (ylo == yhi) { ylo -= d0/2; yhi += d0/2; }
-  if (zlo == zhi) { zlo -= d0/2; zhi += d0/2; }
-  int N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/d0));
+  mstreal charGridDist = 5.0;
+  if (xlo == xhi) { xlo -= charGridDist/2; xhi += charGridDist/2; }
+  if (ylo == yhi) { ylo -= charGridDist/2; yhi += charGridDist/2; }
+  if (zlo == zhi) { zlo -= charGridDist/2; zhi += charGridDist/2; }
+  int N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/charGridDist));
   ps.clear(); ps.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
     ps[i] = ProximitySearch(xlo, ylo, zlo, xhi, yhi, zhi, N);
@@ -412,8 +426,7 @@ void FASST::prepForSearch(int ti) {
       // 2. updating just one atom involves a simple centroid adjustment, rather than recalculation
       // 3. is there a speedup to be gained from re-calculating RMSD with one atom updated only?
       AtomPointerVector targSeg = target.subvector(resToAtomIdx(j), resToAtomIdx(j) + query[i].size());
-      mstreal rmsd = RC.bestRMSD(query[i], targSeg);
-      segmentResiduals[i][j] = rmsd * rmsd * targSeg.size();
+      segmentResiduals[i][j] = RC.bestResidual(query[i], targSeg);
       targSeg.getGeometricCenter(xc, yc, zc);
       ps[i].addPoint(xc, yc, zc, j);
     }
@@ -580,7 +593,7 @@ void FASST::search() {
         }
       } else {
         // if at the lowest recursion level already, then record the solution
-        solutions.insert(pair<vector<int>, mstreal>(currAlignment, currResidual));
+        solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), targetStructs[currentTarget]->getName(), solutions.size()));
       }
     }
   }
@@ -597,8 +610,7 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
     if (recLevel == 0) {
       currResidual = segmentResiduals[recLevel][currAlignment[recLevel]];
     } else {
-      mstreal rmsd = RC.bestRMSD(queryMasks[recLevel], targetMasks[recLevel]);
-      currResidual = rmsd*rmsd;
+      currResidual = RC.bestResidual(queryMasks[recLevel], targetMasks[recLevel]);
     }
   }
   return currResidual;

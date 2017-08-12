@@ -1652,14 +1652,20 @@ vector<vector<mstreal> > RMSDCalculator::lastRotation() {
 }
 
 mstreal RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot, bool* _suc) {
-    _rmsd = 999999.0;
+    _res = 0.0;
     if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
     else { if (_suc != NULL) *_suc = false; }
-    return _rmsd;
+    return sqrt(_res/_n);
+}
+
+mstreal RMSDCalculator::bestResidual(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot, bool* _suc) {
+    _res = 0.0;
+    if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
+    else { if (_suc != NULL) *_suc = false; }
+    return _res;
 }
 
 bool RMSDCalculator::align(const vector<Atom*> &_align, const vector<Atom*> &_ref, vector<Atom*>& _moveable) {
-    _rmsd = 999999.0;
     bool suc = Kabsch(_align, _ref, 1);
 
     if (suc) {
@@ -1714,7 +1720,7 @@ bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_r
     }
 
     //initializtation
-    _rmsd=0;
+    _res=0;
     rms1=0;
     e0=0;
     for (i=0; i<3; i++) {
@@ -1748,8 +1754,8 @@ bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_r
         yc[2] += _ref[i]->getZ();
     }
     for(i=0; i<3; i++){
-        xc[i] = xc[i]/(mstreal)n;
-        yc[i] = yc[i]/(mstreal)n;
+        xc[i] = xc[i]/n;
+        yc[i] = yc[i]/n;
     }
 
     //compute e0 and matrix r
@@ -1990,7 +1996,9 @@ bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_r
     rms1 = (e0 - d) - d;
     if( rms1 < 0.0 ) rms1 = 0.0;
 
-    _rmsd=sqrt(rms1/(mstreal)n);
+//    _rmsd=sqrt(rms1/(mstreal)n);
+    _res = rms1;
+    _n = n;
 
     return true;
 }

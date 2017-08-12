@@ -547,7 +547,7 @@ class RMSDCalculator {
     ~RMSDCalculator() {}
 
     // getters
-    mstreal lastRMSD() { return _rmsd; }
+    mstreal lastRMSD() { return sqrt(_res/_n); }
     vector<mstreal> lastTranslation();
     vector<vector<mstreal> > lastRotation();
 
@@ -557,6 +557,7 @@ class RMSDCalculator {
 
     // quickly calculate RMSD upon optimal superposition without generating the rotation matrix
     mstreal bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot = false, bool* _suc = NULL);
+    mstreal bestResidual(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot = false, bool* _suc = NULL);
 
     // in-place RMSD (no transformations)
     static mstreal rmsd(const vector<Atom*>& A, const vector<Atom*>& B);
@@ -571,7 +572,8 @@ class RMSDCalculator {
     bool Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_ref, int mode);
 
  private:
-    mstreal _rmsd;
+    mstreal _res;
+    int _n;
     mstreal t[3];    // translation vector
     mstreal u[3][3]; // rotation matrix
 
