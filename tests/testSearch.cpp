@@ -390,7 +390,7 @@ void FASST::setSearchType(int _searchType) {
 }
 
 void FASST::rebuildProximityGrids() {
-  mstreal charGridDist = 5.0;
+  mstreal charGridDist = 12.0;
   if (xlo == xhi) { xlo -= charGridDist/2; xhi += charGridDist/2; }
   if (ylo == yhi) { ylo -= charGridDist/2; yhi += charGridDist/2; }
   if (zlo == zhi) { zlo -= charGridDist/2; zhi += charGridDist/2; }
@@ -518,7 +518,7 @@ void FASST::search() {
       int n = query[recLevel].size();
       int si = resToAtomIdx(currAlignment[recLevel]);
       for (int i = 0; i < n; i++) {
-        targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getCoor());
+        targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
       }
 
       // 2. compute the total residual from the current alignment
@@ -539,21 +539,18 @@ void FASST::search() {
         for (int c = 0; true; c++) {
           bool updated = false, levelExhausted = false;
           for (int i = recLevel; i < query.size(); i++) {
-            // IDEA: write a function in RMSDCalculator that does optimization only over
-            // rotation, not centering (just skips the centering part). Then, pre-center
-            // all the query sub-structures at all recursion levels and store them. Will
-            // not have to do this later during optimization. Finally, because you can use the function that does not
-            // center, you can make sure that when you are scanning individual segments,
-            // you are centering them once to compute the centroids and not again in the
-            // RMSDCalculator.
-
             optList& remSet = remOptions[recLevel][i];
             for (int j = 0; j < recLevel; j++) {                    // j runs over already placed segments
-              CartesianPoint cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
-              dij = centToCentDist[i][j];
               de = centToCentTol(i, j);
+              if (de < 0) {
+                recLevel--;
+                levelExhausted = true;
+                break;
+              }
+              dij = centToCentDist[i][j];
               mstreal dePrev = ((c == 0) ? ccTol[recLevel-1][j][i] : ccTol[recLevel][j][i]);
               int numLocs = remSet.size();
+              CartesianPoint& cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
 
               // If the set of options for the current segment was arrived at,
               // in part, by limiting center-to-center distances, then we will
@@ -578,7 +575,6 @@ void FASST::search() {
                 // this both updates the bound and checks that there are still
                 // feasible solutions left
                 if ((remSet.empty()) || (currResidual + boundOnRemainder(true) > residualCut)) {
-                  boundOnRemainder(true);
                   recLevel--;
                   levelExhausted = true;
                   break;

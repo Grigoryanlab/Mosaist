@@ -23,8 +23,9 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
   // create room for fused structure (initialize with average coordinates)
   fused.appendChain(new Chain());
   for (int i = 0; i < resTopo.size(); i++) {
-    if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("residue index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
-    Residue* res = new Residue();
+    if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("position index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
+    if (resTopo[i].size() == 0) MstUtils::error("position index " + MstUtils::toString(i) + " has not overlapping residues in the specified topology", "fusionEvaluator::fusionEvaluator");
+    Residue* res = new Residue(resTopo[i][0]->getName(), 1);
     fused[0].appendResidue(res);
     for (int j = 0; j < bba.size(); j++) {
       CartesianPoint m = atomInstances(i, bba[j]).getGeometricCenter();
