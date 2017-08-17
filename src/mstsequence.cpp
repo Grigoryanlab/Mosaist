@@ -180,3 +180,8 @@ string Sequence::toString(bool triple, const string& delim) {
 	}
 	return s;
 }
+
+string Sequence::getElement(int i, bool triple) {
+  if (triple) return SeqTools::idxToTriple(seq[i]);
+  return SeqTools::idxToSingle(seq[i]);
+}

@@ -14,6 +14,7 @@ class Sequence {
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }
     string toString(bool triple = false, const string& delim = "");
+    string getElement(int i, bool triple = false);
     int& operator[] (int i) { return seq[i]; }
     int length() const { return seq.size(); }
 
