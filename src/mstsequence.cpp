@@ -167,3 +167,16 @@ Sequence::Sequence(const Sequence& S) {
   name = S.name;
   seq = S.seq;
 }
+
+string Sequence::toString(bool triple, const string& delim) {
+	string s;
+	for (int i = 0; i < seq.size(); i++) {
+		if (triple) {
+			s += SeqTools::idxToTriple(seq[i]);
+		} else {
+			s += SeqTools::idxToSingle(seq[i]);
+		}
+		if (i < seq.size() - 1) s += delim;
+	}
+	return s;
+}
