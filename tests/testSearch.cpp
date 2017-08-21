@@ -5,6 +5,36 @@
 
 using namespace MST;
 
+class BallTree {
+  public:
+    BallTree(const AtomPointerVector& _atoms, bool add = true);
+
+  private:
+    class BallTreeNode {
+      public:
+        BallTreeNode() { left = right = NULL; rad = 0; }
+        ~BallTreeNode() {
+          if (left != NULL) delete left;
+          if (right != NULL) delete right;
+        }
+
+      private:
+        BallTreeNode *left, *right;
+        bool hasChildren;
+        mstreal rad;            // a sphere centered at point cen and with
+        CartesianPoint cen;     // radius rad contains all points in the sub-tree
+        vector<int> points;     // all points inside the node (but not its sub-trees)
+        vector<int> subpoints;     // all points inside the sub-tree of the node
+    };
+
+    vector<CartesianPoint> points;
+    BallTreeNode root;
+};
+
+BallTree::BallTree(const AtomPointerVector& _atoms, bool add) {
+
+}
+
 class fasstSolution {
   public:
     fasstSolution(const vector<int>& _alignment, mstreal _rmsd, const string& _target, int _foundOrder) {

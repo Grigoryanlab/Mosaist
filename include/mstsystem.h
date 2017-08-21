@@ -1,3 +1,6 @@
+#ifndef _MSTSYSTEM_H
+#define _MSTSYSTEM_H
+
 #include "msttypes.h"
 
 /* A bunch of static routines to perform various OS-related operations */
@@ -22,3 +25,5 @@ class MstSys {
 
   private:
 };
+
+#endif
