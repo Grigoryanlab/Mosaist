@@ -1205,6 +1205,12 @@ mstreal CartesianPoint::norm() const {
   return sqrt(n);
 }
 
+mstreal CartesianPoint::norm2() const {
+  mstreal n = 0;
+  for (int i = 0; i < size(); i++) n += (*this)[i]*(*this)[i];
+  return n;
+}
+
 mstreal CartesianPoint::mean() const {
   return sum()/size();
 }
@@ -1255,11 +1261,32 @@ mstreal CartesianPoint::distance(const CartesianPoint& another) const {
   return sqrt(d);
 }
 
+mstreal CartesianPoint::distancenc(const CartesianPoint& another) const {
+  mstreal d = 0, dd;
+  const CartesianPoint& p = *this;
+  for (int i = 0; i < p.size(); i++) {
+    dd = p[i] - another[i];
+    d += dd*dd;
+  }
+  return sqrt(d);
+}
+
 mstreal CartesianPoint::distance2(const CartesianPoint& another) const {
   if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance2(CartesianPoint&)");
-  mstreal d = 0;
+  mstreal d = 0, dd;
   for (int i = 0; i < this->size(); i++) {
-    d += ((*this)[i] - another[i])*((*this)[i] - another[i]);
+    dd = (*this)[i] - another[i];
+    d += dd*dd;
+  }
+  return d;
+}
+
+mstreal CartesianPoint::distance2nc(const CartesianPoint& another) const {
+  mstreal d = 0, dd;
+  const CartesianPoint& p = *this;
+  for (int i = 0; i < p.size(); i++) {
+    dd = p[i] - another[i];
+    d += dd*dd;
   }
   return d;
 }
@@ -2248,7 +2275,7 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
         // check all points in bucket i, j, k
         for (int ii = 0; ii < Bijk.size(); ii++) {
           int pi = Bijk[ii];
-          d2 = c.distance2(*(pointList[pi]));
+          d2 = c.distance2nc(*(pointList[pi]));
           if ((d2 >= dmin2) && (d2 <= dmax2)) {
             if (yesno) return true;
             list->push_back(byTag ? pointTags[Bijk[ii]] : Bijk[ii]);
@@ -2366,6 +2393,65 @@ set<int> Clusterer::randomSubsample(set<int>& indices, int N) {
   set<int> sub;
   for (int i = 0; i < N; i++) sub.insert(inds[i]);
   return sub;
+}
+
+vector<vector<int> > Clusterer::kmeans(const vector<CartesianPoint>& points, int k, int Ntrials, int Niter) {
+  if (k > points.size()) MstUtils::error("asked for " + MstUtils::toString(k) + " means, but there are only " + MstUtils::toString(points.size()) + " points in the cloud!", "Clusterer::kmeans");
+  if (k == 0) return vector<vector<int> >(); // could also error
+  mstreal dist, bestDist, err, bestWCSS, wcss;
+  vector<vector<int> > bestClusts(k);
+  int best;
+
+  for (int t = 0; t < Ntrials; t++) {
+    vector<vector<int> > clusts(k);
+
+    // randomly permute and take the first k as initial means
+    vector<CartesianPoint> shuffledPoints = points;
+    MstUtils::shuffle(shuffledPoints);
+    vector<CartesianPoint> means(k);
+    for (int i = 0; i < k; i++) means[i] = shuffledPoints[i];
+
+    // now cycle to update according to the Lloyd's algorithm
+    bool ok = true;
+    for (int c = 0; c < Niter; c++) {
+      for (int j = 0; j < k; j++) clusts[j].resize(0);
+      wcss = 0; // within-cluster sum of squares
+      // assign each point to the cluster with closest mean
+      for (int i = 0; i < points.size(); i++) {
+        const CartesianPoint& p = points[i];
+        best = 0; bestDist = p.distance(means[0]);
+        for (int j = 1; j < means.size(); j++) {
+          dist = p.distance(means[j]);
+          if (dist < bestDist) {
+            bestDist = dist; best = j;
+          }
+        }
+        clusts[best].push_back(i);
+        wcss += bestDist*bestDist;
+      }
+
+      // recompute means
+      err = 0;
+      for (int i = 0; i < clusts.size(); i++) {
+        vector<int>& clust = clusts[i];
+        if (clust.empty()) { ok = false; break; }
+        CartesianPoint o = means[i];
+        CartesianPoint& m = means[i]; m = CartesianPoint(m.size(), 0.0);
+        for (int j = 0; j < clust.size(); j++) m += points[clust[j]];
+        m /= clust.size();
+        err += (m - o).norm2();
+      }
+      if (!ok) break;
+      if (err < 10E-8) break;
+    }
+    if (!ok) { // if one of the clusters ended up empty, try again
+      t--;
+    } else if ((t == 0) || (wcss < bestWCSS)) {
+      bestWCSS = wcss;
+      bestClusts = clusts;
+    }
+  }
+  return bestClusts;
 }
 
 /* --------- MstUtils --------- */

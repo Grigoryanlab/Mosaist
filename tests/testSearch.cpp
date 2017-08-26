@@ -1,39 +1,10 @@
 #include "msttypes.h"
 #include "mstoptions.h"
 #include "msttransforms.h"
+#include <list>
 #include <chrono>
 
 using namespace MST;
-
-class BallTree {
-  public:
-    BallTree(const AtomPointerVector& _atoms, bool add = true);
-
-  private:
-    class BallTreeNode {
-      public:
-        BallTreeNode() { left = right = NULL; rad = 0; }
-        ~BallTreeNode() {
-          if (left != NULL) delete left;
-          if (right != NULL) delete right;
-        }
-
-      private:
-        BallTreeNode *left, *right;
-        bool hasChildren;
-        mstreal rad;            // a sphere centered at point cen and with
-        CartesianPoint cen;     // radius rad contains all points in the sub-tree
-        vector<int> points;     // all points inside the node (but not its sub-trees)
-        vector<int> subpoints;     // all points inside the sub-tree of the node
-    };
-
-    vector<CartesianPoint> points;
-    BallTreeNode root;
-};
-
-BallTree::BallTree(const AtomPointerVector& _atoms, bool add) {
-
-}
 
 class fasstSolution {
   public:
@@ -332,7 +303,7 @@ void FASST::setQuery(const string& pdbFile) {
   centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
   for (int i = 0; i < query.size(); i++) {
     for (int j = i+1; j < query.size(); j++) {
-      centToCentDist[i][j] = query[i].getGeometricCenter().distance(query[j].getGeometricCenter());
+      centToCentDist[i][j] = query[i].getGeometricCenter().distancenc(query[j].getGeometricCenter());
       centToCentDist[j][i] = centToCentDist[i][j];
     }
   }
@@ -527,6 +498,8 @@ void FASST::search() {
     auto endPrep = chrono::high_resolution_clock::now();
     prepTime += chrono::duration_cast<std::chrono::microseconds>(endPrep-beginPrep).count();
     AtomPointerVector& target = targets[currentTarget];
+    vector<int> okLocations, badLocations;
+    okLocations.reserve(target.size()); badLocations.reserve(target.size());
     while (true) {
       // Have to do three things:
       // 1. pick the best choice (from available ones) for the current segment,
@@ -534,7 +507,6 @@ void FASST::search() {
       if (remOptions[recLevel][recLevel].empty()) {
         currAlignment[recLevel] = -1;
         if (recLevel > 0) {
-          // for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i].removeAllOptions();
           recLevel--;
           continue;
         } else {
@@ -565,12 +537,12 @@ void FASST::search() {
         // we can compute bounds on this level and can do set intersections to
         // further narrow this down
         for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
-        mstreal dij, de, d;
+        mstreal dij, de, d, eps = 10E-8;
         for (int c = 0; true; c++) {
           bool updated = false, levelExhausted = false;
           for (int i = recLevel; i < query.size(); i++) {
             optList& remSet = remOptions[recLevel][i];
-            for (int j = 0; j < recLevel; j++) {                    // j runs over already placed segments
+            for (int j = 0; j < recLevel; j++) {  // j runs over already placed segments
               de = centToCentTol(i, j);
               if (de < 0) {
                 recLevel--;
@@ -589,11 +561,11 @@ void FASST::search() {
               // general proximity search given the current tolerance and will
               // tighten the list that way.
               if (dePrev < 0) {
-                vector<int> okLocations;
+                okLocations.resize(0);
                 ps[i].pointsWithin(cj, dij - de, dij + de, &okLocations);
                 remSet.intersectOptions(okLocations);
               } else {
-                vector<int> badLocations; mstreal eps = 10E-8;
+                badLocations.resize(0);
                 ps[i].pointsWithin(cj, dij - dePrev, dij - de - eps, &badLocations);
                 ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, &badLocations);
                 for (int k = 0; k < badLocations.size(); k++) {

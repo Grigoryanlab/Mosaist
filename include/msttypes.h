@@ -401,6 +401,7 @@ class CartesianPoint : public vector<mstreal> {
     const double operator*(const CartesianPoint& other) const { return this->dot(other); }
 
     mstreal norm() const;
+    mstreal norm2() const;
     mstreal mean() const;
     mstreal median() const;
     mstreal sum() const;
@@ -415,8 +416,10 @@ class CartesianPoint : public vector<mstreal> {
 
     mstreal distance(const CartesianPoint& another) const;
     mstreal distance(const CartesianPoint* another) const { return distance(*another); }
+    mstreal distancenc(const CartesianPoint& another) const; // no size check (for speed)
     mstreal distance2(const CartesianPoint& another) const;
     mstreal distance2(const CartesianPoint* another) const { return distance2(*another); }
+    mstreal distance2nc(const CartesianPoint& another) const; // no size check (for speed)
 
     friend ostream & operator<<(ostream &_os, const CartesianPoint& _p) {
       for (int i = 0; i < _p.size(); i++) {
@@ -694,6 +697,10 @@ class Clusterer {
      * be further greedy and find best centroids without ever doing all-by-all comparisons. */
     vector<vector<int> > greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax = 10000);
 
+    /* Perform k-means clustering of a point cloud in arbitrary dimension, using
+     * Euclidean distance as the metric. Returns a list of clusters of size k,
+     * where each cluster is represented by a vector point indices. */
+    static vector<vector<int> > kmeans(const vector<CartesianPoint>& points, int k, int Ntrials = 1, int Niter = 10);
 
   protected:
     // these functions are protected because they assume that the cache of pre-
@@ -869,7 +876,7 @@ bool MstUtils::closeEnough(const T& a, const T& b, const T& epsilon) {
 
 template <class T>
 void MstUtils::shuffle(vector<T>& vec) {
-  int i, j, tmp;
+  int i, j; T tmp;
   for (i = vec.size() - 1; i >= 0; i--) {
     j = MstUtils::randInt(0, i);
     if (i == j) continue;
