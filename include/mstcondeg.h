@@ -40,6 +40,7 @@ class contactList {
     mstreal degree(Residue* _resi, Residue* _resj);
     string info(int i) { return infos[i]; }
     vector<pair<Residue*, Residue*> > getOrderedContacts();
+    bool areInContact(Residue* A, Residue* B);
 
 
   private:
@@ -89,8 +90,8 @@ class ConFind {
     contactList getContacts(Structure& S, mstreal cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, mstreal cdcut = 0.0);
-    contactList getInterferences(vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
-    contactList getInterferences(Structure& S, mstreal incut = 0.0, contactList* list = NULL);
+    contactList getInterference(vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
+    contactList getInterference(Structure& S, mstreal incut = 0.0, contactList* list = NULL);
 
     mstreal getCrowdedness(Residue* res);
     vector<mstreal> getCrowdedness(vector<Residue*>& residues);

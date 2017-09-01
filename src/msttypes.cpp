@@ -2235,46 +2235,48 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
 
   mstreal d2, dmin2, dmax2;
   int ci, cj, ck;
-  int imax1, jmax1, kmax1, imax2, jmax2, kmax2; // external box (no point in looking beyond it, points there are too far)
-  int imin1, jmin1, kmin1, imin2, jmin2, kmin2; // internal box (no point in looking within it, points there are too close)
+  int iOutLo, jOutLo, kOutLo, iOutHi, jOutHi, kOutHi; // external box (no point in looking beyond it, points there are too far)
+  int iInLo, jInLo, kInLo, iInHi, jInHi, kInHi;       // internal box (no point in looking within it, points there are too close)
   pointBucket(cx, cy, cz, &ci, &cj, &ck);
-  pointBucket(cx - dmax, cy - dmax, cz - dmax, &imax1, &jmax1, &kmax1);
-  pointBucket(cx + dmax, cy + dmax, cz + dmax, &imax2, &jmax2, &kmax2);
+  pointBucket(cx - dmax, cy - dmax, cz - dmax, &iOutLo, &jOutLo, &kOutLo);
+  pointBucket(cx + dmax, cy + dmax, cz + dmax, &iOutHi, &jOutHi, &kOutHi);
   if (dmin > 0) {
     mstreal sr3 = sqrt(3);
-    pointBucket(cx - dmin/sr3, cy - dmin/sr3, cz - dmin/sr3, &imin1, &jmin1, &kmin1);
-    pointBucket(cx + dmin/sr3, cy + dmin/sr3, cz + dmin/sr3, &imin2, &jmin2, &kmin2);
-    // need to trim the internal box to make sure it is fully contained within the sphere of radius dmin from the central point
-    if (imin1 != ci) imin1++;
-    if (jmin1 != cj) jmin1++;
-    if (kmin1 != ck) kmin1++;
-    if (imin2 != ci) imin2--;
-    if (jmin2 != cj) jmin2--;
-    if (kmin2 != ck) kmin2--;
+    pointBucket(cx - dmin/sr3, cy - dmin/sr3, cz - dmin/sr3, &iInLo, &jInLo, &kInLo);
+    pointBucket(cx + dmin/sr3, cy + dmin/sr3, cz + dmin/sr3, &iInHi, &jInHi, &kInHi);
+    // NOTE: I used to think this adjustment was necessary, but upon more thought, I don't think so
+    // // need to trim the internal box to make sure it is fully contained within the sphere of radius dmin from the central point
+    // if (iInLo != ci) iInLo++;
+    // if (jInLo != cj) jInLo++;
+    // if (kInLo != ck) kInLo++;
+    // if (iInHi != ci) iInHi--;
+    // if (jInHi != cj) jInHi--;
+    // if (kInHi != ck) kInHi--;
   } else {
-    imin1 = imin2 = ci;
-    jmin1 = jmin2 = cj;
-    kmin1 = kmin2 = ck;
+    iInLo = iInHi = ci;
+    jInLo = jInHi = cj;
+    kInLo = kInHi = ck;
   }
-  limitIndex(&imin1); limitIndex(&imin2); limitIndex(&jmin1); limitIndex(&jmin2); limitIndex(&kmin1); limitIndex(&kmin2);
-  limitIndex(&imax1); limitIndex(&imax2); limitIndex(&jmax1); limitIndex(&jmax2); limitIndex(&kmax1); limitIndex(&kmax2);
+  limitIndex(&iInLo); limitIndex(&iInHi); limitIndex(&jInLo); limitIndex(&jInHi); limitIndex(&kInLo); limitIndex(&kInHi);
+  limitIndex(&iOutLo); limitIndex(&iOutHi); limitIndex(&jOutLo); limitIndex(&jOutHi); limitIndex(&kOutLo); limitIndex(&kOutHi);
 
   // search only within the boxes where points of interest can be, in principle
   if (list != NULL) list->clear();
-  bool found = false;
+  bool found = false, insi, ins;
   bool yesno = (list == NULL);
   dmin2 = dmin*dmin; dmax2 = dmax*dmax;
-  for (int i = imax1; i <= imax2; i++) {
-    bool insi = (i >= imin1) && (i <= imin2);
+  int i, j, k, ii, pi;
+  for (i = iOutLo; i <= iOutHi; i++) {
+    insi = (i >= iInLo) && (i <= iInHi);
     vector<vector<vector<int> > >& Bi = buckets[i];
-    for (int j = jmax1; j <= jmax2; j++) {
-      bool ins = insi && (j >= jmin1) && (j <= jmin2);
+    for (j = jOutLo; j <= jOutHi; j++) {
+      ins = insi && (j >= jInLo) && (j <= jInHi);
       vector<vector<int> >& Bij = Bi[j];
-      for (int k = kmax1; k <= kmax2; k++) {
+      for (k = kOutLo; k <= kOutHi; k++) {
         vector<int>& Bijk = Bij[k];
         // check all points in bucket i, j, k
-        for (int ii = 0; ii < Bijk.size(); ii++) {
-          int pi = Bijk[ii];
+        for (ii = 0; ii < Bijk.size(); ii++) {
+          pi = Bijk[ii];
           d2 = c.distance2nc(*(pointList[pi]));
           if ((d2 >= dmin2) && (d2 <= dmax2)) {
             if (yesno) return true;
@@ -2282,8 +2284,8 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
             found = true;
           }
         }
-        // skip the range from kmin1 to kmin2 (too close)
-        if (ins && (k == kmin1) && (kmin1 != kmin2)) k = kmin2 - 1;
+        // skip the range from kInLo to kInHi (too close)
+        if (ins && (k == kInLo) && (kInLo != kInHi)) k = kInHi - 1;
       }
     }
   }

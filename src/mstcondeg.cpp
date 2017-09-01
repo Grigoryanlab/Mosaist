@@ -9,6 +9,18 @@ vector<pair<Residue*, Residue*> > contactList::getOrderedContacts() {
   return conts;
 }
 
+mstreal contactList::degree(Residue* _resi, Residue* _resj) {
+  if (inContact.find(_resi) == inContact.end()) return 0;
+  if (inContact[_resi].find(_resj) == inContact[_resi].end()) return 0;
+  return degrees[inContact[_resi][_resj]];
+}
+
+bool contactList::areInContact(Residue* A, Residue* B) {
+  if (inContact.find(A) == inContact.end()) return false;
+  if (inContact[A].find(B) == inContact[A].end()) return false;
+  return true;
+}
+
 ConFind::ConFind(string rotLibFile, Structure& S) {
   setParams();
   rotLib = new RotamerLibrary(rotLibFile);
@@ -118,7 +130,7 @@ void ConFind::cache(Residue* res) {
           if (interfering.find(resB) != interfering.end()) continue;
           if (resB != res) {
             interfering.insert(resB);
-            interference[res][resB] += aaP * rotP;
+            interference[res][resB] += aaP * rotP/100.0;
           }
         }
 
@@ -285,7 +297,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, mstreal cdcut, cont
   return *list;
 }
 
-contactList ConFind::getInterferences(vector<Residue*>& residues, mstreal incut, contactList* list) {
+contactList ConFind::getInterference(vector<Residue*>& residues, mstreal incut, contactList* list) {
   cache(residues);
   contactList L;
   if (list == NULL) list = &L;
@@ -309,11 +321,11 @@ contactList ConFind::getInterferences(vector<Residue*>& residues, mstreal incut,
   return *list;
 }
 
-contactList ConFind::getInterferences(Structure& S, mstreal incut, contactList* list) {
+contactList ConFind::getInterference(Structure& S, mstreal incut, contactList* list) {
   contactList L;
   if (list == NULL) list = &L;
   vector<Residue*> allRes = S.getResidues();
-  getInterferences(allRes, incut, list);
+  getInterference(allRes, incut, list);
 
   return *list;
 }
@@ -453,10 +465,4 @@ void ConFind::openLogFile(string fname, bool append) {
 
 void ConFind::closeLogFile() {
   rotOut.close();
-}
-
-mstreal contactList::degree(Residue* _resi, Residue* _resj) {
-  if (inContact.find(_resi) == inContact.end()) return 0;
-  if (inContact[_resi].find(_resj) == inContact[_resi].end()) return 0;
-  return degrees[inContact[_resi][_resj]];
 }

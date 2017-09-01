@@ -95,7 +95,7 @@ Structure fusionEvaluator::getAlignedStructure() {
   return aligned;
 }
 
-double fusionEvaluator::eval(const vector<double>& point) {
+mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
   bool init = point.empty();
   if (init) initPoint.resize(0);
   mstreal bR = 0.01; mstreal aR = 1.0; mstreal dR = 1.0; mstreal xyzR = 0.01; // randomness scale factors
@@ -142,9 +142,9 @@ double fusionEvaluator::eval(const vector<double>& point) {
             initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
             initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
           } else {
-            double d0 = point[k]; k++;
-            double d1 = point[k]; k++;
-            double a0 = point[k]; k++;
+            mstreal d0 = point[k]; k++;
+            mstreal d1 = point[k]; k++;
+            mstreal a0 = point[k]; k++;
             N->setCoor(0.0, 0.0, 0.0);
             CA->setCoor(d0, 0.0, 0.0);
             C->setCoor(d0 - d1*cos(a0), d1*sin(a0), 0.0);
@@ -251,7 +251,7 @@ double fusionEvaluator::eval(const vector<double>& point) {
   }
 
   // compute penalty for out-of-range parameters (based on the built struct)
-  double bondPenalty = 0, anglPenalty = 0, dihePenalty = 0;
+  mstreal bondPenalty = 0, anglPenalty = 0, dihePenalty = 0;
   k = 0;
   for (int i = 0; i < F.residueSize(); i++) {
     Residue& res = F[i];
@@ -317,11 +317,11 @@ double fusionEvaluator::eval(const vector<double>& point) {
   }
 
   // finally, compute best-fit RMSD of individual fragments onto the built structure
-  double rmsdScore = 0, rmsdTot = 0;
+  mstreal rmsdScore = 0, rmsdTot = 0;
   if (!init) {
     RMSDCalculator rms;
     for (int i = 0; i < alignedFrags.size(); i++) {
-      double r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
+      mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
       // rmsdScore += r;
       rmsdScore += r * r * alignedFrags[i].first.size();
       rmsdTot += r;
@@ -491,17 +491,17 @@ CartesianPoint fusionEvaluator::dihedralInstances(int ri, int rj, int rk, int rl
   return p;
 }
 
-double fusionEvaluator::harmonicPenalty(double val, const icBound& b) {
+mstreal fusionEvaluator::harmonicPenalty(mstreal val, const icBound& b) {
   switch (b.type) {
     case icDihedral: {
       if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return 0;
-      double dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
+      mstreal dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
       return kh * dx2;
     }
     case icAngle:
     case icBond: {
-      double pen = 0;
-      double K = (b.type == icBond) ? kb : ka;
+      mstreal pen = 0;
+      mstreal K = (b.type == icBond) ? kb : ka;
       if (val < b.minVal) { pen = K * (val - b.minVal) * (val - b.minVal); }
       else if (val > b.maxVal) { pen = K * (val - b.maxVal) * (val - b.maxVal); }
       return pen;
@@ -521,17 +521,17 @@ double fusionEvaluator::harmonicPenalty(double val, const icBound& b) {
 Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Ni, int Nc, bool verbose) {
   bool useGradDescent = true;
   fusionEvaluator E(resTopo, fixed);
-  vector<double> bestSolution; double score, bestScore;
+  vector<mstreal> bestSolution; mstreal score, bestScore;
   if (useGradDescent) {
     bestScore = Optim::gradDescent(E, bestSolution, Ni, 10E-6, verbose);
   } else {
-    double bestScore = Optim::fminsearch(E, Ni, bestSolution);
+    mstreal bestScore = Optim::fminsearch(E, Ni, bestSolution);
   }
   int bestAnchor = E.getBuildOrigin();
   if (verbose) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
   for (int i = 0; i < Nc-1; i++) {
     E.noisifyGuessPoint(0.2);
-    vector<double> solution;
+    vector<mstreal> solution;
     int anchor = E.randomizeBuildOrigin();
     if (useGradDescent) {
       score = Optim::gradDescent(E, solution, Ni, 10E-6, verbose);

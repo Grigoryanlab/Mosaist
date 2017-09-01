@@ -316,7 +316,7 @@ int main(int argc, char *argv[]) {
       vector<mstreal>& F = freedoms[i][j];
       vector<vector<int> > aaDist(Nb, vector<int>(NAATypes, 0));
       for (int k = 0; k < F.size(); k++) {
-        int bi = int(min(F[k], 1 - 1.0/(2*Nb))*Nb); // since freedom is always [0, 1]
+        int bi = int(MstUtils::min((mstreal) F[k], (mstreal) (1 - 1.0/(2*Nb))*Nb)); // since freedom is always [0, 1]
         aaDist[bi][AA[k]]++;
       }
       mstreal expSeqRec = 0; int Nall = 0;
@@ -343,7 +343,7 @@ int main(int argc, char *argv[]) {
   vector<mstreal>& F = freedoms[bestI][bestJ];
   vector<int> hist(Nb, 0);
   for (int k = 0; k < F.size(); k++) {
-    int bi = int(min(F[k], 1 - 1.0/(2*Nb))*Nb); // since freedom is always [0, 1]
+    int bi = int(MstUtils::min((mstreal) F[k], (mstreal) (1 - 1.0/(2*Nb))*Nb)); // since freedom is always [0, 1]
     hist[bi]++;
   }
   for (int bi = 0; bi < Nb; bi++) cout << hist[bi] << endl;

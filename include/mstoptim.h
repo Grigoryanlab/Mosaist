@@ -11,10 +11,10 @@ namespace MST {
 
 class optimizerEvaluator {
   public:
-    virtual vector<double> guessPoint() { return vector<double>(1, 0); }
-    virtual double eval(const vector<double>& point) { return 0.0; }
-    virtual double eval(const vector<double>& point, Vector& grad, vector<double> eps = vector<double>(0)) { grad = finiteDifferenceGradient(point, eps); return eval(point); }
-    virtual Vector finiteDifferenceGradient(const vector<double>& point, vector<double> eps = vector<double>(0));
+    virtual vector<mstreal> guessPoint() { return vector<mstreal>(1, 0); }
+    virtual mstreal eval(const vector<mstreal>& point) { return 0.0; }
+    virtual mstreal eval(const vector<mstreal>& point, Vector& grad, vector<mstreal> eps = vector<mstreal>(0)) { grad = finiteDifferenceGradient(point, eps); return eval(point); }
+    virtual Vector finiteDifferenceGradient(const vector<mstreal>& point, vector<mstreal> eps = vector<mstreal>(0));
 };
 
 class Optim {
@@ -22,8 +22,8 @@ class Optim {
   public:
 
     // --- Nelder-Mead simplex algorithm as in Matlab's fminsearch
-    static double fminsearch(optimizerEvaluator& E, int numIters, vector<double>& solution, bool verbose = false);
-    static double gradDescent(optimizerEvaluator& E, vector<double>& solution, int numIters = 1000, double tol = 10E-6, bool verbose = false);
+    static mstreal fminsearch(optimizerEvaluator& E, int numIters, vector<mstreal>& solution, bool verbose = false);
+    static mstreal gradDescent(optimizerEvaluator& E, vector<mstreal>& solution, int numIters = 1000, mstreal tol = 10E-6, bool verbose = false);
 
 };
 

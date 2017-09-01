@@ -157,16 +157,29 @@ void optList::intersectOptions(const vector<int>& opts) {
 /* FASST -- Fast Algorithm for Searching STructure */
 class FASST {
   public:
+    enum matchType { REGION = 1, FULL, WITHGAPS };
+    enum searchType { CA = 1, FULLBB };
     ~FASST();
-    FASST() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(2); querySize = 0; updateGrids = false; }
+    FASST() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(searchType::FULLBB); querySize = 0; updateGrids = false; gridSpacing = 15.0; }
     void setQuery(const string& pdbFile);
+    Structure getQuery() { return queryStruct; }
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
     void setRMSDCutoff(mstreal cut);
-    void setSearchType(int _searchType);
+    void setSearchType(searchType _searchType);
+    void setGridSpacing(mstreal _spacing) { gridSpacing = _spacing; updateGrids = true; }
     void search();
     int numMatches() { return solutions.size(); }
     set<fasstSolution> getMatches() { return solutions; }
+
+    // TODO
+    // memory saver (keep only the needed backbone atoms; keep a way to get everything later)
+    void writeDatabase(const string& dbFile);
+    void readDatabase(const string& dbFile);
+    // void setMaxNumMatches(int _max);
+    // void setMinNumMatches(int _min);
+    // Structure getMatchStructure(int mi, matchType type = matchType::REGION);
+    // void setGapLimits(const vector<pair<int, int> >& lims);
 
   protected:
     void prepForSearch(int ti);
@@ -191,7 +204,8 @@ class FASST {
     vector<vector<mstreal> > segmentResiduals;
 
     int recLevel;
-    int searchType, atomsPerRes;
+    int atomsPerRes;
+    searchType type;
     vector<string> searchableAtomTypes;
     int querySize;
 
@@ -220,7 +234,8 @@ class FASST {
     // set of solutions, sorted by RMSD
     set<fasstSolution> solutions;
 
-    // ProximitySearch for finding nearby centroids of target segments
+    // ProximitySearch for finding nearby centroids of target segments (there
+    // will be one ProximitySearch object per query segment)
     vector<ProximitySearch> ps;
 
     // various solution constraints
@@ -235,6 +250,9 @@ class FASST {
     // every time a new target is added, this flag will be set so we will know
     // to update proximity grids required for the search
     bool updateGrids;
+
+    // grid spacing for ProximitySearch object
+    mstreal gridSpacing;
 
     RMSDCalculator RC;
 };
@@ -251,8 +269,17 @@ int main(int argc, char *argv[]) {
   S.setQuery(op.getString("q"));
   S.addTargets(MstUtils::fileToArray(op.getString("d")));
   S.setRMSDCutoff(2.0);
-  cout << "Searching..." << endl;
-  S.search();
+  if (true) {
+    int N = 10;
+    for (int i = 0; i < N; i++) {
+      mstreal d = i*20.0/(N-1) + (N-i-1)*5.0/(N-1);
+      cout << "Searching with grid spacing " << d << "..." << endl;
+      S.setGridSpacing(d);
+      S.search();
+    }
+  } else {
+    S.search();
+  }
   cout << "found " << S.numMatches() << " matches:" << endl;
   set<fasstSolution> matches = S.getMatches();
   for (auto it = matches.begin(); it != matches.end(); ++it) {
@@ -356,9 +383,9 @@ bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable) {
   bool foundAll = true;
   for (int i = 0; i < C.residueSize(); i++) {
     Residue& res = C.getResidue(i);
-    switch(searchType) {
-      case 1:
-      case 2: {
+    switch(type) {
+      case searchType::CA:
+      case searchType::FULLBB: {
         AtomPointerVector bb;
         for (int k = 0; k < searchableAtomTypes.size(); k++) {
           Atom* a = res.findAtom(searchableAtomTypes[k], false);
@@ -369,33 +396,32 @@ bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable) {
         break;
       }
       default:
-        MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "FASST::parseStructure");
+        MstUtils::error("uknown search type '" + MstUtils::toString(type) + "' specified", "FASST::parseStructure");
     }
   }
   return foundAll;
 }
 
-void FASST::setSearchType(int _searchType) {
-  searchType = _searchType;
-  switch(searchType) {
-    case 1:
+void FASST::setSearchType(searchType _searchType) {
+  type = _searchType;
+  switch(type) {
+    case searchType::CA:
       searchableAtomTypes =  {"CA"};
       break;
-    case 2:
+    case searchType::FULLBB:
       searchableAtomTypes =  {"N", "CA", "C", "O"};
       break;
     default:
-      MstUtils::error("uknown search type '" + MstUtils::toString(searchType) + "' specified", "FASST::setSearchType");
+      MstUtils::error("uknown search type '" + MstUtils::toString(type) + "' specified", "FASST::setSearchType");
   }
   atomsPerRes = searchableAtomTypes.size();
 }
 
 void FASST::rebuildProximityGrids() {
-  mstreal charGridDist = 12.0;
-  if (xlo == xhi) { xlo -= charGridDist/2; xhi += charGridDist/2; }
-  if (ylo == yhi) { ylo -= charGridDist/2; yhi += charGridDist/2; }
-  if (zlo == zhi) { zlo -= charGridDist/2; zhi += charGridDist/2; }
-  int N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/charGridDist));
+  if (xlo == xhi) { xlo -= gridSpacing/2; xhi += gridSpacing/2; }
+  if (ylo == yhi) { ylo -= gridSpacing/2; yhi += gridSpacing/2; }
+  if (zlo == zhi) { zlo -= gridSpacing/2; zhi += gridSpacing/2; }
+  int N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/gridSpacing));
   ps.clear(); ps.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
     ps[i] = ProximitySearch(xlo, ylo, zlo, xhi, yhi, zhi, N);
@@ -599,7 +625,7 @@ void FASST::search() {
   int searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
   prepTime = prepTime/1000;
   cout << "prep time " << prepTime << " ms" << std::endl;
-  cout << "search time " << searchTime << " ms" << std::endl;
+  cout << "total time " << searchTime << " ms" << std::endl;
   cout << "prep time was " << (100.0*prepTime/searchTime) << " % of the total" << std::endl;
 }
 

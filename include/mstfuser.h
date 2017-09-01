@@ -23,10 +23,10 @@ class fusionEvaluator: public optimizerEvaluator {
      * has to have at least one entry for all i. */
     fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> fixedResidues = vector<int>(), bool _verbose = false);
 
-    double eval(const vector<double>& point);
+    mstreal eval(const vector<mstreal>& point);
 
-    vector<double> guessPoint() { if (initPoint.empty()) eval(vector<double>()); return initPoint; }
-    void setGuessPoint(const vector<double>& _initPoint) { initPoint = _initPoint; }
+    vector<mstreal> guessPoint() { if (initPoint.empty()) eval(vector<mstreal>()); return initPoint; }
+    void setGuessPoint(const vector<mstreal>& _initPoint) { initPoint = _initPoint; }
     void noisifyGuessPoint(mstreal _noise = 1.0) { noise = _noise; initPoint.resize(0); }
     int numResidues() { return overlappingResidues.size(); }
     bool isAnchored() { return fixedResidues.size() > 0; }
@@ -69,7 +69,7 @@ class fusionEvaluator: public optimizerEvaluator {
     CartesianPoint dihedralInstances(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al, bool addToCache = false);
 
     // if the last flag is specified as true, will compute angular differences
-    double harmonicPenalty(double val, const icBound& b);
+    mstreal harmonicPenalty(mstreal val, const icBound& b);
 
   private:
     Structure fused, guess;
@@ -102,8 +102,8 @@ class fusionEvaluator: public optimizerEvaluator {
      * fragment, respectively. */
     vector<pair<AtomPointerVector, AtomPointerVector> > alignedFrags;
 
-    double kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
-    vector<double> initPoint;
+    mstreal kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
+    vector<mstreal> initPoint;
     bool verbose, startWithMean, optimCartesian;
     mstreal noise;
 };

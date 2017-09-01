@@ -755,6 +755,8 @@ class MstUtils {
     static MST::mstreal randUnit() { return ((MST::mstreal) rand() / RAND_MAX); }
 
     template <class T>
+    static T pow2(const T& A) { return A*A; }
+    template <class T>
     static string toString(const T& obj) { return toString(&obj); }
     template <class T>
     static string toString(const T* obj);

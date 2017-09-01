@@ -2,11 +2,11 @@
 
 using namespace MST;
 
-Vector optimizerEvaluator::finiteDifferenceGradient(const vector<double>& point, vector<double> eps) {
+Vector optimizerEvaluator::finiteDifferenceGradient(const vector<mstreal>& point, vector<mstreal> eps) {
   Vector grad(point.size(), 0);
-  vector<double> p = point;
-  if (eps.empty()) eps = vector<double>(point.size(), 10E-6);
-  double a, b;
+  vector<mstreal> p = point;
+  if (eps.empty()) eps = vector<mstreal>(point.size(), 10E-6);
+  mstreal a, b;
   for (int i = 0; i < grad.length(); i++) {
     p[i] = point[i] - eps[i];
     a = eval(p);
@@ -18,8 +18,8 @@ Vector optimizerEvaluator::finiteDifferenceGradient(const vector<double>& point,
   return grad;
 }
 
-double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& solution, bool verbose) {
-  double tol = 10E-6;
+mstreal Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<mstreal>& solution, bool verbose) {
+  mstreal tol = 10E-6;
   Matrix x0(E.guessPoint()); // row vector
   int n = x0.length();
   Matrix simplex(n + 1, n);
@@ -68,7 +68,7 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
 
     // calculate the reflected point
     Matrix r = 2.0*m - simplex.row(o);
-    double fr = E.eval(r);
+    mstreal fr = E.eval(r);
     if ((values(b) <= fr) && (fr < values(w))) {
       // accept the reflection
       simplex.row(o) = r;
@@ -78,7 +78,7 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
     } else if (fr < values(b)) {
       // calculate the expansion point
       Matrix s = 2*(m - simplex.row(o)) + m;
-      double fs = E.eval(s);
+      mstreal fs = E.eval(s);
       if (fs < fr) {
         // accept the expansion point
         simplex.row(o) = s;
@@ -96,7 +96,7 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
       // perform a contraction
       if (fr < values(o)) {
         Matrix c = 0.5*(r - m) + m;
-        double fc = E.eval(c);
+        mstreal fc = E.eval(c);
         if (fc < fr) {
           // accept contraction point
           simplex.row(o) = c;
@@ -106,7 +106,7 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
         }
       } else {
         Matrix cc = 0.5*(simplex.row(o) - m) + m;
-        double fcc = E.eval(cc);
+        mstreal fcc = E.eval(cc);
         if (fcc < values(o)) {
           // accept contraction point
           simplex.row(o) = cc;
@@ -127,16 +127,16 @@ double Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<double>& so
 
   // find best solution
   int bestPoint;
-  double bestScore = MstUtils::min((vector<mstreal>) values, -1, -1, &bestPoint);
+  mstreal bestScore = MstUtils::min((vector<mstreal>) values, -1, -1, &bestPoint);
   solution = simplex.row(bestPoint);
   return bestScore;
 }
 
-double Optim::gradDescent(optimizerEvaluator& E, vector<double>& solution, int numIters, double tol, bool verbose) {
+mstreal Optim::gradDescent(optimizerEvaluator& E, vector<mstreal>& solution, int numIters, mstreal tol, bool verbose) {
   Vector x0(E.guessPoint());
   Vector x1(x0);
-  double gamma = 0.001;      // initial step size (gradient descent rate)
-  double v0, v1;
+  mstreal gamma = 0.001;      // initial step size (gradient descent rate)
+  mstreal v0, v1;
   Vector g0(x0.length()), g1(x0.length());
 
   v0 = E.eval(x0, g0);

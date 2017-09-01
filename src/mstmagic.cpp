@@ -6,14 +6,14 @@ vector<AtomPointerVector> TERMUtils::mostDesignableFragments(Structure& C, vecto
 
   // this ProximitySearch object is for checking which residues are already contained within the central TERM (we want to bring new segments)
   AtomPointerVector centAtoms = C.getAtoms();
-  ProximitySearch centTERM(centAtoms, 1.0, true, NULL);
+  ProximitySearch centTERM(centAtoms, (mstreal) 1.0, true, NULL);
 
   // this ProximitySearch will store all residues brought in by the central TERM
   ProximitySearch* PS;
   if (cen == NULL) {
     // by default, look in a pad x pad x pad box around the center of the central TERM
     mstreal pad = 100;
-    PS = new ProximitySearch(centAtoms, 1.0, false, NULL, pad/2);
+    PS = new ProximitySearch(centAtoms, (mstreal) 1.0, false, NULL, pad/2);
   } else {
     PS = new ProximitySearch((*cen)[0] - (*ext)[0], (*cen)[1] - (*ext)[1], (*cen)[2] - (*ext)[2], (*cen)[0] + (*ext)[0], (*cen)[1] + (*ext)[1], (*cen)[2] + (*ext)[2]);
   }
