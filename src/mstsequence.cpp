@@ -48,7 +48,7 @@ string SeqTools::tripleToSingle(const string triple, string del) {
   return single;
 }
 
-string singleToTriple(const string single, string del) {
+string SeqTools::singleToTriple(const string single, string del) {
   vector<string> seq = MstUtils::split(single, del);
   string triple;
   for (int i = 0; i < seq.size(); i++) {
@@ -58,7 +58,7 @@ string singleToTriple(const string single, string del) {
   return triple;
 }
 
-vector<int> seqToIdx(const string seqstr, string del) {
+vector<int> SeqTools::seqToIdx(const string seqstr, string del) {
   vector<string> seq = MstUtils::split(seqstr, del);
   vector<int> indices(seq.size());
   for (int i = 0; i < seq.size(); i++) {

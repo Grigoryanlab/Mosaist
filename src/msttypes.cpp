@@ -529,11 +529,19 @@ Chain::Chain(const Chain& C) {
   sid = C.sid;
 }
 
-Chain::Chain(string chainID, string segID) {
+Chain::Chain(const string& chainID, const string& segID) {
   numAtoms = 0;
   parent = NULL;
   cid = chainID;
   sid = segID;
+}
+
+Chain::Chain(const string& chainID, const string& segID, const vector<Residue*>& residues) {
+	numAtoms = 0;
+	parent = NULL;
+	cid = chainID;
+	sid = segID;
+	appendResidueCopies(residues);
 }
 
 Chain::~Chain() {
@@ -573,6 +581,12 @@ void Chain::appendResidue(Residue* R) {
   residues.push_back(R);
   R->setParent(this);
   residueIndexInChain[R] = residues.size() - 1;
+}
+
+void Chain::appendResidueCopies(const vector<Residue*>& residues) {
+	for (int i = 0; i < residues.size(); i++) {
+		insertResidueCopy(residues[i], -1);
+	}
 }
 
 void Chain::insertResidue(Residue* R, int index) {
@@ -1114,13 +1128,13 @@ AtomPointerVector AtomPointerVector::clone() {
 }
 
 AtomPointerVector AtomPointerVector::subvector(int beg, int end) {
-  return AtomPointerVector(vector<Atom*>(this->begin() + beg, this->begin() + end));
+  return AtomPointerVector(vector<Atom*>(begin() + beg, begin() + end));
 }
 
 void AtomPointerVector::clone(AtomPointerVector& into) {
   int L = into.size();
-  into.resize(L + this->size());
-  for (int i = 0; i < this->size(); i++) {
+  into.resize(L + size());
+  for (int i = 0; i < size(); i++) {
     Atom* newAtom = new Atom(*((*this)[i]));
     newAtom->setParent(NULL);
     into[L + i] = newAtom;
@@ -1137,30 +1151,30 @@ CartesianPoint::CartesianPoint(const Atom& A) {
 }
 
 CartesianPoint& CartesianPoint::operator+=(const CartesianPoint &rhs) {
-  if (this->size() != rhs.size()) MstUtils::error("points of different dimensionality!", "CartesianPoint::operator+=");
-  for (int i = 0; i < this->size(); i++) {
+  if (size() != rhs.size()) MstUtils::error("points of different dimensionality!", "CartesianPoint::operator+=");
+  for (int i = 0; i < size(); i++) {
     (*this)[i] += rhs[i];
   }
   return *this;
 }
 
 CartesianPoint& CartesianPoint::operator-=(const CartesianPoint &rhs) {
-  if (this->size() != rhs.size()) MstUtils::error("points of different dimensionality!", "CartesianPoint::operator-=");
-  for (int i = 0; i < this->size(); i++) {
+  if (size() != rhs.size()) MstUtils::error("points of different dimensionality!", "CartesianPoint::operator-=");
+  for (int i = 0; i < size(); i++) {
     (*this)[i] -= rhs[i];
   }
   return *this;
 }
 
 CartesianPoint& CartesianPoint::operator*=(const mstreal& s) {
-  for (int i = 0; i < this->size(); i++) {
+  for (int i = 0; i < size(); i++) {
     (*this)[i] *= s;
   }
   return *this;
 }
 
 CartesianPoint& CartesianPoint::operator/=(const mstreal& s) {
-  for (int i = 0; i < this->size(); i++) {
+  for (int i = 0; i < size(); i++) {
     (*this)[i] /= s;
   }
   return *this;
@@ -1179,7 +1193,7 @@ const CartesianPoint CartesianPoint::operator-(const CartesianPoint &other) cons
 }
 
 const CartesianPoint CartesianPoint::operator-() const {
-  return CartesianPoint(this->size(), 0) - *this;
+  return CartesianPoint(size(), 0) - *this;
 }
 
 const CartesianPoint CartesianPoint::operator*(const mstreal& s) const {

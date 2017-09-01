@@ -128,7 +128,8 @@ class Chain {
   public:
     Chain();
     Chain(const Chain& C);
-    Chain(string chainID, string segID);
+    Chain(const string& chainID, const string& segID);
+    Chain(const string& chainID, const string& segID, const vector<Residue*>& residues);
     ~Chain();
 
     int residueSize() const { return residues.size(); }
@@ -155,6 +156,7 @@ class Chain {
     /* ----- functions that grow/shrink structure ----- */
     void appendResidue(Residue* R);
     void insertResidue(Residue* R, int index); // insert the Residue in such a way that it ends up being at index i
+    void appendResidueCopies(const vector<Residue*>& residues);
     Residue* insertResidueCopy(Residue* R, int index = -1); // same, but copies the residue first
     Residue* insertResidueCopy(Residue& R, int index = -1); // same, but copies the residue first
     /* ----- functions that grow/shrink structure ----- */
