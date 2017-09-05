@@ -205,6 +205,7 @@ class Residue {
     void setIcode(char _icode) { icode = _icode; }
     void setNum(int num) { resnum = num; }
     void copyAtoms(Residue& R, bool copyAlt = true);
+    void compactify() { atoms.shrink_to_fit(); } // saves memory by adjusting capacity to match length
 
     /* for all atoms in this residue, overwrite the main coordinate set with the
      * coordinate set from the alternative with the specified index. */
@@ -226,8 +227,8 @@ class Residue {
      * the permutation of the existing atoms. The order of atoms in the new vector
      * will be: any old ones that survived, in their initial order, followed by any
      * newly added atoms, in the specified order. */
-    void replaceAtoms(vector<Atom*>& newAtoms, vector<int>* oldAtoms = NULL);
-    /* ----- functions that grow/shrink structure ----- */
+    void replaceAtoms(const vector<Atom*>& newAtoms, vector<int>* oldAtoms = NULL);
+    /* ----- end functions that grow/shrink structure -- */
 
     Residue* previousResidue();
     Residue* nextResidue();

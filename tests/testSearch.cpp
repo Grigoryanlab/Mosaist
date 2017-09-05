@@ -15,6 +15,8 @@ class fasstSolution {
       alignment = _sol.alignment; rmsd = _sol.rmsd; target = _sol.target; foundOrder = _sol.foundOrder;
     }
 
+    mstreal getRMSD() const { return rmsd; }
+
     friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
       if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
       return si.foundOrder < sj.foundOrder;
@@ -160,28 +162,40 @@ class FASST {
     enum matchType { REGION = 1, FULL, WITHGAPS };
     enum searchType { CA = 1, FULLBB };
     ~FASST();
-    FASST() { recLevel = 0; setRMSDCutoff(1.0); setSearchType(searchType::FULLBB); querySize = 0; updateGrids = false; gridSpacing = 15.0; }
+    FASST();
     void setQuery(const string& pdbFile);
     Structure getQuery() { return queryStruct; }
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
-    void setRMSDCutoff(mstreal cut);
+    void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
     void setSearchType(searchType _searchType);
+    void setMemorySaveMode(bool _memSave) { memSave = _memSave; }
     void setGridSpacing(mstreal _spacing) { gridSpacing = _spacing; updateGrids = true; }
     void search();
     int numMatches() { return solutions.size(); }
+    void setMaxNumMatches(int _max);
+    void setMinNumMatches(int _min);
+    int getMaxNumMatches() { return maxNumMatches; }
+    int getMinNumMatches() { return minNumMatches; }
+    bool isMaxNumMatchesSet() { return (maxNumMatches > 0); }
+    bool isMinNumMatchesSet() { return (minNumMatches >= 0); }
     set<fasstSolution> getMatches() { return solutions; }
 
     // TODO
-    // memory saver (keep only the needed backbone atoms; keep a way to get everything later)
-    void writeDatabase(const string& dbFile);
-    void readDatabase(const string& dbFile);
-    // void setMaxNumMatches(int _max);
-    // void setMinNumMatches(int _min);
-    // Structure getMatchStructure(int mi, matchType type = matchType::REGION);
-    // void setGapLimits(const vector<pair<int, int> >& lims);
+    void setGapConstraint(int i, int j, int _minGap, int _maxGap);
+    void removeGapConstraint(int i, int j);
+    bool gapsConstrained() { return gapConstSet; }
+    bool validateSearchRequest(); // make sure all user specified requirements are consistent with a meaningful search
+    // void writeDatabase(const string& dbFile);
+    // void readDatabase(const string& dbFile);
+    // place a constraint on the sequence separation between query segments i and j
+    void getMatchStructure(int mi, AtomPointerVector& match, matchType type = matchType::REGION);
+    AtomPointerVector getMatchStructure(int mi, matchType type = matchType::REGION);
+    void getMatchStructure(const fasstSolution& sol, AtomPointerVector& match, matchType type = matchType::REGION);
+    AtomPointerVector getMatchStructure(const fasstSolution& sol, matchType type = matchType::REGION);
 
   protected:
+    void setCurrentRMSDCutoff(mstreal cut);
     void prepForSearch(int ti);
     bool parseChain(const Chain& S, AtomPointerVector& searchable);
     mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
@@ -190,14 +204,19 @@ class FASST {
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
     mstreal centToCentTol(int i, int j, bool recomputeResidual = false, bool recomputeBound = false);
     void rebuildProximityGrids();
+    void stripSidechains(Structure& S);
 
   private:
     Structure queryStruct;
     vector<Structure*> targetStructs;
-    vector<AtomPointerVector> query;      // just the part of the query that will be sought, split by segment
-    vector<AtomPointerVector> targets;    // just the part of the target structure that will be searched over
-    mstreal xlo, ylo, zlo, xhi, yhi, zhi; // bounding box of the search database
-    vector<Transform> tr;                 // transformations from the original frame to the common frames of reference for each target
+    vector<AtomPointerVector> query;         // just the part of the query that will be sought, split by segment
+    vector<AtomPointerVector> targets;       // just the part of the target structure that will be searched over
+    vector<pair<string, int> > targetSource; // where each target was read from (in case need to re-read it)
+    mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
+    vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
+
+    vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
+    bool gapConstSet;
 
     // segmentResiduals[i][j] is the residual of the alignment of segment i, in which
     // its starting residue aligns with the residue index j in the target
@@ -208,6 +227,7 @@ class FASST {
     searchType type;
     vector<string> searchableAtomTypes;
     int querySize;
+    int maxNumMatches, minNumMatches;
 
     // remOptions[L][i] is a set of alignments for segment i (i >= L) at recursion level
     // L, which are stored sorted by their own residual, through the optList
@@ -239,7 +259,7 @@ class FASST {
     vector<ProximitySearch> ps;
 
     // various solution constraints
-    mstreal rmsdCut, residualCut;
+    mstreal rmsdCutRequested, rmsdCut, residualCut;
 
     // Atom subsets needed at different recursion levels. So queryMasks[i] stores
     // all atoms of the first i+1 segments of the query combined. The same for
@@ -254,6 +274,8 @@ class FASST {
     // grid spacing for ProximitySearch object
     mstreal gridSpacing;
 
+    bool memSave; // save memory by storing only the backbone of targets?
+
     RMSDCalculator RC;
 };
 
@@ -262,14 +284,20 @@ int main(int argc, char *argv[]) {
   op.setTitle("Implements the FASSA (FAst Structure Search Algorithm). Options:");
   op.addOption("q", "query PDB file.", true);
   op.addOption("d", "a database file with a list of PDB files.", true);
+  op.addOption("r", "RMSD cutoff.", true);
+  op.addOption("min", "min number of matches.");
+  op.addOption("max", "max number of matches.");
   op.setOptions(argc, argv);
 
   FASST S;
   cout << "Building the database..." << endl;
   S.setQuery(op.getString("q"));
+  S.setMemorySaveMode(true);
   S.addTargets(MstUtils::fileToArray(op.getString("d")));
-  S.setRMSDCutoff(2.0);
-  if (true) {
+  S.setRMSDCutoff(op.getReal("r"));
+  S.setMaxNumMatches(op.getInt("max", -1));
+  S.setMinNumMatches(op.getInt("min", -1));
+  if (false) {
     int N = 10;
     for (int i = 0; i < N; i++) {
       mstreal d = i*20.0/(N-1) + (N-i-1)*5.0/(N-1);
@@ -287,6 +315,17 @@ int main(int argc, char *argv[]) {
   }
 }
 
+FASST::FASST() {
+  recLevel = 0;
+  setRMSDCutoff(1.0);
+  setSearchType(searchType::FULLBB);
+  querySize = 0;
+  updateGrids = false;
+  gridSpacing = 15.0;
+  memSave = false;
+  maxNumMatches = minNumMatches = -1;
+  gapConstSet = false;
+}
 
 FASST::~FASST() {
   // need to delete atoms only on the lowest level of recursion, because at
@@ -295,9 +334,19 @@ FASST::~FASST() {
   for (int i = 0; i < targetStructs.size(); i++) delete targetStructs[i];
 }
 
-void FASST::setRMSDCutoff(mstreal cut) {
+void FASST::setCurrentRMSDCutoff(mstreal cut) {
   rmsdCut = cut;
   residualCut = cut*cut*querySize;
+}
+
+void FASST::setMaxNumMatches(int _max) {
+  maxNumMatches = _max;
+  if ((minNumMatches >= 0) && (minNumMatches > maxNumMatches)) MstUtils::error("invalid pairing of min and max number of matches: " + MstUtils::toString(minNumMatches) + " and " + MstUtils::toString(maxNumMatches), "FASST::setMaxNumMatches");
+}
+
+void FASST::setMinNumMatches(int _min) {
+  minNumMatches = _min;
+  if ((maxNumMatches >= 0) && (minNumMatches > maxNumMatches)) MstUtils::error("invalid pairing of min and max number of matches: " + MstUtils::toString(minNumMatches) + " and " + MstUtils::toString(maxNumMatches), "FASST::setMinNumMatches");
 }
 
 /* This function sets up the query, in the process deciding which part of the
@@ -324,7 +373,6 @@ void FASST::setQuery(const string& pdbFile) {
     querySize += query[i].size();
   }
   currAlignment.resize(query.size(), -1);
-  setRMSDCutoff(rmsdCut); // update the max residual
 
   // center-to-center distances in the qyery
   centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
@@ -349,6 +397,8 @@ void FASST::setQuery(const string& pdbFile) {
 
 void FASST::addTarget(const string& pdbFile) {
   Structure* targetStruct = new Structure(pdbFile, "QUIET");
+  targetSource.push_back(pair<string, int>(pdbFile, 0));
+  if (memSave) stripSidechains(*targetStruct);
   targetStructs.push_back(targetStruct);
   targets.push_back(AtomPointerVector());
   AtomPointerVector& target = targets.back();
@@ -415,6 +465,23 @@ void FASST::setSearchType(searchType _searchType) {
       MstUtils::error("uknown search type '" + MstUtils::toString(type) + "' specified", "FASST::setSearchType");
   }
   atomsPerRes = searchableAtomTypes.size();
+}
+
+void FASST::stripSidechains(Structure& S) {
+  for (int i = 0; i < S.chainSize(); i++) {
+    Chain& C = S[i];
+    for (int j = 0; j < C.residueSize(); j++) {
+      Residue& R = C[j];
+      int n = R.atomSize();
+      for (int k = 0; k < n; k++) {
+        Atom& A = R[k];
+        if (A.isNamed("N") || A.isNamed("CA") || A.isNamed("C") || A.isNamed("O")) continue;
+        R.deleteAtom(k);
+        k--; n--;
+      }
+      R.compactify();
+    }
+  }
 }
 
 void FASST::rebuildProximityGrids() {
@@ -515,6 +582,9 @@ mstreal FASST::centToCentTol(int i, int j, bool recomputeResidual, bool recomput
 }
 
 void FASST::search() {
+  if (isMinNumMatchesSet()) setCurrentRMSDCutoff(999.0);
+  else setCurrentRMSDCutoff(rmsdCutRequested);
+
   solutions.clear();
   auto begin = chrono::high_resolution_clock::now();
   int prepTime = 0;
@@ -588,11 +658,12 @@ void FASST::search() {
               // tighten the list that way.
               if (dePrev < 0) {
                 okLocations.resize(0);
-                ps[i].pointsWithin(cj, dij - de, dij + de, &okLocations);
+                ps[i].pointsWithin(cj, max(dij - de, 0.0), dij + de, &okLocations);
+                // TODO: check whether any constraints have been placed on the distance between alignments of i and j
                 remSet.intersectOptions(okLocations);
               } else {
                 badLocations.resize(0);
-                ps[i].pointsWithin(cj, dij - dePrev, dij - de - eps, &badLocations);
+                ps[i].pointsWithin(cj, max(dij - dePrev, 0.0), dij - de - eps, &badLocations);
                 ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, &badLocations);
                 for (int k = 0; k < badLocations.size(); k++) {
                   remSet.removeOption(badLocations[k]);
@@ -618,6 +689,14 @@ void FASST::search() {
       } else {
         // if at the lowest recursion level already, then record the solution
         solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), targetStructs[currentTarget]->getName(), solutions.size()));
+        // if ((maxNumMatches > 0) && (solutions.size() > maxNumMatches)) {
+        if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
+          solutions.erase(--solutions.end());
+          setCurrentRMSDCutoff(solutions.rbegin()->getRMSD());
+        } else if (isMinNumMatchesSet() && (solutions.size() > minNumMatches) && (rmsdCut > rmsdCutRequested)) {
+          if (solutions.rbegin()->getRMSD() > rmsdCutRequested) solutions.erase(--solutions.end());
+          setCurrentRMSDCutoff(solutions.rbegin()->getRMSD());
+        }
       }
     }
   }

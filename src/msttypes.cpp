@@ -715,7 +715,7 @@ void Residue::deleteAtoms() {
   atoms.resize(0);
 }
 
-void Residue::replaceAtoms(vector<Atom*>& newAtoms, vector<int>* toRemove) {
+void Residue::replaceAtoms(const vector<Atom*>& newAtoms, vector<int>* toRemove) {
   bool delAll = (toRemove == NULL);
   int N = delAll ? atoms.size() : toRemove->size();
   if (parent != NULL) {
