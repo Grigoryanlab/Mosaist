@@ -55,6 +55,11 @@ class optList {
     // after this, the only remaining allowed options will be those that were
     // allowed before AND are in the specified list
     void intersectOptions(const vector<int>& opts);
+    // keep only options with indices less than or equal to the given one
+    void constrainLE(int idx);
+    // keep only options with indices greater than or equal to the given one
+    void constrainGE(int idx);
+    // wipe all options
     void removeAllOptions();
     // copy the valid options from a different set of the same options
     void copyIn(const optList& opt);
@@ -156,6 +161,14 @@ void optList::intersectOptions(const vector<int>& opts) {
   }
 }
 
+void optList::constrainLE(int idx) {
+  for (int i = idx+1; i <= isIn.size(); i++) removeOption(i);
+}
+
+void optList::constrainGE(int idx) {
+  for (int i = 0; i < idx; i++) removeOption(i);
+}
+
 /* FASST -- Fast Algorithm for Searching STructure */
 class FASST {
   public:
@@ -181,11 +194,13 @@ class FASST {
     bool isMinNumMatchesSet() { return (minNumMatches >= 0); }
     set<fasstSolution> getMatches() { return solutions; }
 
+    bool gapConstrained(int i, int j) { return (minGapSet[i][j] || maxGapSet[i][j]); }
+    void setMinGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at list gapLim long] [segment j]
+    void setMaxGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at most gapLim long] [segment j]
+    void resetGapConstraints();
+    bool gapConstraintsExist() { return gapConstSet; }
+    bool validateSearchRequest(); // make sure all user specified requirements are consistent
     // TODO
-    void setGapConstraint(int i, int j, int _minGap, int _maxGap);
-    void removeGapConstraint(int i, int j);
-    bool gapsConstrained() { return gapConstSet; }
-    bool validateSearchRequest(); // make sure all user specified requirements are consistent with a meaningful search
     // void writeDatabase(const string& dbFile);
     // void readDatabase(const string& dbFile);
     // place a constraint on the sequence separation between query segments i and j
@@ -216,6 +231,7 @@ class FASST {
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
 
     vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
+    vector<vector<bool> > minGapSet, maxGapSet;
     bool gapConstSet;
 
     // segmentResiduals[i][j] is the residual of the alignment of segment i, in which
@@ -297,6 +313,7 @@ int main(int argc, char *argv[]) {
   S.setRMSDCutoff(op.getReal("r"));
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
+  S.setMaxGap(0, 1, 10);
   if (false) {
     int N = 10;
     for (int i = 0; i < N; i++) {
@@ -349,6 +366,33 @@ void FASST::setMinNumMatches(int _min) {
   if ((maxNumMatches >= 0) && (minNumMatches > maxNumMatches)) MstUtils::error("invalid pairing of min and max number of matches: " + MstUtils::toString(minNumMatches) + " and " + MstUtils::toString(maxNumMatches), "FASST::setMinNumMatches");
 }
 
+void FASST::setMinGap(int i, int j, int gapLim) {
+  minGap[i][j] = gapLim;
+  minGapSet[i][j] = true;
+  gapConstSet = true;
+}
+
+void FASST::setMaxGap(int i, int j, int gapLim) {
+  maxGap[i][j] = gapLim;
+  maxGapSet[i][j] = true;
+  gapConstSet = true;
+}
+
+void FASST::resetGapConstraints() {
+  minGap.resize(query.size(), vector<int>(query.size(), 0));
+  maxGap = minGap;
+  minGapSet.resize(query.size(), vector<bool>(query.size(), false));
+  maxGapSet = minGapSet;
+  gapConstSet = false;
+}
+
+bool FASST::validateSearchRequest() {
+  if (query.size() != minGap.size()) {
+    MstUtils::error("gap constraints inconsistent with number of segments in query", "FASST::validateSearchRequest()");
+  }
+  return true;
+}
+
 /* This function sets up the query, in the process deciding which part of the
  * query is really searchable (e.g., backbone). Various search types an be added
  * in the future to provide search capabilities over different parts of the
@@ -393,6 +437,9 @@ void FASST::setQuery(const string& pdbFile) {
     }
   }
   updateGrids = true;
+
+  // set gap constraints structure
+  resetGapConstraints();
 }
 
 void FASST::addTarget(const string& pdbFile) {
@@ -589,6 +636,7 @@ void FASST::search() {
   auto begin = chrono::high_resolution_clock::now();
   int prepTime = 0;
   for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
+cout << "target " << currentTarget << endl;
     auto beginPrep = chrono::high_resolution_clock::now();
     prepForSearch(currentTarget);
     auto endPrep = chrono::high_resolution_clock::now();
@@ -633,6 +681,17 @@ void FASST::search() {
         // we can compute bounds on this level and can do set intersections to
         // further narrow this down
         for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
+        // if any gap constraints exist, limit options at this recursion level accordingly
+        if (gapConstraintsExist()) {
+          for (int j = 0; j < recLevel; j++) {
+            for (int i = recLevel; i < query.size(); i++) {
+              if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j]);
+              if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j]);
+              if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i]);
+              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[i][j]);
+            }
+          }
+        }
         mstreal dij, de, d, eps = 10E-8;
         for (int c = 0; true; c++) {
           bool updated = false, levelExhausted = false;
@@ -659,7 +718,6 @@ void FASST::search() {
               if (dePrev < 0) {
                 okLocations.resize(0);
                 ps[i].pointsWithin(cj, max(dij - de, 0.0), dij + de, &okLocations);
-                // TODO: check whether any constraints have been placed on the distance between alignments of i and j
                 remSet.intersectOptions(okLocations);
               } else {
                 badLocations.resize(0);

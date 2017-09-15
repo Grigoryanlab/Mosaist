@@ -466,7 +466,7 @@ CartesianPoint fusionEvaluator::dihedralInstances(int ri, int rj, int rk, int rl
     Atom* Al = residues[3]->findAtom(al);
     p.push_back(Ai->dihedral(Aj, Ak, Al));
   }
-  // if no comboes from the same chain were found, that means this element crosses
+  // if no combos from the same chain were found, that means this element crosses
   // a chain boundary, so we should try all combinations of atoms
   if (p.size() == 0) {
     chainBreak = true;
@@ -566,17 +566,46 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
   // build topology
   vector<vector<Residue*> > resTopo;
   map<Residue*, int> resTopoIdx; // stores indices into the above topology structure that each residue maps into
-  vector<bool> counted(residues.size(), false);
-  for (int i = 0; i < residues.size(); i++) {
-    if (counted[i]) continue;
-    resTopo.push_back(vector<Residue*>());
-    vector<int> bucket = psCA.getPointsWithin(CAs[i]->getCoor(), 0, closeDist);
-    for (int j = 0; j < bucket.size(); j++) {
-      resTopo.back().push_back(residues[bucket[j]]);
-      resTopoIdx[residues[bucket[j]]] = resTopo.size() - 1;
-      counted[bucket[j]] = true;
+  vector<Residue*> unsortedResidues = residues;
+  while (!unsortedResidues.empty()) {
+    Residue* res = unsortedResidues.back();
+    unsortedResidues.pop_back();
+    vector<int> bucket = psCA.getPointsWithin(res->findAtom("CA"), 0, closeDist);
+
+    // are any close residues already assigned to a position?
+    int pos = -1; mstreal dmin;
+    for (int i = 0; i < bucket.size(); i++) {
+      if (resTopoIdx.find(residues[bucket[i]]) != resTopoIdx.end()) {
+        mstreal dist = res->findAtom("CA")->distance(CAs[bucket[i]]);
+        if ((pos < 0) || (dist < dmin)) {
+          pos = resTopoIdx[residues[bucket[i]]];
+          dmin = dist;
+        }
+      }
+    }
+    // if so, take their position assignment
+    if (pos >= 0) {
+      resTopoIdx[res] = pos;
+      resTopo[pos].push_back(res);
+    } else {
+      // otherwise, make a new position for this residue
+      resTopo.push_back(vector<Residue*>());
+      resTopo.back().push_back(res);
+      resTopoIdx[res] = resTopo.size() - 1;
     }
   }
+
+  // vector<bool> counted(residues.size(), false);
+  // for (int i = 0; i < residues.size(); i++) {
+  //   if (counted[i]) continue;
+  //   resTopo.push_back(vector<Residue*>());
+  //   vector<int> bucket = psCA.getPointsWithin(CAs[i]->getCoor(), 0, closeDist);
+  //   for (int j = 0; j < bucket.size(); j++) {
+  //     resTopo.back().push_back(residues[bucket[j]]);
+  //     resTopoIdx[residues[bucket[j]]] = resTopo.size() - 1;
+  //     counted[bucket[j]] = true;
+  //   }
+  // }
 
   // now order residues N-to-C of the final chain
   vector<int> ntoc(1, 0); // put first residue in chain
@@ -640,5 +669,6 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
   }
 
   // call regular fuser to do all the work
+  if (verbose) cout << "Fuser::autofuse => fusing a structure of " << resTopo.size() << " residues, with " << fixedInTopo.size() << " positions fixed" << endl;
   return fuse(resTopo, fixedInTopo, Ni, Nc, verbose);
 }

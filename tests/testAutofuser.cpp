@@ -11,14 +11,12 @@ int main(int argc, char *argv[]) {
   }
   string outFile(argv[argc-1]);
   vector<Residue*> toFuse;
+  vector<Structure> inputs;
   for (int i = 1; i < argc-1; i++) {
-    Structure unfused(argv[i]);
-    vector<Residue*> res = unfused.getResidues();
-    for (int j = 0; j < unfused.residueSize(); j++) {
-      toFuse.push_back(new Residue(*res[j]));
-    }
+    inputs.push_back(Structure(argv[i]));
+    vector<Residue*> res = inputs.back().getResidues();
+    toFuse.insert(toFuse.end(), res.begin(), res.end());
   }
-  Structure fused = Fuser::autofuse(toFuse, 1);
+  Structure fused = Fuser::autofuse(toFuse, 1, 100, 1, true);
 	fused.writePDB(outFile);
-  for (int j = 0; j < toFuse.size(); j++) delete(toFuse[j]);
 }
