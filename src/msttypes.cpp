@@ -308,7 +308,7 @@ bool Structure::appendChain(Chain* C, bool allowRename) {
 
   // if allowed to rename and there is a name clash, try to pick a unique chain name
   if (allowRename && !cidUnique) {
-    string goodNames = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz";
+    string goodNames = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     int f = -1;
     for (int i = 0; i < goodNames.size(); i++) {
       if (chainsByID.find(goodNames.substr(i, 1)) == chainsByID.end()) { f = i; break; }

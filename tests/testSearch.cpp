@@ -6,34 +6,6 @@
 
 using namespace MST;
 
-class fasstSolution {
-  public:
-    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, const string& _target, int _foundOrder) {
-      alignment = _alignment; rmsd = _rmsd; target = _target; foundOrder = _foundOrder;
-    }
-    fasstSolution(const fasstSolution& _sol) {
-      alignment = _sol.alignment; rmsd = _sol.rmsd; target = _sol.target; foundOrder = _sol.foundOrder;
-    }
-
-    mstreal getRMSD() const { return rmsd; }
-
-    friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
-      if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
-      return si.foundOrder < sj.foundOrder;
-    }
-
-    friend ostream& operator<<(ostream &_os, const fasstSolution& _sol) {
-      _os << std::setprecision(6) << std::fixed << _sol.rmsd << " " << _sol.target << " [" << MstUtils::vecToString(_sol.alignment, ", ") << "]";
-      return _os;
-    }
-
-  private:
-    vector<int> alignment;
-    mstreal rmsd;
-    string target;
-    int foundOrder;
-};
-
 /* A class for storing a sub-set of a fixed set of options, each with a fixed
  * cost. The options are stored sorted by cost, so that the best option is
  * alwasys quickly availabe. Insertion is constant time. Deletion is constant
@@ -70,6 +42,7 @@ class optList {
     int numOptions() { return numIn; }
     int size() { return numIn; }
     bool empty() { return (numIn == 0); }
+    bool consistencyCheck();
 
   private:
     // costs, sorted in ascending order
@@ -125,6 +98,23 @@ void optList::addOption(int k) {
   }
 }
 
+bool optList::consistencyCheck() {
+  int nn = 0;
+  for (int i = 0; i < isIn.size(); i++) {
+    if (isIn[i]) nn++;
+  }
+  if (nn != numIn) {
+    return false;
+  }
+  if (numIn == 0) {
+    if (bestCostRank != -1) return false;
+  } else {
+    if ((bestCostRank < 0) || (bestCostRank >= costs.size())) return false;
+    if (!isIn[rankToIdx[bestCostRank]]) return false;
+  }
+  return true;
+}
+
 void optList::removeOption(int k) {
   // if ((k < 0) || (k >= costs.size())) MstUtils::error("out-of-range index specified: " + MstUtils::toString(k), "optList::removeOption(int)");
   if (isIn[k]) {
@@ -162,18 +152,61 @@ void optList::intersectOptions(const vector<int>& opts) {
 }
 
 void optList::constrainLE(int idx) {
-  for (int i = idx+1; i <= isIn.size(); i++) removeOption(i);
+  for (int i = idx+1; i < isIn.size(); i++) removeOption(i);
 }
 
 void optList::constrainGE(int idx) {
-  for (int i = 0; i < idx; i++) removeOption(i);
+  for (int i = 0; i < MstUtils::min(idx, (int) isIn.size()); i++) removeOption(i);
 }
+
+class fasstSolution {
+  public:
+    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, int _foundOrder) {
+      alignment = _alignment; rmsd = _rmsd; targetIndex = _target; foundOrder = _foundOrder;
+    }
+    fasstSolution(const fasstSolution& _sol) {
+      alignment = _sol.alignment; rmsd = _sol.rmsd; targetIndex = _sol.targetIndex; foundOrder = _sol.foundOrder;
+    }
+
+    mstreal getRMSD() const { return rmsd; }
+    int getTargetIndex() const { return targetIndex; }
+    vector<int> getAlignment() const { return alignment; }
+
+    friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
+      if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
+      return si.foundOrder < sj.foundOrder;
+    }
+
+    friend ostream& operator<<(ostream &_os, const fasstSolution& _sol) {
+      _os << std::setprecision(6) << std::fixed << _sol.rmsd << " " << _sol.targetIndex << " [" << MstUtils::vecToString(_sol.alignment, ", ") << "]";
+      return _os;
+    }
+
+  private:
+    vector<int> alignment;
+    mstreal rmsd;
+    int targetIndex, foundOrder;
+};
 
 /* FASST -- Fast Algorithm for Searching STructure */
 class FASST {
   public:
     enum matchType { REGION = 1, FULL, WITHGAPS };
     enum searchType { CA = 1, FULLBB };
+    enum targetFileType { PDB = 1, BINDATABASE };
+    class targetInfo {
+      public:
+        targetInfo(const string& _file, targetFileType _type, int _index, bool _memSave) {
+          file = _file; type = _type; index = _index; memSave = _memSave;
+        }
+        targetInfo(const targetInfo& I) {
+          file = I.file; type = I.type; index = I.index; memSave = I.memSave;
+        }
+        string file;         // source file
+        targetFileType type; // file type (PDB or database)
+        int index;           // location info within file
+        bool memSave;        // was the target read with memory save on?
+    };
     ~FASST();
     FASST();
     void setQuery(const string& pdbFile);
@@ -200,14 +233,12 @@ class FASST {
     void resetGapConstraints();
     bool gapConstraintsExist() { return gapConstSet; }
     bool validateSearchRequest(); // make sure all user specified requirements are consistent
+    void getMatchStructure(const fasstSolution& sol, Structure& match, matchType type = matchType::REGION, bool detailed = false);
+    Structure getMatchStructure(const fasstSolution& sol, matchType type = matchType::REGION, bool detailed = false);
+    void getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, matchType type = matchType::REGION, bool detailed = false);
     // TODO
     // void writeDatabase(const string& dbFile);
     // void readDatabase(const string& dbFile);
-    // place a constraint on the sequence separation between query segments i and j
-    void getMatchStructure(int mi, AtomPointerVector& match, matchType type = matchType::REGION);
-    AtomPointerVector getMatchStructure(int mi, matchType type = matchType::REGION);
-    void getMatchStructure(const fasstSolution& sol, AtomPointerVector& match, matchType type = matchType::REGION);
-    AtomPointerVector getMatchStructure(const fasstSolution& sol, matchType type = matchType::REGION);
 
   protected:
     void setCurrentRMSDCutoff(mstreal cut);
@@ -226,9 +257,10 @@ class FASST {
     vector<Structure*> targetStructs;
     vector<AtomPointerVector> query;         // just the part of the query that will be sought, split by segment
     vector<AtomPointerVector> targets;       // just the part of the target structure that will be searched over
-    vector<pair<string, int> > targetSource; // where each target was read from (in case need to re-read it)
+    vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
+    bool memSave;                            // save memory by storing only the backbone of targets?
 
     vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
     vector<vector<bool> > minGapSet, maxGapSet;
@@ -290,8 +322,6 @@ class FASST {
     // grid spacing for ProximitySearch object
     mstreal gridSpacing;
 
-    bool memSave; // save memory by storing only the backbone of targets?
-
     RMSDCalculator RC;
 };
 
@@ -313,7 +343,7 @@ int main(int argc, char *argv[]) {
   S.setRMSDCutoff(op.getReal("r"));
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
-  S.setMaxGap(0, 1, 10);
+  S.setMaxGap(0, 1, 10); S.setMinGap(0, 1, 0);
   if (false) {
     int N = 10;
     for (int i = 0; i < N; i++) {
@@ -326,9 +356,11 @@ int main(int argc, char *argv[]) {
     S.search();
   }
   cout << "found " << S.numMatches() << " matches:" << endl;
-  set<fasstSolution> matches = S.getMatches();
-  for (auto it = matches.begin(); it != matches.end(); ++it) {
+  set<fasstSolution> matches = S.getMatches(); int i = 0;
+  for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << *it << endl;
+    Structure match = S.getMatchStructure(*it);
+    match.writePDB("/tmp/match" + MstUtils::toString(i) + ".pdb");
   }
 }
 
@@ -444,7 +476,7 @@ void FASST::setQuery(const string& pdbFile) {
 
 void FASST::addTarget(const string& pdbFile) {
   Structure* targetStruct = new Structure(pdbFile, "QUIET");
-  targetSource.push_back(pair<string, int>(pdbFile, 0));
+  targetSource.push_back(targetInfo(pdbFile, targetFileType::PDB, 0, memSave));
   if (memSave) stripSidechains(*targetStruct);
   targetStructs.push_back(targetStruct);
   targets.push_back(AtomPointerVector());
@@ -636,7 +668,6 @@ void FASST::search() {
   auto begin = chrono::high_resolution_clock::now();
   int prepTime = 0;
   for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
-cout << "target " << currentTarget << endl;
     auto beginPrep = chrono::high_resolution_clock::now();
     prepForSearch(currentTarget);
     auto endPrep = chrono::high_resolution_clock::now();
@@ -683,14 +714,22 @@ cout << "target " << currentTarget << endl;
         for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
         // if any gap constraints exist, limit options at this recursion level accordingly
         if (gapConstraintsExist()) {
+          bool levelExhausted = false;
           for (int j = 0; j < recLevel; j++) {
             for (int i = recLevel; i < query.size(); i++) {
               if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j]);
               if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j]);
               if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i]);
-              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[i][j]);
+              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[j][i]);
+              if (remOptions[recLevel][i].empty()) {
+                recLevel--;
+                levelExhausted = true;
+                break;
+              }
             }
+            if (levelExhausted) break;
           }
+          if (levelExhausted) continue;
         }
         mstreal dij, de, d, eps = 10E-8;
         for (int c = 0; true; c++) {
@@ -746,7 +785,7 @@ cout << "target " << currentTarget << endl;
         }
       } else {
         // if at the lowest recursion level already, then record the solution
-        solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), targetStructs[currentTarget]->getName(), solutions.size()));
+        solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), currentTarget, solutions.size()));
         // if ((maxNumMatches > 0) && (solutions.size() > maxNumMatches)) {
         if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
           solutions.erase(--solutions.end());
@@ -775,4 +814,87 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
     }
   }
   return currResidual;
+}
+
+void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, matchType type, bool detailed) {
+  vector<Structure> matches;
+  getMatchStructures(vector<fasstSolution>(1, sol), matches, type, detailed);
+  match = matches[0];
+}
+
+Structure FASST::getMatchStructure(const fasstSolution& sol, matchType type, bool detailed) {
+  Structure match; getMatchStructure(sol, match, type, detailed); return match;
+}
+
+void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, matchType type, bool detailed) {
+  // hash solutions by the target they come from, to visit each target only once
+  map<int, vector<int> > solsFromTarget;
+  for (int i = 0; i < sols.size(); i++) {
+    const fasstSolution& sol = sols[i];
+    int idx = sol.getTargetIndex();
+    if ((idx < 0) || (idx >= targets.size())) {
+      MstUtils::error("supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchStructures");
+    }
+    solsFromTarget[idx].push_back(i);
+  }
+
+  // flatten query into a single array of atoms
+  AtomPointerVector queryAtoms;
+  for (int k = 0; k < query.size(); k++) {
+    for (int ai = 0; ai < query[k].size(); ai++) queryAtoms.push_back(query[k][ai]);
+  }
+  AtomPointerVector matchAtoms; matchAtoms.reserve(queryAtoms.size());
+
+  // visit each target
+  Structure dummy; RMSDCalculator rc;
+  matches.resize(sols.size(), Structure());
+  for (auto it = solsFromTarget.begin(); it != solsFromTarget.end(); ++it) {
+    int idx = it->first;
+    Structure& targetStruct = *(targetStructs[idx]);
+    AtomPointerVector& target = targets[idx];
+    bool reread = detailed && targetSource[idx].memSave; // should we re-read the target structure?
+    if (reread) {
+      // re-read structure
+      if (targetSource[idx].type == targetFileType::PDB) {
+        dummy.reset();
+        dummy.readPDB(targetSource[idx].file);
+      } else {
+        MstUtils::error("don't know how to read target of this type", "ASST::getMatchStructures");
+      }
+      targetStruct = dummy;
+    }
+
+    // visit each solution from this target
+    vector<int>& solIndices = it->second;
+    for (int i = 0; i < solIndices.size(); i++) {
+      int solIndex = solIndices[i];
+      const fasstSolution& sol = sols[solIndex];
+      Structure& match = matches[solIndex];
+      vector<int> alignment = sol.getAlignment();
+      if (alignment.size() != query.size()) {
+        MstUtils::error("solution alignment size inconsistent with number of query segments", "FASST::getMatchStructures");
+      }
+      // walk over target alignment and pick out corresponding residues
+      matchAtoms.resize(0);
+      for (int k = 0; k < alignment.size(); k++) {
+        // copy matching residues from the original target structure
+        int si = resToAtomIdx(alignment[k]);
+        int L = query[k].size();
+        if (si + L > target.size()) {
+          MstUtils::error("solution points to atom outside of target range", "FASST::getMatchStructures");
+        }
+        for (int ai = si; ai < si + L; ai++) matchAtoms.push_back(target[ai]);
+        for (int ri = atomToResIdx(si); ri < atomToResIdx(si + L); ri++) {
+          Residue* res = target[resToAtomIdx(ri)]->getResidue();
+          if (reread) res = &(targetStruct.getResidue(res->getResidueIndex()));
+          match.addResidue(res);
+        }
+      }
+      // align matching region onto query, transforming the match itself
+      rc.align(matchAtoms, queryAtoms, match);
+    }
+  }
+
+  // TODO: pay attention to matchType
+
 }
