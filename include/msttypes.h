@@ -48,9 +48,13 @@ class Structure {
     Structure(const vector<Residue*>& residues);
     ~Structure();
 
-    void readPDB(string pdbFile, string options = "");
-    void writePDB(string pdbFile, string options = "") const;
+    void readPDB(const string& pdbFile, string options = "");
+    void writePDB(const string& pdbFile, string options = "") const;
     void writePDB(fstream& ofs, string options = "") const;
+    void writeData(const string& dataFile) const;
+    void writeData(fstream& ofs) const;
+    void readData(const string& dataFile); // TODO
+    void readData(fstream& ifs);           // TODO
     void reset();
     Structure& operator=(const Structure& A);
 
@@ -282,6 +286,9 @@ class Atom {
     mstreal& operator[](int i);
     CartesianPoint getCoor() const;
     CartesianPoint getAltCoor(int altInd) const;
+    mstreal getAltB(int altInd) const;
+    mstreal getAltOcc(int altInd) const;
+    char getAltLocID(int altInd) const;
     mstreal getB() { return B; }
     mstreal getOcc() { return occ; }
     string getName() const { return string(name); }
@@ -785,6 +792,12 @@ class MstUtils {
     // randomly shuffle the array in place using the Fisher-Yates shuffle
     template <class T>
     static void shuffle(vector<T>& vec);
+
+    // read to/from binary file
+    template <class T>
+    static void writeBin(fstream& ofs, const T& val); // binary output for primitive types
+    template <class T>
+    static void readBin(fstream& ifs, T& val);
 };
 
 template <class T>
@@ -894,6 +907,16 @@ set<T> MstUtils::contents(const vector<T>& vec) {
   set<T> cont;
   for (int i = 0; i < vec.size(); i++) cont.insert(vec[i]);
   return cont;
+}
+
+template <class T>
+void MstUtils::writeBin(fstream& ofs, const T& val) {
+  ofs.write((char*) (&val), sizeof(T));
+}
+
+template <class T>
+void MstUtils::readBin(fstream& ifs, T& val) {
+  ifs.read((char*) (&val), sizeof(T));
 }
 
 #endif

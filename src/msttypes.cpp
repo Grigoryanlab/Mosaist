@@ -77,7 +77,7 @@ Structure& Structure::operator=(const Structure& A) {
   return *this;
 }
 
-void Structure::readPDB(string pdbFile, string options) {
+void Structure::readPDB(const string& pdbFile, string options) {
   name = pdbFile;
   int lastresnum = -999999;
   string lastresname = "XXXXXX";
@@ -209,7 +209,7 @@ void Structure::readPDB(string pdbFile, string options) {
   ifh.close();
 }
 
-void Structure::writePDB(string pdbFile, string options) const {
+void Structure::writePDB(const string& pdbFile, string options) const {
   fstream ofs; MstUtils::openFile(ofs, pdbFile, fstream::out, "Structure::writePDB(string, string)");
   writePDB(ofs, options);
   ofs.close();
@@ -298,6 +298,97 @@ void Structure::writePDB(fstream& ofs, string options) const {
     }
     if (!noend && (ci == this->chainSize() - 1)) {
       ofs << "END" << endl;
+    }
+  }
+}
+
+void Structure::writeData(const string& dataFile) const {
+  fstream ofs; MstUtils::openFile(ofs, dataFile, fstream::out | fstream::binary, "Structure::writeData(const string&)");
+  // fstream ofs; MstUtils::openFile(ofs, dataFile, fstream::out, "Structure::writeData(const string&)");
+  writeData(ofs);
+  ofs.close();
+}
+
+void Structure::writeData(fstream& ofs) const {
+  char ter = '\0';
+  ofs << getName() << ter;
+  MstUtils::writeBin(ofs, chainSize());
+  for (int i = 0; i < chainSize(); i++) {
+    Chain& chain = getChain(i);
+    ofs << chain.getID() << ter << chain.getSegID() << ter;
+    MstUtils::writeBin(ofs,chain.residueSize());
+    for (int j = 0; j < chain.residueSize(); j++) {
+      Residue& res = chain[j];
+      ofs << res.getName() << ter << res.getIcode();
+      MstUtils::writeBin(ofs, res.getNum());
+      MstUtils::writeBin(ofs, res.atomSize());
+      for (int k = 0; k < res.atomSize(); k++) {
+        Atom& atom = res[k];
+        ofs << atom.getName() << ter << atom.getAlt();
+        MstUtils::writeBin(ofs, atom.getX());
+        MstUtils::writeBin(ofs, atom.getY());
+        MstUtils::writeBin(ofs, atom.getZ());
+        MstUtils::writeBin(ofs, atom.getOcc());
+        MstUtils::writeBin(ofs, atom.getB());
+        MstUtils::writeBin(ofs, (char) atom.isHetero());
+        MstUtils::writeBin(ofs, atom.getIndex());
+        MstUtils::writeBin(ofs, atom.numAlternatives());
+        for (int ii = 0; ii < atom.numAlternatives(); ii++) {
+          CartesianPoint altCoor = atom.getAltCoor(ii);
+          MstUtils::writeBin(ofs, altCoor.getX());
+          MstUtils::writeBin(ofs, altCoor.getY());
+          MstUtils::writeBin(ofs, altCoor.getZ());
+          MstUtils::writeBin(ofs, atom.getAltOcc(ii));
+          MstUtils::writeBin(ofs, atom.getAltB(ii));
+          ofs << atom.getAltLocID(ii);
+        }
+      }
+    }
+  }
+}
+
+void Structure::readData(const string& dataFile) {
+  fstream ifs; MstUtils::openFile(ifs, dataFile, fstream::in | fstream::binary, "Structure::readData(const string&)");
+  readData(ifs);
+  ifs.close();
+}
+
+void Structure::readData(fstream& ifs) {
+  char ter = '\0';
+  getline(ifs, name, '\0');
+  string resname, atomname;
+  char icode, alt;
+  int resnum, atominx, nC, nR, nA, numAlt;
+  mstreal x, y, z, B, occ;
+  char het;
+
+  MstUtils::readBin(ifs, nC);
+  for (int i = 0; i < nC; i++) {
+    string chainID, segID;
+    getline(ifs, chainID, '\0'); getline(ifs, segID, '\0');
+    Chain* chain = new Chain(chainID, segID); appendChain(chain);
+    MstUtils::readBin(ifs, nR);
+    for (int j = 0; j < nR; j++) {
+      getline(ifs, resname, '\0');
+      MstUtils::readBin(ifs, icode);
+      MstUtils::readBin(ifs, resnum);
+      Residue* residue = new Residue(resname, resnum, icode);
+      chain->appendResidue(residue);
+      MstUtils::readBin(ifs, nA);
+      for (int k = 0; k < nA; k++) {
+        getline(ifs, atomname, '\0');
+        MstUtils::readBin(ifs, alt);
+        MstUtils::readBin(ifs, x); MstUtils::readBin(ifs, y); MstUtils::readBin(ifs, z);
+        MstUtils::readBin(ifs, occ); MstUtils::readBin(ifs, B); MstUtils::readBin(ifs, het);
+        MstUtils::readBin(ifs, atominx); MstUtils::readBin(ifs, numAlt);
+        Atom* atom = new Atom(atominx, atomname, x, y, z, B, occ, (bool) het, alt);
+        residue->appendAtom(atom);
+        for (int ii = 0; ii < numAlt; ii++) {
+          MstUtils::readBin(ifs, x); MstUtils::readBin(ifs, y); MstUtils::readBin(ifs, z);
+          MstUtils::readBin(ifs, occ); MstUtils::readBin(ifs, B); MstUtils::readBin(ifs, alt);
+          atom->addAlternative(x, y, z, B, occ, alt);
+        }
+      }
     }
   }
 }
@@ -926,10 +1017,25 @@ CartesianPoint Atom::getCoor() const {
 }
 
 CartesianPoint Atom::getAltCoor(int altInd) const {
-  if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
+  if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltCoor");
   altInfo& targ = (*alternatives)[altInd];
   CartesianPoint coor(targ.x, targ.y, targ.z);
   return coor;
+}
+
+mstreal Atom::getAltB(int altInd) const {
+  if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltB");
+  return (*alternatives)[altInd].B;
+}
+
+mstreal Atom::getAltOcc(int altInd) const {
+  if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltOcc");
+  return (*alternatives)[altInd].occ;
+}
+
+char Atom::getAltLocID(int altInd) const {
+  if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltLocID");
+  return (*alternatives)[altInd].alt;
 }
 
 void Atom::setCoor(const CartesianPoint& xyz) {

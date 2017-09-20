@@ -53,4 +53,12 @@ int main(int argc, char** argv) {
   s1.writePDB(outBase + ".ch1.out.pdb");
   s1.deleteChain(c);
   s1.writePDB(outBase + ".ch2.out.pdb");
+
+  // write to binary data test
+  cout << "writing to/reading from binary file..." << endl;
+  Structure M(pdbFile);
+  M.writeData(outBase + ".bin");
+  Structure Mread;
+  Mread.readData(outBase + ".bin");
+  Mread.writePDB(outBase + ".bin.pdb");
 }
