@@ -359,7 +359,7 @@ int main(int argc, char *argv[]) {
   set<fasstSolution> matches = S.getMatches(); int i = 0;
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << *it << endl;
-    Structure match = S.getMatchStructure(*it, true);
+    Structure match = S.getMatchStructure(*it, true, FASST::matchType::WITHGAPS);
     match.writePDB("/tmp/match" + MstUtils::toString(i) + ".pdb");
   }
 }
@@ -399,12 +399,14 @@ void FASST::setMinNumMatches(int _min) {
 }
 
 void FASST::setMinGap(int i, int j, int gapLim) {
+  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the positive direction", "FASST::setMinGap");
   minGap[i][j] = gapLim;
   minGapSet[i][j] = true;
   gapConstSet = true;
 }
 
 void FASST::setMaxGap(int i, int j, int gapLim) {
+  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the positive direction", "FASST::setMinGap");
   maxGap[i][j] = gapLim;
   maxGapSet[i][j] = true;
   gapConstSet = true;
@@ -884,20 +886,48 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
         if (si + L > target.size()) {
           MstUtils::error("solution points to atom outside of target range", "FASST::getMatchStructures");
         }
-        for (int ai = si; ai < si + L; ai++) {
-          matchAtoms.push_back(target[ai]);
-        }
-        for (int ri = atomToResIdx(si); ri < atomToResIdx(si + L); ri++) {
-          Residue* res = target[resToAtomIdx(ri)]->getResidue();
-          if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
-          match.addResidue(res);
+        for (int ai = si; ai < si + L; ai++) matchAtoms.push_back(target[ai]);
+        switch(type) {
+          case matchType::REGION: {
+            for (int ri = atomToResIdx(si); ri < atomToResIdx(si + L); ri++) {
+              Residue* res = target[resToAtomIdx(ri)]->getResidue();
+              if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
+              match.addResidue(res);
+            }
+            break;
+          }
+          case matchType::WITHGAPS: {
+            // figure out the range of residues to excise from target structure
+            vector<bool> toInclude(targetStruct->residueSize());
+            for (int i = 0; i < query.size(); i++) {
+              // each individual segments should be included
+              for (int k = alignment[i]; k < alignment[i] + atomToResIdx(query[i].size()); k++) toInclude[k] = true;
+              // then some gaps also
+              for (int j = 0; j < query.size(); j++) {
+                if (i == j) continue;
+                // if gap constrained, fill in between these two segments
+                if (gapConstrained(i, j)) {
+                  if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchStructures");
+                  for (int k = alignment[i] + atomToResIdx(query[i].size()); k < alignment[j]; k++) {
+                    toInclude[k] = true;
+                  }
+                }
+              }
+            }
+            for (int ri = 0; ri < toInclude.size(); ri++) {
+              if (toInclude[ri]) match.addResidue(&(targetStruct->getResidue(ri)));
+            }
+            break;
+          }
+          case matchType::FULL:
+            match = *targetStruct;
+            break;
+          default:
+            MstUtils::error("unknown match output type", "FASST::getMatchStructures");
         }
       }
       // align matching region onto query, transforming the match itself
       rc.align(matchAtoms, queryAtoms, match);
     }
   }
-
-  // TODO: pay attention to matchType
-
 }
