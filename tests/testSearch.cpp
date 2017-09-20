@@ -233,9 +233,9 @@ class FASST {
     void resetGapConstraints();
     bool gapConstraintsExist() { return gapConstSet; }
     bool validateSearchRequest(); // make sure all user specified requirements are consistent
-    void getMatchStructure(const fasstSolution& sol, Structure& match, matchType type = matchType::REGION, bool detailed = false);
-    Structure getMatchStructure(const fasstSolution& sol, matchType type = matchType::REGION, bool detailed = false);
-    void getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, matchType type = matchType::REGION, bool detailed = false);
+    void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION);
+    Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION);
+    void getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
     // TODO
     // void writeDatabase(const string& dbFile);
     // void readDatabase(const string& dbFile);
@@ -359,7 +359,7 @@ int main(int argc, char *argv[]) {
   set<fasstSolution> matches = S.getMatches(); int i = 0;
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << *it << endl;
-    Structure match = S.getMatchStructure(*it);
+    Structure match = S.getMatchStructure(*it, true);
     match.writePDB("/tmp/match" + MstUtils::toString(i) + ".pdb");
   }
 }
@@ -816,17 +816,17 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
   return currResidual;
 }
 
-void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, matchType type, bool detailed) {
+void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed, matchType type) {
   vector<Structure> matches;
-  getMatchStructures(vector<fasstSolution>(1, sol), matches, type, detailed);
+  getMatchStructures(vector<fasstSolution>(1, sol), matches, detailed, type);
   match = matches[0];
 }
 
-Structure FASST::getMatchStructure(const fasstSolution& sol, matchType type, bool detailed) {
-  Structure match; getMatchStructure(sol, match, type, detailed); return match;
+Structure FASST::getMatchStructure(const fasstSolution& sol, bool detailed, matchType type) {
+  Structure match; getMatchStructure(sol, match, detailed, type); return match;
 }
 
-void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, matchType type, bool detailed) {
+void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, bool detailed, matchType type) {
   // hash solutions by the target they come from, to visit each target only once
   map<int, vector<int> > solsFromTarget;
   for (int i = 0; i < sols.size(); i++) {
@@ -850,18 +850,19 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
   matches.resize(sols.size(), Structure());
   for (auto it = solsFromTarget.begin(); it != solsFromTarget.end(); ++it) {
     int idx = it->first;
-    Structure& targetStruct = *(targetStructs[idx]);
+    Structure* targetStruct = targetStructs[idx];
     AtomPointerVector& target = targets[idx];
     bool reread = detailed && targetSource[idx].memSave; // should we re-read the target structure?
     if (reread) {
       // re-read structure
       if (targetSource[idx].type == targetFileType::PDB) {
         dummy.reset();
-        dummy.readPDB(targetSource[idx].file);
+        dummy.readPDB(targetSource[idx].file, "QUIET");
+        tr[idx].apply(dummy);
       } else {
         MstUtils::error("don't know how to read target of this type", "ASST::getMatchStructures");
       }
-      targetStruct = dummy;
+      targetStruct = &dummy;
     }
 
     // visit each solution from this target
@@ -883,10 +884,12 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
         if (si + L > target.size()) {
           MstUtils::error("solution points to atom outside of target range", "FASST::getMatchStructures");
         }
-        for (int ai = si; ai < si + L; ai++) matchAtoms.push_back(target[ai]);
+        for (int ai = si; ai < si + L; ai++) {
+          matchAtoms.push_back(target[ai]);
+        }
         for (int ri = atomToResIdx(si); ri < atomToResIdx(si + L); ri++) {
           Residue* res = target[resToAtomIdx(ri)]->getResidue();
-          if (reread) res = &(targetStruct.getResidue(res->getResidueIndex()));
+          if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
           match.addResidue(res);
         }
       }

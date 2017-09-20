@@ -844,14 +844,14 @@ int Residue::getResidueIndex() const {
   bool found = false;
   for (int i = 0; i < parentStructure->chainSize(); i++) {
     Chain& chain = (*parentStructure)[i];
-    if (&chain  == parentChain) {
+    if (&chain == parentChain) {
       n += chain.getResidueIndex(this);
       found = true;
       break;
     }
     n += chain.residueSize();
   }
-  if (!found) MstUtils::error("residue not from Structure '" + MstUtils::toString(this) + "'", "Structure::getResidueIndex()");
+  if (!found) MstUtils::error("residue not in its parent Structure '" + MstUtils::toString(this) + "'", "Residue::getResidueIndex()");
 
   return n;
 }
