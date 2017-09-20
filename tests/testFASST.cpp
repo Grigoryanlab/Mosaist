@@ -15,8 +15,8 @@ int main(int argc, char *argv[]) {
   op.setOptions(argc, argv);
 
   FASST S;
-  cout << "Building the database..." << endl;
-  auto beginDB = chrono::high_resolution_clock::now();
+  cout << "Reading the database..." << endl;
+  auto begin = chrono::high_resolution_clock::now();
   S.setQuery(op.getString("q"));
   S.setMemorySaveMode(true);
   if (op.isGiven("d")) {
@@ -32,25 +32,18 @@ int main(int argc, char *argv[]) {
   S.setRMSDCutoff(op.getReal("r"));
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
-  S.setMaxGap(0, 1, 10); S.setMinGap(0, 1, 0);
-  auto endDB = chrono::high_resolution_clock::now();
-  cout << "Took " << chrono::duration_cast<std::chrono::milliseconds>(endDB-beginDB).count() << " ms" << endl;
+  // S.setMaxGap(0, 1, 10); S.setMinGap(0, 1, 0);
+  auto end = chrono::high_resolution_clock::now();
+  cout << "DB reading took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "Searching..." << endl;
-  if (false) {
-    int N = 10;
-    for (int i = 0; i < N; i++) {
-      mstreal d = i*20.0/(N-1) + (N-i-1)*5.0/(N-1);
-      cout << "Searching with grid spacing " << d << "..." << endl;
-      S.setGridSpacing(d);
-      S.search();
-    }
-  } else {
-    S.search();
-  }
+  begin = chrono::high_resolution_clock::now();
+  S.search();
+  end = chrono::high_resolution_clock::now();
+  cout << "Search took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "found " << S.numMatches() << " matches:" << endl;
   set<fasstSolution> matches = S.getMatches(); int i = 0;
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
-    cout << *it << endl;
+    cout << S.toString(*it) << endl;
     Structure match = S.getMatchStructure(*it, true, FASST::matchType::WITHGAPS);
     match.writePDB("/tmp/match" + MstUtils::toString(i) + ".pdb");
   }

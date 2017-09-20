@@ -134,6 +134,7 @@ class FASST {
     bool isMaxNumMatchesSet() { return (maxNumMatches > 0); }
     bool isMinNumMatchesSet() { return (minNumMatches >= 0); }
     set<fasstSolution> getMatches() { return solutions; }
+    string toString(const fasstSolution& sol);
 
     bool gapConstrained(int i, int j) { return (minGapSet[i][j] || maxGapSet[i][j]); }
     void setMinGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at list gapLim long] [segment j]

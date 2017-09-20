@@ -689,3 +689,9 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
     }
   }
 }
+
+string FASST::toString(const fasstSolution& sol) {
+  stringstream ss;
+  ss << std::setprecision(6) << std::fixed << sol.getRMSD() << " " << targetStructs[sol.getTargetIndex()]->getName() << " [" << MstUtils::vecToString(sol.getAlignment(), ", ") << "]";
+  return ss.str();
+}
