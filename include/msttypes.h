@@ -53,8 +53,8 @@ class Structure {
     void writePDB(fstream& ofs, string options = "") const;
     void writeData(const string& dataFile) const;
     void writeData(fstream& ofs) const;
-    void readData(const string& dataFile); // TODO
-    void readData(fstream& ifs);           // TODO
+    void readData(const string& dataFile);
+    void readData(fstream& ifs);
     void reset();
     Structure& operator=(const Structure& A);
 

@@ -304,7 +304,6 @@ void Structure::writePDB(fstream& ofs, string options) const {
 
 void Structure::writeData(const string& dataFile) const {
   fstream ofs; MstUtils::openFile(ofs, dataFile, fstream::out | fstream::binary, "Structure::writeData(const string&)");
-  // fstream ofs; MstUtils::openFile(ofs, dataFile, fstream::out, "Structure::writeData(const string&)");
   writeData(ofs);
   ofs.close();
 }

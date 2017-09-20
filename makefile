@@ -15,7 +15,7 @@ endif
 PYLIB = -L$(PYLIBPATH) -L$(LDIR) $(shell python-config --libs) -lboost_python -Wl,-whole-archive -lmst -Wl,-no-whole-archive
 PYOPTS = $(shell python-config --includes) -O2 -fPIC -std=c++11 -I$(INCDIR)
 
-SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem
+SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem mstfasst
 OBJECTS = $(patsubst %,$(ODIR)/%.o, $(SOURCE))
 PROGRAMS = master createPDS parsePDS
 
@@ -40,6 +40,7 @@ tests: $(OBJECTS)
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testAutofuser.cpp -o bin/testAutofuser
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o $(ODIR)/msttransforms.o $(ODIR)/mstfasst.o tests/testFASST.cpp -o bin/testFASST
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstsystem.o programs/renumber.cpp -o bin/renumber
 
 libs: $(OBJECTS)
