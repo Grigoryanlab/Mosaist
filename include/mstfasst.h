@@ -43,19 +43,19 @@ class FASST {
   public:
     enum matchType { REGION = 1, FULL, WITHGAPS };
     enum searchType { CA = 1, FULLBB };
-    enum targetFileType { PDB = 1, BINDATABASE };
+    enum targetFileType { PDB = 1, BINDATABASE, STRUCTURE };
 
     class targetInfo {
       public:
-        targetInfo(const string& _file, targetFileType _type, int _index, bool _memSave) {
-          file = _file; type = _type; index = _index; memSave = _memSave;
+        targetInfo(const string& _file, targetFileType _type, int _loc, bool _memSave) {
+          file = _file; type = _type; loc = _loc; memSave = _memSave;
         }
         targetInfo(const targetInfo& I) {
-          file = I.file; type = I.type; index = I.index; memSave = I.memSave;
+          file = I.file; type = I.type; loc = I.loc; memSave = I.memSave;
         }
         string file;         // source file
         targetFileType type; // file type (PDB or database)
-        int index;           // location info within file
+        int loc;             // location info within file
         bool memSave;        // was the target read with memory save on?
     };
 
@@ -117,8 +117,11 @@ class FASST {
 
     ~FASST();
     FASST();
+    // TODO: enable checking for continuity of gaps
     void setQuery(const string& pdbFile);
+    void setQuery(const Structure& Q);
     Structure getQuery() { return queryStruct; }
+    void addTarget(const Structure& T);
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
     void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
@@ -144,11 +147,13 @@ class FASST {
     bool validateSearchRequest(); // make sure all user specified requirements are consistent
     void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION);
     Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION);
+    void getMatchStructures(const set<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
     void getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
     void writeDatabase(const string& dbFile);
     void readDatabase(const string& dbFile);
 
   protected:
+    void processQuery();
     void setCurrentRMSDCutoff(mstreal cut);
     void prepForSearch(int ti);
     bool parseChain(const Chain& S, AtomPointerVector& searchable);

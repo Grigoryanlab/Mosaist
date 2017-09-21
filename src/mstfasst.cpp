@@ -173,6 +173,15 @@ bool FASST::validateSearchRequest() {
 void FASST::setQuery(const string& pdbFile) {
   queryStruct.reset();
   queryStruct.readPDB(pdbFile);
+  processQuery();
+}
+
+void FASST::setQuery(const Structure& Q) {
+  queryStruct = Q;
+  processQuery();
+}
+
+void FASST::processQuery() {
   querySize = 0;
   // auto-splitting segments by connectivity, but can do diffeerntly
   queryStruct = queryStruct.reassignChainsByConnectivity();
@@ -214,6 +223,12 @@ void FASST::setQuery(const string& pdbFile) {
 void FASST::addTarget(const string& pdbFile) {
   Structure* targetStruct = new Structure(pdbFile, "QUIET");
   targetSource.push_back(targetInfo(pdbFile, targetFileType::PDB, 0, memSave));
+  addTargetStructure(targetStruct);
+}
+
+void FASST::addTarget(const Structure& T) {
+  Structure* targetStruct = new Structure(T);
+  targetSource.push_back(targetInfo(pdbFile, targetFileType::STRUCTURE, 0, memSave));
   addTargetStructure(targetStruct);
 }
 
@@ -586,6 +601,13 @@ Structure FASST::getMatchStructure(const fasstSolution& sol, bool detailed, matc
   Structure match; getMatchStructure(sol, match, detailed, type); return match;
 }
 
+void FASST::getMatchStructures(const set<fasstSolution>& sols, vector<Structure>& matches, bool detailed, matchType type) {
+  vector<fasstSolution> vec; vec.reserve(sols.size());
+  int i = 0;
+  for (auto it = sols.begin(); it != sols.end(); ++it, ++i) vec[i] = *it;
+  getMatchStructures(vec, matches, detailed, type);
+}
+
 void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, bool detailed, matchType type) {
   // hash solutions by the target they come from, to visit each target only once
   map<int, vector<int> > solsFromTarget;
@@ -614,14 +636,21 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
     AtomPointerVector& target = targets[idx];
     bool reread = detailed && targetSource[idx].memSave; // should we re-read the target structure?
     if (reread) {
+      dummy.reset();
       // re-read structure
       if (targetSource[idx].type == targetFileType::PDB) {
-        dummy.reset();
         dummy.readPDB(targetSource[idx].file, "QUIET");
-        tr[idx].apply(dummy);
+      } else if (targetSource[idx].type == targetFileType::PDB) {
+        fstream ifs; MstUtils::openFile(ifs, targetSource[idx].file, fstream::in | fstream::binary, "FASST::getMatchStructures");
+        ofs.seekg(targetSource[idx].loc);
+        dummy.readData(ifs);
+        ofs.close();
+      } else if (targetSource[idx].type == targetFileType::STRUCTURE) {
+        MstUtils::error("cannot produce a detailed match if target was initialized from object", "FASST::getMatchStructures");
       } else {
-        MstUtils::error("don't know how to read target of this type", "ASST::getMatchStructures");
+        MstUtils::error("don't know how to re-read target of this type", "FASST::getMatchStructures");
       }
+      tr[idx].apply(dummy);
       targetStruct = &dummy;
     }
 

@@ -11,10 +11,10 @@ bool initialized = SeqTools::initConstants();
 
 int SeqTools::aaToIdx(const string aa) {
   if (aa.length() == 1) {
-    MstUtils::assert(aa1ToIdx.find(aa) != aa1ToIdx.end(), "unrecognized single-letter amino acid '" + aa + "'", "SeqTools::aaToIdx");
+    if (aa1ToIdx.find(aa) == aa1ToIdx.end()) return -1;
     return aa1ToIdx[aa];
   } else if (aa.length() == 3) {
-    MstUtils::assert(aa3ToIdx.find(aa) != aa3ToIdx.end(), "unrecognized three-letter amino acid '" + aa + "'", "SeqTools::aaToIdx");
+    if (aa3ToIdx.find(aa) == aa3ToIdx.end()) return -1;
     return aa3ToIdx[aa];
   }
   MstUtils::error("uknown amino acid '" + aa + "'", "SeqTools::aaToIdx");
