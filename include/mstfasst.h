@@ -115,6 +115,19 @@ class FASST {
         int numIn;
     };
 
+    /* TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
+     * TODO: Jianfu and Craig will look for fast ways of NN searches in Hamming distnce space
+     * TODO: goal is to define redundancy as follows:
+     * 1. define the redundancy of each segment alignment separately
+     * 2. if a segment is shorter than L, expand it to L (L = 30)
+     * 3. compute RMSD between these L residues. If it is above 1.5 A, then the
+     *    two alignments are different, so done. If it is below, then do an
+     *    ungapped sequence alignment and judge by the score.
+     * 4. some windows will not be expandable (hit a chain terminus), in which
+     *    case we will compare the common portion of any two windows. Both the
+     *    RMSD cutoff and the sequence identity cutoff have to scale.
+     * TODO: need to define chain ends. Do so via the standard information. */
+
     ~FASST();
     FASST();
     // TODO: enable checking for continuity of gaps

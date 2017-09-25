@@ -366,7 +366,7 @@ void FASST::prepForSearch(int ti) {
     ps[i].dropAllPoints();
     AtomPointerVector& seg = query[i];
     int Na = atomToResIdx(target.size()) - atomToResIdx(seg.size()) + 1; // number of possible alignments
-    segmentResiduals[i].resize(Na);
+    segmentResiduals[i].resize(MstUtils::max(Na, 0));
     for (int j = 0; j < Na; j++) {
       // NOTE: can save on this in several ways:
       // 1. the centroid calculation is effectively already done inside RMSDCalculator::bestRMSD
