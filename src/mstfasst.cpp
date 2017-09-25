@@ -228,7 +228,7 @@ void FASST::addTarget(const string& pdbFile) {
 
 void FASST::addTarget(const Structure& T) {
   Structure* targetStruct = new Structure(T);
-  targetSource.push_back(targetInfo(pdbFile, targetFileType::STRUCTURE, 0, memSave));
+  targetSource.push_back(targetInfo(T.getName(), targetFileType::STRUCTURE, 0, memSave));
   addTargetStructure(targetStruct);
 }
 
@@ -640,11 +640,11 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
       // re-read structure
       if (targetSource[idx].type == targetFileType::PDB) {
         dummy.readPDB(targetSource[idx].file, "QUIET");
-      } else if (targetSource[idx].type == targetFileType::PDB) {
+      } else if (targetSource[idx].type == targetFileType::BINDATABASE) {
         fstream ifs; MstUtils::openFile(ifs, targetSource[idx].file, fstream::in | fstream::binary, "FASST::getMatchStructures");
-        ofs.seekg(targetSource[idx].loc);
+        ifs.seekg(targetSource[idx].loc);
         dummy.readData(ifs);
-        ofs.close();
+        ifs.close();
       } else if (targetSource[idx].type == targetFileType::STRUCTURE) {
         MstUtils::error("cannot produce a detailed match if target was initialized from object", "FASST::getMatchStructures");
       } else {

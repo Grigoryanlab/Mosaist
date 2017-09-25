@@ -17,7 +17,7 @@ class Sequence {
     string getElement(int i, bool triple = false);
     int& operator[] (int i) { return seq[i]; }
     int length() const { return seq.size(); }
-    void appendResidue(const string& aa) { seq.push_back(SeqTools::aaToIdx(aa)); }
+    void appendResidue(const string& aa);
 
   private:
     vector<int> seq;

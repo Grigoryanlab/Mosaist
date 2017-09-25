@@ -168,6 +168,10 @@ Sequence::Sequence(const Sequence& S) {
   seq = S.seq;
 }
 
+void Sequence::appendResidue(const string& aa) {
+  seq.push_back(SeqTools::aaToIdx(aa));
+}
+
 string Sequence::toString(bool triple, const string& delim) {
 	string s;
 	for (int i = 0; i < seq.size(); i++) {
