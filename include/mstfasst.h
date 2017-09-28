@@ -148,7 +148,7 @@ class FASST {
     int getMaxNumMatches() { return maxNumMatches; }
     int getMinNumMatches() { return minNumMatches; }
     bool isMaxNumMatchesSet() { return (maxNumMatches > 0); }
-    bool isMinNumMatchesSet() { return (minNumMatches >= 0); }
+    bool isMinNumMatchesSet() { return (minNumMatches > 0); }
     set<fasstSolution> getMatches() { return solutions; }
     string toString(const fasstSolution& sol);
 
