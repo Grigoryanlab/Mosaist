@@ -2,7 +2,6 @@
 #define _MSTFASST_H
 
 #include "msttypes.h"
-#include "mstoptions.h"
 #include "msttransforms.h"
 #include <list>
 #include <chrono>

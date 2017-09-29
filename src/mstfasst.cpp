@@ -664,7 +664,8 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
       if (alignment.size() != query.size()) {
         MstUtils::error("solution alignment size inconsistent with number of query segments", "FASST::getMatchStructures");
       }
-      // walk over target alignment and pick out corresponding residues
+
+      // excise match atoms that superimpose onto the query, in the right order
       matchAtoms.resize(0);
       for (int k = 0; k < alignment.size(); k++) {
         // copy matching residues from the original target structure
@@ -674,45 +675,52 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
           MstUtils::error("solution points to atom outside of target range", "FASST::getMatchStructures");
         }
         for (int ai = si; ai < si + L; ai++) matchAtoms.push_back(target[ai]);
-        switch(type) {
-          case matchType::REGION: {
+      }
+
+      // cut out the part of the target Structure that will constitute the returned match
+      switch(type) {
+        case matchType::REGION: {
+          for (int k = 0; k < alignment.size(); k++) {
+            int si = resToAtomIdx(alignment[k]);
+            int L = query[k].size();
             for (int ri = atomToResIdx(si); ri < atomToResIdx(si + L); ri++) {
               Residue* res = target[resToAtomIdx(ri)]->getResidue();
               if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
               match.addResidue(res);
             }
-            break;
           }
-          case matchType::WITHGAPS: {
-            // figure out the range of residues to excise from target structure
-            vector<bool> toInclude(targetStruct->residueSize());
-            for (int i = 0; i < query.size(); i++) {
-              // each individual segments should be included
-              for (int k = alignment[i]; k < alignment[i] + atomToResIdx(query[i].size()); k++) toInclude[k] = true;
-              // then some gaps also
-              for (int j = 0; j < query.size(); j++) {
-                if (i == j) continue;
-                // if gap constrained, fill in between these two segments
-                if (gapConstrained(i, j)) {
-                  if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchStructures");
-                  for (int k = alignment[i] + atomToResIdx(query[i].size()); k < alignment[j]; k++) {
-                    toInclude[k] = true;
-                  }
+          break;
+        }
+        case matchType::WITHGAPS: {
+          // figure out the range of residues to excise from target structure
+          vector<bool> toInclude(targetStruct->residueSize());
+          for (int i = 0; i < query.size(); i++) {
+            // each individual segments should be included
+            for (int k = alignment[i]; k < alignment[i] + atomToResIdx(query[i].size()); k++) toInclude[k] = true;
+            // then some gaps also
+            for (int j = 0; j < query.size(); j++) {
+              if (i == j) continue;
+              // if gap constrained, fill in between these two segments
+              if (gapConstrained(i, j)) {
+                if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchStructures");
+                for (int k = alignment[i] + atomToResIdx(query[i].size()); k < alignment[j]; k++) {
+                  toInclude[k] = true;
                 }
               }
             }
-            for (int ri = 0; ri < toInclude.size(); ri++) {
-              if (toInclude[ri]) match.addResidue(&(targetStruct->getResidue(ri)));
-            }
-            break;
           }
-          case matchType::FULL:
-            match = *targetStruct;
-            break;
-          default:
-            MstUtils::error("unknown match output type", "FASST::getMatchStructures");
+          for (int ri = 0; ri < toInclude.size(); ri++) {
+            if (toInclude[ri]) match.addResidue(&(targetStruct->getResidue(ri)));
+          }
+          break;
         }
+        case matchType::FULL:
+          match = *targetStruct;
+          break;
+        default:
+          MstUtils::error("unknown match output type", "FASST::getMatchStructures");
       }
+
       // align matching region onto query, transforming the match itself
       rc.align(matchAtoms, queryAtoms, match);
     }
