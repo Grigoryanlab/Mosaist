@@ -85,7 +85,7 @@ void ConFind::cache(Residue* res) {
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
   if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
-    MstUtils::error("cannot build rotamers at position " + MstUtils::toString(res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
+    MstUtils::error("cannot build rotamers at position " + MstUtils::toString(*res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
   }
   mstreal phi = res->getPhi(false); mstreal psi = res->getPsi(false);
 
