@@ -134,14 +134,14 @@ void FASST::setMinNumMatches(int _min) {
 }
 
 void FASST::setMinGap(int i, int j, int gapLim) {
-  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the positive direction", "FASST::setMinGap");
+  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
   minGap[i][j] = gapLim;
   minGapSet[i][j] = true;
   gapConstSet = true;
 }
 
 void FASST::setMaxGap(int i, int j, int gapLim) {
-  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the positive direction", "FASST::setMinGap");
+  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
   maxGap[i][j] = gapLim;
   maxGapSet[i][j] = true;
   gapConstSet = true;
@@ -492,10 +492,10 @@ void FASST::search() {
           bool levelExhausted = false;
           for (int j = 0; j < recLevel; j++) {
             for (int i = recLevel; i < query.size(); i++) {
-              if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j]);
-              if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j]);
-              if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i]);
-              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[j][i]);
+              if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - 1);
+              if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - 1);
+              if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + 1);
+              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + 1);
               if (remOptions[recLevel][i].empty()) {
                 recLevel--;
                 levelExhausted = true;
