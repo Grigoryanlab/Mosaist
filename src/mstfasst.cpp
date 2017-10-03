@@ -70,6 +70,10 @@ void FASST::optList::removeOption(int k) {
   }
 }
 
+void FASST::optList::removeOptions(int b, int e) {
+  for (int k = b; k <= e; k++) removeOption(k);
+}
+
 void FASST::optList::removeAllOptions() {
   for (int i = 0; i < isIn.size(); i++) isIn[i] = false;
   numIn = 0;
@@ -435,13 +439,14 @@ mstreal FASST::centToCentTol(int i, int j, bool recomputeResidual, bool recomput
 }
 
 void FASST::search() {
+  // auto begin = chrono::high_resolution_clock::now();
+  // int prepTime = 0;
   validateSearchRequest();
   if (isMinNumMatchesSet()) setCurrentRMSDCutoff(999.0);
   else setCurrentRMSDCutoff(rmsdCutRequested);
-
   solutions.clear();
-  // auto begin = chrono::high_resolution_clock::now();
-  // int prepTime = 0;
+  vector<int> segLen(query.size()); // number of residues in each query segment
+  for (int i = 0; i < query.size(); i++) segLen[i] = atomToResIdx(query[i].size());
   for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
     // auto beginPrep = chrono::high_resolution_clock::now();
     prepForSearch(currentTarget);
@@ -486,16 +491,21 @@ void FASST::search() {
         // copy remaining options from the previous recursion level. This way,
         // we can compute bounds on this level and can do set intersections to
         // further narrow this down
-        for (int i = recLevel; i < query.size(); i++) remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
+        for (int i = recLevel; i < query.size(); i++) {
+          remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
+          // except that segments cannot overlap, so remove from consideration
+          // all alignments that overlap with the segments that was just placed
+          remOptions[recLevel][i].removeOptions(MstUtils::max(0, currAlignment[recLevel - 1] - segLen[i] + 1), currAlignment[recLevel - 1] + segLen[recLevel - 1] - 1);
+        }
         // if any gap constraints exist, limit options at this recursion level accordingly
         if (gapConstraintsExist()) {
           bool levelExhausted = false;
           for (int j = 0; j < recLevel; j++) {
             for (int i = recLevel; i < query.size(); i++) {
-              if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - 1);
-              if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - 1);
-              if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + 1);
-              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + 1);
+              if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
+              if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
+              if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
+              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
               if (remOptions[recLevel][i].empty()) {
                 recLevel--;
                 levelExhausted = true;

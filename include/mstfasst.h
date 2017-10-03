@@ -87,6 +87,7 @@ class FASST {
         void removeAllOptions();
         // copy the valid options from a different set of the same options
         void copyIn(const optList& opt);
+        void removeOptions(int b, int e);
         void removeOption(int k);
         mstreal bestCost() { return costs[bestCostRank]; }
         int bestChoice() { return rankToIdx[bestCostRank]; }

@@ -67,4 +67,4 @@ $(ODIR)/mstpython.o: $(SDIR)/mstpython.cpp makefile
 .PHONY: clean
 
 clean:
-	rm -f $(ODIR)/*.o $(ODIR)/*.so
+	rm -f $(ODIR)/*.o $(ODIR)/*.so lib/*.a
