@@ -71,7 +71,7 @@ void FASST::optList::removeOption(int k) {
 }
 
 void FASST::optList::removeOptions(int b, int e) {
-  for (int k = b; k <= e; k++) removeOption(k);
+  for (int k = MstUtils::max(b, 0); k <= MstUtils::min(e, totNumOptions() - 1); k++) removeOption(k);
 }
 
 void FASST::optList::removeAllOptions() {
@@ -495,7 +495,8 @@ void FASST::search() {
           remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
           // except that segments cannot overlap, so remove from consideration
           // all alignments that overlap with the segments that was just placed
-          remOptions[recLevel][i].removeOptions(MstUtils::max(0, currAlignment[recLevel - 1] - segLen[i] + 1), currAlignment[recLevel - 1] + segLen[recLevel - 1] - 1);
+          remOptions[recLevel][i].removeOptions(currAlignment[recLevel - 1] - segLen[i] + 1,
+                                                currAlignment[recLevel - 1] + segLen[recLevel - 1] - 1);
         }
         // if any gap constraints exist, limit options at this recursion level accordingly
         if (gapConstraintsExist()) {
