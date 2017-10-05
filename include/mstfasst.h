@@ -200,7 +200,7 @@ class FASST {
     int recLevel;
     int atomsPerRes;
     searchType type;
-    vector<string> searchableAtomTypes;
+    vector<vector<string> > searchableAtomTypes;
     int querySize;
     int maxNumMatches, minNumMatches;
 

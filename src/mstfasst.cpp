@@ -71,7 +71,9 @@ void FASST::optList::removeOption(int k) {
 }
 
 void FASST::optList::removeOptions(int b, int e) {
-  for (int k = MstUtils::max(b, 0); k <= MstUtils::min(e, totNumOptions() - 1); k++) removeOption(k);
+  if (b < 0) b = 0;
+  if (e >= totNumOptions()) e = totNumOptions() - 1;
+  for (int k = b; k <= e; k++) removeOption(k);
 }
 
 void FASST::optList::removeAllOptions() {
@@ -277,7 +279,10 @@ bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable) {
       case searchType::FULLBB: {
         AtomPointerVector bb;
         for (int k = 0; k < searchableAtomTypes.size(); k++) {
-          Atom* a = res.findAtom(searchableAtomTypes[k], false);
+          Atom* a = NULL;
+          for (int kk = 0; kk < searchableAtomTypes[k].size(); kk++) {
+            if ((a = res.findAtom(searchableAtomTypes[k][kk], false)) != NULL) break;
+          }
           if (a == NULL) { foundAll = false; break; }
           bb.push_back(a);
         }
@@ -313,10 +318,10 @@ void FASST::setSearchType(searchType _searchType) {
   type = _searchType;
   switch(type) {
     case searchType::CA:
-      searchableAtomTypes =  {"CA"};
+      searchableAtomTypes =  {{"CA"}};
       break;
     case searchType::FULLBB:
-      searchableAtomTypes =  {"N", "CA", "C", "O"};
+      searchableAtomTypes =  {{"N", "NT"}, {"CA"}, {"C"}, {"O", "OT1", "OT2", "OXT"}};
       break;
     default:
       MstUtils::error("uknown search type '" + MstUtils::toString(type) + "' specified", "FASST::setSearchType");
@@ -331,8 +336,20 @@ void FASST::stripSidechains(Structure& S) {
       Residue& R = C[j];
       int n = R.atomSize();
       for (int k = 0; k < n; k++) {
-        Atom& A = R[k];
-        if (A.isNamed("N") || A.isNamed("CA") || A.isNamed("C") || A.isNamed("O")) continue;
+        char* name = R[k].getNameC();
+        if (strlen(name)) { // check that it's okay to index atom name string
+          switch (name[0]) {
+            case 'N':
+              if (!strcmp(name, "N") || !strcmp(name, "NT")) continue;
+              break;
+            case 'C':
+              if (!strcmp(name, "C") || !strcmp(name, "CA")) continue;
+              break;
+            case 'O':
+              if (!strcmp(name, "O") || !strcmp(name, "OT1") || !strcmp(name, "OT2") || !strcmp(name, "OXT")) continue;
+              break;
+          }
+        }
         R.deleteAtom(k);
         k--; n--;
       }
