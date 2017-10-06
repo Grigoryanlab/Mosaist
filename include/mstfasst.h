@@ -89,7 +89,7 @@ class FASST {
         void copyIn(const optList& opt);
         void removeOptions(int b, int e);
         void removeOption(int k);
-        mstreal bestCost() { return costs[bestCostRank]; }
+        mstreal bestCost() { return (numIn == 0) ? 0.0 : costs[bestCostRank]; }
         int bestChoice() { return rankToIdx[bestCostRank]; }
         int totNumOptions() { return costs.size(); }
         int numOptions() { return numIn; }

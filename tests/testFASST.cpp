@@ -45,6 +45,6 @@ int main(int argc, char *argv[]) {
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << S.toString(*it) << endl;
     Structure match = S.getMatchStructure(*it, true, FASST::matchType::FULL);
-    match.writePDB("/tmp/match" + MstUtils::toString(i) + ".pdb");
+//    match.writePDB("/tmp/match" + MstUtils::toString(i) + ".pdb");
   }
 }
