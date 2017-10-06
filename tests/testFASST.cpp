@@ -38,8 +38,6 @@ int main(int argc, char *argv[]) {
   cout << "Searching..." << endl;
   begin = chrono::high_resolution_clock::now();
   S.search();
-S.setQuery(op.getString("q"));
-S.search();
   end = chrono::high_resolution_clock::now();
   cout << "Search took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "found " << S.numMatches() << " matches:" << endl;

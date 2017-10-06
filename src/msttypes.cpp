@@ -2386,10 +2386,10 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
   dmin2 = dmin*dmin; dmax2 = dmax*dmax;
   int i, j, k, ii, pi;
   for (i = iOutLo; i <= iOutHi; i++) {
-    insi = (i >= iInLo) && (i <= iInHi);
+    insi = (i > iInLo) && (i < iInHi);
     vector<vector<vector<int> > >& Bi = buckets[i];
     for (j = jOutLo; j <= jOutHi; j++) {
-      ins = insi && (j >= jInLo) && (j <= jInHi);
+      ins = insi && (j > jInLo) && (j < jInHi);
       vector<vector<int> >& Bij = Bi[j];
       for (k = kOutLo; k <= kOutHi; k++) {
         vector<int>& Bijk = Bij[k];
