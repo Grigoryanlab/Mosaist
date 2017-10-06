@@ -212,7 +212,7 @@ void FASST::processQuery() {
   }
 
   // set query masks (subsets of query segments involved at each recursion level)
-  queryMasks.resize(query.size());
+  queryMasks.clear(); queryMasks.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
     for (int L = i; L < query.size(); L++) {
       for (int j = 0; j < query[i].size(); j++) {

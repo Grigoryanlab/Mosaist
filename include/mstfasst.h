@@ -115,7 +115,8 @@ class FASST {
         int numIn;
     };
 
-    /* TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
+    /* TODO: add setSufficientNumMatches(int) 
+     * TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
      * TODO: Jianfu and Craig will look for fast ways of NN searches in Hamming distnce space
      * TODO: goal is to define redundancy as follows:
      * 1. define the redundancy of each segment alignment separately
