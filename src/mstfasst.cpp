@@ -477,14 +477,13 @@ void FASST::search() {
   solutions.clear();
   vector<int> segLen(query.size()); // number of residues in each query segment
   for (int i = 0; i < query.size(); i++) segLen[i] = atomToResIdx(query[i].size());
-  for (int currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
+  for (currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
     // auto beginPrep = chrono::high_resolution_clock::now();
     prepForSearch(currentTarget);
     // auto endPrep = chrono::high_resolution_clock::now();
     // prepTime += chrono::duration_cast<std::chrono::microseconds>(endPrep-beginPrep).count();
-    AtomPointerVector& target = targets[currentTarget];
     vector<int> okLocations, badLocations;
-    okLocations.reserve(target.size()); badLocations.reserve(target.size());
+    okLocations.reserve(targets[currentTarget].size()); badLocations.reserve(targets[currentTarget].size());
     while (true) {
       // Have to do three things:
       // 1. pick the best choice (from available ones) for the current segment,
@@ -500,18 +499,11 @@ void FASST::search() {
       }
       currAlignment[recLevel] = remOptions[recLevel][recLevel].bestChoice();
       remOptions[recLevel][recLevel].removeOption(currAlignment[recLevel]);
-      // fill up sub-alignment with target atoms
-      int N = targetMasks[recLevel].size();
-      int n = query[recLevel].size();
-      int si = resToAtomIdx(currAlignment[recLevel]);
-      for (int i = 0; i < n; i++) {
-        targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
-      }
 
       // 2. compute the total residual from the current alignment
       mstreal curBound = currentAlignmentResidual(true) + boundOnRemainder(true);
       if (curBound > residualCut) continue;
-      updateQueryCentroids();
+      if (query.size() > 1) updateQueryCentroids();
 
       // 3. update update remaining options for subsequent segments based on the
       // newly made choice. The set of options on the next recursion level is a
@@ -624,8 +616,22 @@ void FASST::search() {
 
 mstreal FASST::currentAlignmentResidual(bool compute) {
   if (compute) {
-    // the last true sets the transformation matrices
-    currResidual = RC.bestResidual(queryMasks[recLevel], targetMasks[recLevel], true);
+    if (query.size() == 1) {
+      // this is a special case, because will not need to calculate centroid
+      // locations for subsequent segments (since there are no other segments)
+      currResidual = segmentResiduals[0][currAlignment[0]];
+    } else {
+      // fill up sub-alignment with target atoms
+      int N = targetMasks[recLevel].size();
+      int n = query[recLevel].size();
+      int si = resToAtomIdx(currAlignment[recLevel]);
+      AtomPointerVector& target = targets[currentTarget];
+      for (int i = 0; i < n; i++) {
+        targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
+      }
+      // the last true sets the transformation matrices
+      currResidual = RC.bestResidual(queryMasks[recLevel], targetMasks[recLevel], true);
+    }
   }
   return currResidual;
 }

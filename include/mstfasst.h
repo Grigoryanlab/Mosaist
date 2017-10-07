@@ -194,6 +194,7 @@ class FASST {
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
     bool memSave;                            // save memory by storing only the backbone of targets?
+    int currentTarget;                       // the index of the target currently being searched for
 
     vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
     vector<vector<bool> > minGapSet, maxGapSet;
