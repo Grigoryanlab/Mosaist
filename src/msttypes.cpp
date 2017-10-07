@@ -1918,28 +1918,33 @@ bool RMSDCalculator::Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_r
     }
 
     //compute e0 and matrix r
-    for (m=0; m<n; m++) {
-        e0 += (_align[m]->getX()-xc[0])*(_align[m]->getX()-xc[0]) \
-          +(_ref[m]->getX()-yc[0])*(_ref[m]->getX()-yc[0]);
-        e0 += (_align[m]->getY()-xc[1])*(_align[m]->getY()-xc[1]) \
-          +(_ref[m]->getY()-yc[1])*(_ref[m]->getY()-yc[1]);
-        e0 += (_align[m]->getZ()-xc[2])*(_align[m]->getZ()-xc[2]) \
-          +(_ref[m]->getZ()-yc[2])*(_ref[m]->getZ()-yc[2]);
-        r[0][0] += (_ref[m]->getX() - yc[0])*(_align[m]->getX() - xc[0]);
-        r[0][1] += (_ref[m]->getX() - yc[0])*(_align[m]->getY() - xc[1]);
-        r[0][2] += (_ref[m]->getX() - yc[0])*(_align[m]->getZ() - xc[2]);
-        r[1][0] += (_ref[m]->getY() - yc[1])*(_align[m]->getX() - xc[0]);
-        r[1][1] += (_ref[m]->getY() - yc[1])*(_align[m]->getY() - xc[1]);
-        r[1][2] += (_ref[m]->getY() - yc[1])*(_align[m]->getZ() - xc[2]);
-        r[2][0] += (_ref[m]->getZ() - yc[2])*(_align[m]->getX() - xc[0]);
-        r[2][1] += (_ref[m]->getZ() - yc[2])*(_align[m]->getY() - xc[1]);
-        r[2][2] += (_ref[m]->getZ() - yc[2])*(_align[m]->getZ() - xc[2]);
+    mstreal ax, ay, az, rx, ry, rz;
+    for (m = 0; m < n; m++) {
+      ax = _align[m]->getX() - xc[0];
+      ay = _align[m]->getY() - xc[1];
+      az = _align[m]->getZ() - xc[2];
+      rx = _ref[m]->getX() - yc[0];
+      ry = _ref[m]->getY() - yc[1];
+      rz = _ref[m]->getZ() - yc[2];
+      e0 += ax * ax + rx * rx;
+      e0 += ay * ay + ry * ry;
+      e0 += az * az + rz * rz;
+      r[0][0] += rx * ax;
+      r[0][1] += rx * ay;
+      r[0][2] += rx * az;
+      r[1][0] += ry * ax;
+      r[1][1] += ry * ay;
+      r[1][2] += ry * az;
+      r[2][0] += rz * ax;
+      r[2][1] += rz * ay;
+      r[2][2] += rz * az;
     }
+
     //compute determinat of matrix r
     det = r[0][0] * ( r[1][1]*r[2][2] - r[1][2]*r[2][1] )       \
-    - r[0][1] * ( r[1][0]*r[2][2] - r[1][2]*r[2][0] )       \
-    + r[0][2] * ( r[1][0]*r[2][1] - r[1][1]*r[2][0] );
-    sigma=det;
+        - r[0][1] * ( r[1][0]*r[2][2] - r[1][2]*r[2][0] )       \
+        + r[0][2] * ( r[1][0]*r[2][1] - r[1][1]*r[2][0] );
+    sigma = det;
 
     //compute tras(r)*r
     m = 0;
