@@ -465,7 +465,7 @@ mstreal FASST::boundOnRemainder(bool compute) {
 mstreal FASST::centToCentTol(int i, bool recomputeResidual, bool recomputeBound) {
   mstreal remRes = residualCut - currentAlignmentResidual(recomputeResidual) - boundOnRemainder(recomputeBound);
   if (remRes < 0) return -1.0;
-  return sqrt((remRes * (queryMasks[recLevel].size() + query[i].size())) / (queryMasks[recLevel].size() * query[i].size()));
+  return sqrt((remRes * (queryMasks[recLevel - 1].size() + query[i].size())) / (queryMasks[recLevel - 1].size() * query[i].size()));
 }
 
 void FASST::search() {

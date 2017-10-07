@@ -116,7 +116,7 @@ class FASST {
     };
 
     /* TODO: add setSufficientNumMatches(int)
-     * TODO: make sure there isn't a ton of overhead for single-segment searches
+     * TODO: implement and try out the QCP RMSD calculation algorithm (by Theobold)
      * TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
      * TODO: pre-sort query segments in order of decreasing size (remember original oder); check performance
      * TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
@@ -179,6 +179,10 @@ class FASST {
     void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
     int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
+    /* This is a key function for the algorithm. It computes the maximal
+     * tollerable error in the distance between the centroid of any already
+     * placed segment and the to-be-placed segment i. So that means something
+     * has to have been placed before this function is called. */
     mstreal centToCentTol(int i, bool recomputeResidual = false, bool recomputeBound = false);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
