@@ -176,14 +176,15 @@ class FASST {
     bool parseChain(const Chain& S, AtomPointerVector& searchable);
     mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
-    void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
+    // void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
     int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
-    /* This is a key function for the algorithm. It computes the maximal
-     * tollerable error in the distance between the centroid of any already
-     * placed segment and the to-be-placed segment i. So that means something
-     * has to have been placed before this function is called. */
-    mstreal centToCentTol(int i, bool recomputeResidual = false, bool recomputeBound = false);
+    mstreal centToCentTol(int i, int j, bool recomputeResidual = false, bool recomputeBound = false);
+    // /* This is a key function for the algorithm. It computes the maximal
+    //  * tollerable error in the distance between the centroid of any already
+    //  * placed segment and the to-be-placed segment i. So that means something
+    //  * has to have been placed before this function is called. */
+    // mstreal centToCentTol(int i, bool recomputeResidual = false, bool recomputeBound = false);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     void stripSidechains(Structure& S);
@@ -192,7 +193,7 @@ class FASST {
     Structure queryStruct;
     vector<Structure*> targetStructs;
     vector<AtomPointerVector> query;         // just the part of the query that will be sought, split by segment
-    vector<AtomPointerVector> querySegCents; // palcehoder for centroids of query segments, at each recursion level
+    // vector<AtomPointerVector> querySegCents; // palcehoder for centroids of query segments, at each recursion level
     vector<AtomPointerVector> targets;       // just the part of the target structure that will be searched over
     vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
@@ -228,8 +229,10 @@ class FASST {
     // alignment indices for segments visited up to the current recursion level
     vector<int> currAlignment;
 
-    // the residual of the above alignment, computed and stored
+    // the residual of the above alignment, computed and stored; as well as
+    // broken by individual segment
     mstreal currResidual;
+    vector<mstreal> currSegResiduals;
 
     // the bound on the parts remaining to align, computed and stored
     mstreal currRemBound;

@@ -1053,6 +1053,11 @@ void Atom::setName(string _name) {
   strcpy(name, _name.c_str());
 }
 
+void Atom::setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z) {
+  altInfo& A = (*alternatives)[ai];
+  A.x = _x; A.y = _y; A.z = _z;
+}
+
 void Atom::swapWithAlternative(int altInd) {
   if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
   altInfo& targ = (*alternatives)[altInd];

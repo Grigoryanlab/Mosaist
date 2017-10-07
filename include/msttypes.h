@@ -311,6 +311,7 @@ class Atom {
     void setZ(mstreal _z) { z = _z; }
     void setCoor(mstreal _x, mstreal _y, mstreal _z) { x = _x; y = _y; z = _z; }
     void setCoor(const CartesianPoint& xyz);
+    void setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z);
     void setOcc(mstreal _occ) { occ = _occ; }
     void setB(mstreal _B) { B = _B; }
     void seetHet(bool _het) { het = _het; }

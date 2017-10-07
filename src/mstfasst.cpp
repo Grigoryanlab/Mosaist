@@ -205,6 +205,7 @@ void FASST::processQuery() {
   // center-to-center distances in the qyery
   centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
   for (int i = 0; i < query.size(); i++) {
+    for (int j = 0; j < query[i].size(); j++) query[i][j]->addAlternative(query[i][j]->getX(), query[i][j]->getY(), query[i][j]->getZ(), 0.0, 1.0);
     for (int j = i+1; j < query.size(); j++) {
       centToCentDist[i][j] = query[i].getGeometricCenter().distancenc(query[j].getGeometricCenter());
       centToCentDist[j][i] = centToCentDist[i][j];
@@ -222,18 +223,21 @@ void FASST::processQuery() {
   }
   updateGrids = true;
 
-  // room for storing query segment centroids at each recursion level
-  mstreal xc, yc, zc;
-  for (int i = 0; i < querySegCents.size(); i++) querySegCents[i].deletePointers();
-  querySegCents.resize(query.size());
-  for (int i = 0; i < querySegCents.size(); i++) {
-    querySegCents[i].resize(i+1);
-    for (int j = 0; j <= i; j++) {
-      query[j].getGeometricCenter(xc, yc, zc);
-      querySegCents[i][j] = new Atom(1, "CEN" + MstUtils::toString(j), xc, yc, zc, 0.0, 1.0, true);
-      querySegCents[i][j]->addAlternative(xc, yc, zc, 0.0, 1.0);
-    }
-  }
+  // room for storing per-segment residuals
+  currSegResiduals.clear(); currSegResiduals.resize(query.size(), 0.0);
+
+  // // room for storing query segment centroids at each recursion level
+  // mstreal xc, yc, zc;
+  // for (int i = 0; i < querySegCents.size(); i++) querySegCents[i].deletePointers();
+  // querySegCents.resize(query.size());
+  // for (int i = 0; i < querySegCents.size(); i++) {
+  //   querySegCents[i].resize(i+1);
+  //   for (int j = 0; j <= i; j++) {
+  //     query[j].getGeometricCenter(xc, yc, zc);
+  //     querySegCents[i][j] = new Atom(1, "CEN" + MstUtils::toString(j), xc, yc, zc, 0.0, 1.0, true);
+  //     querySegCents[i][j]->addAlternative(xc, yc, zc, 0.0, 1.0);
+  //   }
+  // }
 
   // set gap constraints structure
   resetGapConstraints();
@@ -462,10 +466,19 @@ mstreal FASST::boundOnRemainder(bool compute) {
   return currRemBound;
 }
 
-mstreal FASST::centToCentTol(int i, bool recomputeResidual, bool recomputeBound) {
+// mstreal FASST::centToCentTol(int i, bool recomputeResidual, bool recomputeBound) {
+//   mstreal remRes = residualCut - currentAlignmentResidual(recomputeResidual) - boundOnRemainder(recomputeBound);
+//   if (remRes < 0) return -1.0;
+//   return sqrt((remRes * (queryMasks[recLevel - 1].size() + query[i].size())) / (queryMasks[recLevel - 1].size() * query[i].size()));
+// }
+
+mstreal FASST::centToCentTol(int i, int j, bool recomputeResidual, bool recomputeBound) {
   mstreal remRes = residualCut - currentAlignmentResidual(recomputeResidual) - boundOnRemainder(recomputeBound);
+  if (recLevel > 1) { // if recLevel is 1, we would be subtracting and adding the same thing
+    remRes += currSegResiduals[i] - segmentResiduals[i][currAlignment[i]]; // segment i is the one already placed
+  }
   if (remRes < 0) return -1.0;
-  return sqrt((remRes * (queryMasks[recLevel - 1].size() + query[i].size())) / (queryMasks[recLevel - 1].size() * query[i].size()));
+  return sqrt((remRes * (query[i].size() + query[j].size())) / (query[i].size() * query[j].size()));
 }
 
 void FASST::search() {
@@ -503,7 +516,7 @@ void FASST::search() {
       // 2. compute the total residual from the current alignment
       mstreal curBound = currentAlignmentResidual(true) + boundOnRemainder(true);
       if (curBound > residualCut) continue;
-      if (query.size() > 1) updateQueryCentroids();
+      // if (query.size() > 1) updateQueryCentroids();
 
       // 3. update update remaining options for subsequent segments based on the
       // newly made choice. The set of options on the next recursion level is a
@@ -540,13 +553,13 @@ void FASST::search() {
           }
           if (levelExhausted) continue;
         }
-        mstreal dij, de, d, eps = 10E-8; CartesianPoint cj;
+        mstreal dij, de, d, eps = 10E-8;
         for (int c = 0; true; c++) {
           bool updated = false, levelExhausted = false;
           for (int i = recLevel; i < query.size(); i++) {
             FASST::optList& remSet = remOptions[recLevel][i];
             for (int j = 0; j < recLevel; j++) {  // j runs over already placed segments
-              de = centToCentTol(i);
+              de = centToCentTol(j, i);
               if (de < 0) {
                 recLevel--;
                 levelExhausted = true;
@@ -555,7 +568,8 @@ void FASST::search() {
               dij = centToCentDist[i][j];
               mstreal dePrev = ((c == 0) ? ccTol[recLevel-1][j][i] : ccTol[recLevel][j][i]);
               int numLocs = remSet.size();
-              cj = querySegCents[recLevel-1][j]; // the centroid of the j-th segment in the query in the current alignment
+              CartesianPoint& cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
+              // cj = querySegCents[recLevel-1][j]; // the centroid of the j-th segment in the query in the current alignment
 
               // If the set of options for the current segment was arrived at,
               // in part, by limiting center-to-center distances, then we will
@@ -629,18 +643,33 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
       for (int i = 0; i < n; i++) {
         targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
       }
-      // the last true sets the transformation matrices
-      currResidual = RC.bestResidual(queryMasks[recLevel], targetMasks[recLevel], true);
+
+      // align query onto target region and calculate residuals by segment
+      RC.align(queryMasks[recLevel], targetMasks[recLevel], queryMasks[recLevel]);
+      mstreal res; int k = 0;
+      currResidual = 0.0;
+      for (int si = 0; si <= recLevel; si++) {
+        currSegResiduals[si] = 0.0;
+        for (int i = 0; i < query[si].size(); i++) {
+          res = query[si][i]->distance2(targetMasks[recLevel][k]);
+          currResidual += res;
+          currSegResiduals[si] += res;
+          k++;
+        }
+      }
+
+      // return the original query coordinates
+      for (int i = 0; i < queryMasks[recLevel].size(); i++) queryMasks[recLevel][i]->makeAlternativeMain(0);
     }
   }
   return currResidual;
 }
 
-void FASST::updateQueryCentroids() {
-  AtomPointerVector& cents = querySegCents[recLevel];
-  for (int i = 0; i < cents.size(); i++) cents[i]->makeAlternativeMain(0); // first, return the original coordinates
-  RC.applyLastTransformation(cents); // then, apply transformation
-}
+// void FASST::updateQueryCentroids() {
+//   AtomPointerVector& cents = querySegCents[recLevel];
+//   for (int i = 0; i < cents.size(); i++) cents[i]->makeAlternativeMain(0); // first, return the original coordinates
+//   RC.applyLastTransformation(cents); // then, apply transformation
+// }
 
 void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed, matchType type) {
   vector<Structure> matches;
