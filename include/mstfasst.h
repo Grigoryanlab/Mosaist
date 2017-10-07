@@ -115,7 +115,10 @@ class FASST {
         int numIn;
     };
 
-    /* TODO: add setSufficientNumMatches(int) 
+    /* TODO: add setSufficientNumMatches(int)
+     * TODO: make sure there isn't a ton of overhead for single-segment searches
+     * TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
+     * TODO: pre-sort query segments in order of decreasing size (remember original oder); check performance
      * TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
      * TODO: Jianfu and Craig will look for fast ways of NN searches in Hamming distnce space
      * TODO: goal is to define redundancy as follows:
@@ -173,9 +176,10 @@ class FASST {
     bool parseChain(const Chain& S, AtomPointerVector& searchable);
     mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
+    void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
     int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
-    mstreal centToCentTol(int i, int j, bool recomputeResidual = false, bool recomputeBound = false);
+    mstreal centToCentTol(int i, bool recomputeResidual = false, bool recomputeBound = false);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     void stripSidechains(Structure& S);
@@ -184,6 +188,7 @@ class FASST {
     Structure queryStruct;
     vector<Structure*> targetStructs;
     vector<AtomPointerVector> query;         // just the part of the query that will be sought, split by segment
+    vector<AtomPointerVector> querySegCents; // palcehoder for centroids of query segments, at each recursion level
     vector<AtomPointerVector> targets;       // just the part of the target structure that will be searched over
     vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database

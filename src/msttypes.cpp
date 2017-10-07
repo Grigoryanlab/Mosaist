@@ -1834,6 +1834,19 @@ bool RMSDCalculator::align(const vector<Atom*> &_align, const vector<Atom*> &_re
   return align(_align, _ref, atoms);
 }
 
+void RMSDCalculator::applyLastTransformation(vector<Atom*>& _moveable) {
+  mstreal x[3], x1[3];
+  for(int k = 0; k < _moveable.size(); k++) {
+      x[0] = _moveable[k]->getX();
+      x[1] = _moveable[k]->getY();
+      x[2] = _moveable[k]->getZ();
+      x1[0] = t[0]+u[0][0]*x[0]+u[0][1]*x[1]+u[0][2]*x[2];
+      x1[1] = t[1]+u[1][0]*x[0]+u[1][1]*x[1]+u[1][2]*x[2];
+      x1[2] = t[2]+u[2][0]*x[0]+u[2][1]*x[1]+u[2][2]*x[2];
+      _moveable[k]->setCoor(x1[0], x1[1], x1[2]);
+  }
+}
+
 /**************************************************************************
   Implemetation of Kabsch algoritm for finding the best rotation matrix
 ---------------------------------------------------------------------------

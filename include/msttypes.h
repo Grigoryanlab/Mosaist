@@ -568,6 +568,9 @@ class RMSDCalculator {
     bool align(const vector<Atom*> &_align, const vector<Atom*> &_ref, vector<Atom*>& _moveable);
     bool align(const vector<Atom*> &_align, const vector<Atom*> &_ref, Structure& _moveable);
 
+    // simply apply the previously obtained optimal rotatoin/translation
+    void applyLastTransformation(vector<Atom*>& _moveable);
+
     // quickly calculate RMSD upon optimal superposition without generating the rotation matrix
     mstreal bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot = false, bool* _suc = NULL);
     mstreal bestResidual(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot = false, bool* _suc = NULL);
