@@ -213,20 +213,20 @@ void FASST::processQuery() {
 
   // the distance from the centroid of each segment and the centroid of the
   // previous segments considered together
-  centToCentDist.resize(query.size(), 0.0);
-  segCentToPrevSegCentDist.resize(query.size(), 0.0);
-  CartesianPoint C(0, 0, 0), cp(0, 0, 0);
+  centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
+  // segCentToPrevSegCentDist.resize(query.size(), 0.0); CartesianPoint cp(0, 0, 0);
+  CartesianPoint C(0, 0, 0);
   int N = 0;
-  for (int i = 0; i < query.size(); i++) {
-    CartesianPoint ci = query[i].getGeometricCenter();
-    // the 0th entry has the distnace from the reference point (here origin) to
-    // the centroid of the first segment; but we won't need the zeroth value anyway
-    centToCentDist[i] = C.distance(ci);
-    segCentToPrevSegCentDist[i] = cp.distance(ci);
-    int n = query[i].size();
+  for (int L = 0; L < query.size(); L++) {
+    CartesianPoint ci = query[L].getGeometricCenter();
+    int n = query[L].size();
     C = (C*N + ci*n)/(N + n);
+    for (int i = L + 1; i < query.size(); i++) {
+      centToCentDist[L][i] = C.distance(query[i].getGeometricCenter());
+    }
     N += n;
-    cp = ci;
+    // segCentToPrevSegCentDist[i] = cp.distance(ci);
+    // cp = ci;
   }
 
   // set query masks (subsets of query segments involved at each recursion level)
@@ -488,12 +488,11 @@ mstreal FASST::boundOnRemainder(bool compute) {
 mstreal FASST::centToCentTol(int i) {
   mstreal remRes = residualCut - currResidual - currRemBound;
   if (remRes < 0) return -1.0;
-  return sqrt((remRes * (queryMasks[recLevel - 1].size() + query[i].size())) / (queryMasks[recLevel - 1].size() * query[i].size()));
+  return sqrt((remRes * (queryMasks[recLevel].size() + query[i].size())) / (queryMasks[recLevel].size() * query[i].size()));
 }
 
 mstreal FASST::segCentToPrevSegCentTol(int i) {
-  int p = recLevel - 1; // index of the previously placed segment (assumes this
-                        // called is made after recLevel is incremented)
+  int p = recLevel; // index of the previously placed segment
 
   /* Say the distance between the centroid of some to-be-placed segment i and
    * the segment p that was just placed is different from the corresponding
@@ -560,47 +559,55 @@ cout << currentTarget << "/" << targets.size() << endl;
       // subset of the set of options on the previous level.
       int remSegs = query.size() - (recLevel + 1);
       if (remSegs > 0) {
-        recLevel++;
+        bool levelExhausted = false;
+//        recLevel++;
+        int nextLevel = recLevel + 1;
         // copy remaining options from the previous recursion level. This way,
         // we can compute bounds on this level and can do set intersections to
         // further narrow this down
-        for (int i = recLevel; i < query.size(); i++) {
-          remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
+        for (int i = nextLevel; i < query.size(); i++) {
+          remOptions[nextLevel][i].copyIn(remOptions[nextLevel-1][i]);
           // except that segments cannot overlap, so remove from consideration
           // all alignments that overlap with the segments that was just placed
-          remOptions[recLevel][i].removeOptions(currAlignment[recLevel - 1] - segLen[i] + 1,
-                                                currAlignment[recLevel - 1] + segLen[recLevel - 1] - 1);
+          remOptions[nextLevel][i].removeOptions(currAlignment[recLevel] - segLen[i] + 1,
+                                                currAlignment[recLevel] + segLen[recLevel] - 1);
         }
         // if any gap constraints exist, limit options at this recursion level accordingly
         if (gapConstraintsExist()) {
-          bool levelExhausted = false;
-          for (int j = 0; j < recLevel; j++) {
-            for (int i = recLevel; i < query.size(); i++) {
-              if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
-              if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
-              if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
-              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
-              if (remOptions[recLevel][i].empty()) {
-                recLevel--;
-                levelExhausted = true;
-                break;
-              }
+          for (int j = 0; j < nextLevel; j++) {
+            for (int i = nextLevel; i < query.size(); i++) {
+              if (minGapSet[i][j]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
+              if (maxGapSet[i][j]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
+              if (minGapSet[j][i]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
+              if (maxGapSet[j][i]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
+              if (remOptions[nextLevel][i].empty()) { levelExhausted = true; break; }
             }
             if (levelExhausted) break;
           }
           if (levelExhausted) continue;
         }
+// if ((currAlignment[0] == 2035) && (currAlignment[1] == 2115) && (currAlignment[2] == 2075) && (currAlignment[3] == 2053)) {
         mstreal di, de, d, dePrev, eps = 10E-8;
-        CartesianPoint& currCent = currCents[recLevel - 1];
+        CartesianPoint& currCent = currCents[recLevel];
+// bool flag = false;
+// if ((currAlignment[0] == 2035) && (currAlignment[1] == 2115)) {
+//   cout << "here" << endl;
+//   flag = true;
+//   cout << "target portion is:\n" << targetMasks[recLevel] << endl;
+//   cout << "current centroid: " << currCent << endl;
+//   cout << "geometric center: " << targetMasks[recLevel].getGeometricCenter() << endl;
+//   Structure(targetMasks[recLevel]).writePDB("/tmp/targ-port.pdb");
+//   Structure(targets[currentTarget]).writePDB("/tmp/targ.pdb");
+// }
         for (int c = 0; true; c++) {
-          bool updated = false, levelExhausted = false;
-          for (int i = recLevel; i < query.size(); i++) {
-            FASST::optList& remSet = remOptions[recLevel][i];
+          bool updated = false;
+          for (int i = nextLevel; i < query.size(); i++) {
+            FASST::optList& remSet = remOptions[nextLevel][i];
             de = centToCentTol(i);
-            if (de < 0) { recLevel--; levelExhausted = true; break; }
-            di = centToCentDist[i];
-            // dePrev = ((c == 0) ? ccTol[recLevel-1][i][i] : ccTol[recLevel][i][i]);
-            dePrev = ((c == 0) ? -1 : ccTol[recLevel][i][i]);
+            if (de < 0) { levelExhausted = true; break; }
+            di = centToCentDist[recLevel][i];
+            // dePrev = ((c == 0) ? ccTol[nextLevel-1][i][i] : ccTol[nextLevel][i][i]);
+            dePrev = ((c == 0) ? -1 : ccTol[nextLevel][i][i]); // TODO: ????????????? remnant of how things were done before; CHANGE!!!!!!!!
             int numLocs = remSet.size();
 
             // If the set of options for the current segment was arrived at,
@@ -612,6 +619,26 @@ cout << currentTarget << "/" << targets.size() << endl;
             if (dePrev < 0) {
               okLocations.resize(0);
               ps[i].pointsWithin(currCent, max(di - de, 0.0), di + de, &okLocations);
+// if (flag && (i == 3)) {
+//   int ii = 2053;
+//   cout << "\ncurrent alignment: " << MstUtils::vecToString(currAlignment) << endl;
+//   cout << "okLocations: " << MstUtils::vecToString(okLocations) << endl;
+//   cout << "distance(currCent, ps[i].getPoint(" << ii << ")) = " << currCent.distance(ps[i].getPoint(ii)) << endl;
+//   cout << "bound was: " << di << " +/- " << de << endl;
+//   cout << "residual cutoff is " << residualCut << endl;
+//   cout << "current residual = " << currResidual << endl;
+//   cout << "currRemBound = " << currRemBound << endl;
+//   cout << queryMasks[recLevel].size() << " atoms have been aligned already" << endl;
+//   cout << query[i].size() << " atoms in the current segment being placed" << endl;
+//   int si = resToAtomIdx(ii);
+//   AtomPointerVector segi(query[i].size(), NULL);
+//   for (int k = 0; k < query[i].size(); k++) {
+//     segi[k] = targets[currentTarget][si + k];
+//   }
+//   cout << "the segment to be added:\n" << segi << endl << "and its centroid: " << segi.getGeometricCenter() << endl;
+//   Structure(segi).writePDB("/tmp/segi.pdb");
+// exit(-1);
+// }
               remSet.intersectOptions(okLocations);
             } else if (dePrev - de > eps) {
               badLocations.resize(0);
@@ -621,12 +648,12 @@ cout << currentTarget << "/" << targets.size() << endl;
                 remSet.removeOption(badLocations[k]);
               }
             }
-            ccTol[recLevel][i][i] = de;
+            ccTol[nextLevel][i][i] = de;
             if (numLocs != remSet.size()) {
               // this both updates the bound and checks that there are still
               // feasible solutions left
               if ((remSet.empty()) || (currResidual + boundOnRemainder(true) > residualCut)) {
-                recLevel--; levelExhausted = true; break;
+                levelExhausted = true; break;
               }
               updated = true;
             }
@@ -634,6 +661,8 @@ cout << currentTarget << "/" << targets.size() << endl;
           if (levelExhausted) break;
           if (!updated) break;
         }
+        if (levelExhausted) continue;
+        recLevel = nextLevel;
       } else {
         // if at the lowest recursion level already, then record the solution
         solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), currentTarget, solutions.size()));

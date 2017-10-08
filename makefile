@@ -31,6 +31,7 @@ $(OBJECTS): $(ODIR)/%.o : $(SDIR)/%.cpp $(INCDIR)/%.h
 	$(CC) $(CPPFLAGS) -I$(INCDIR) -c -o $@ $<
 
 tests: $(OBJECTS)
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o $(ODIR)/msttransforms.o $(ODIR)/mstfasst.o tests/testFASST.cpp -o bin/testFASST
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o tests/test.cpp -o bin/test
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstlinalg.o tests/testTransforms.cpp -o bin/testTransforms
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstrotlib.o tests/testRotlib.cpp -o bin/testRotlib
@@ -40,7 +41,6 @@ tests: $(OBJECTS)
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testAutofuser.cpp -o bin/testAutofuser
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o $(ODIR)/msttransforms.o $(ODIR)/mstfasst.o tests/testFASST.cpp -o bin/testFASST
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstsystem.o programs/renumber.cpp -o bin/renumber
 
 libs: $(OBJECTS)

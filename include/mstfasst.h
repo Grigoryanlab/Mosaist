@@ -205,7 +205,7 @@ class FASST {
     // its starting residue aligns with the residue index j in the target
     vector<vector<mstreal> > segmentResiduals;
 
-    int recLevel;
+    int recLevel;                            // segments up to index recLevel are already placed
     int atomsPerRes;
     searchType type;
     vector<vector<string> > searchableAtomTypes;
@@ -241,10 +241,11 @@ class FASST {
     // "previous" segment, in the order in which they will be placed
     vector<mstreal> segCentToPrevSegCentDist;
 
-    // cumulative center-to-center distances in the query. That is, the distance
-    // between the centroid of each segment and the centroid of all segments
-    // preceeding it, in the order in which segments will be placed
-    vector<mstreal> centToCentDist;
+    // distances between the centroid of the already placed sub-query and every
+    // sub-sequence segment. I.e., centToCentDist[L][i] is the distance between
+    // the centroid of the sub-query placed at recursion level L (i.e., segments
+    // 0 through L) and some sub-sequent segment i (i > L)
+    vector<vector<mstreal> > centToCentDist;
 
     // set of solutions, sorted by RMSD
     set<fasstSolution> solutions;
