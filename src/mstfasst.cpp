@@ -560,7 +560,6 @@ cout << currentTarget << "/" << targets.size() << endl;
       int remSegs = query.size() - (recLevel + 1);
       if (remSegs > 0) {
         bool levelExhausted = false;
-//        recLevel++;
         int nextLevel = recLevel + 1;
         // copy remaining options from the previous recursion level. This way,
         // we can compute bounds on this level and can do set intersections to
@@ -586,19 +585,8 @@ cout << currentTarget << "/" << targets.size() << endl;
           }
           if (levelExhausted) continue;
         }
-// if ((currAlignment[0] == 2035) && (currAlignment[1] == 2115) && (currAlignment[2] == 2075) && (currAlignment[3] == 2053)) {
         mstreal di, de, d, dePrev, eps = 10E-8;
         CartesianPoint& currCent = currCents[recLevel];
-// bool flag = false;
-// if ((currAlignment[0] == 2035) && (currAlignment[1] == 2115)) {
-//   cout << "here" << endl;
-//   flag = true;
-//   cout << "target portion is:\n" << targetMasks[recLevel] << endl;
-//   cout << "current centroid: " << currCent << endl;
-//   cout << "geometric center: " << targetMasks[recLevel].getGeometricCenter() << endl;
-//   Structure(targetMasks[recLevel]).writePDB("/tmp/targ-port.pdb");
-//   Structure(targets[currentTarget]).writePDB("/tmp/targ.pdb");
-// }
         for (int c = 0; true; c++) {
           bool updated = false;
           for (int i = nextLevel; i < query.size(); i++) {
@@ -619,26 +607,6 @@ cout << currentTarget << "/" << targets.size() << endl;
             if (dePrev < 0) {
               okLocations.resize(0);
               ps[i].pointsWithin(currCent, max(di - de, 0.0), di + de, &okLocations);
-// if (flag && (i == 3)) {
-//   int ii = 2053;
-//   cout << "\ncurrent alignment: " << MstUtils::vecToString(currAlignment) << endl;
-//   cout << "okLocations: " << MstUtils::vecToString(okLocations) << endl;
-//   cout << "distance(currCent, ps[i].getPoint(" << ii << ")) = " << currCent.distance(ps[i].getPoint(ii)) << endl;
-//   cout << "bound was: " << di << " +/- " << de << endl;
-//   cout << "residual cutoff is " << residualCut << endl;
-//   cout << "current residual = " << currResidual << endl;
-//   cout << "currRemBound = " << currRemBound << endl;
-//   cout << queryMasks[recLevel].size() << " atoms have been aligned already" << endl;
-//   cout << query[i].size() << " atoms in the current segment being placed" << endl;
-//   int si = resToAtomIdx(ii);
-//   AtomPointerVector segi(query[i].size(), NULL);
-//   for (int k = 0; k < query[i].size(); k++) {
-//     segi[k] = targets[currentTarget][si + k];
-//   }
-//   cout << "the segment to be added:\n" << segi << endl << "and its centroid: " << segi.getGeometricCenter() << endl;
-//   Structure(segi).writePDB("/tmp/segi.pdb");
-// exit(-1);
-// }
               remSet.intersectOptions(okLocations);
             } else if (dePrev - de > eps) {
               badLocations.resize(0);
