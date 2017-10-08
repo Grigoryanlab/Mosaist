@@ -448,11 +448,11 @@ void FASST::prepForSearch(int ti) {
   currResiduals.resize(query.size(), 0);
   currRemBound = boundOnRemainder(true);
 
-  // initialize center-to-center tolerances
-  ccTol.clear(); ccTol.resize(query.size());
-  for (int i = 0; i < query.size(); i++) {
-    ccTol[i].resize(query.size(), vector<mstreal>(query.size(), -1.0)); // unnecessary (unused) entries will stay as -1
-  }
+  // // initialize center-to-center tolerances
+  // ccTol.clear(); ccTol.resize(query.size());
+  // for (int i = 0; i < query.size(); i++) {
+  //   ccTol[i].resize(query.size(), vector<mstreal>(query.size(), -1.0)); // unnecessary (unused) entries will stay as -1
+  // }
 
   // make room for target atom masks at different recursion levels
   if (targetMasks.size()) targetMasks.back().deletePointers();
@@ -525,8 +525,8 @@ void FASST::search() {
   solutions.clear();
   vector<int> segLen(query.size()); // number of residues in each query segment
   for (int i = 0; i < query.size(); i++) segLen[i] = atomToResIdx(query[i].size());
+  vector<mstreal> ccTol(query.size(), -1.0);
   for (currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
-cout << currentTarget << "/" << targets.size() << endl;
     // auto beginPrep = chrono::high_resolution_clock::now();
     prepForSearch(currentTarget);
     // auto endPrep = chrono::high_resolution_clock::now();
@@ -594,8 +594,7 @@ cout << currentTarget << "/" << targets.size() << endl;
             de = centToCentTol(i);
             if (de < 0) { levelExhausted = true; break; }
             di = centToCentDist[recLevel][i];
-            // dePrev = ((c == 0) ? ccTol[nextLevel-1][i][i] : ccTol[nextLevel][i][i]);
-            dePrev = ((c == 0) ? -1 : ccTol[nextLevel][i][i]); // TODO: ????????????? remnant of how things were done before; CHANGE!!!!!!!!
+            dePrev = ((c == 0) ? -1 : ccTol[i]);
             int numLocs = remSet.size();
 
             // If the set of options for the current segment was arrived at,
@@ -616,7 +615,7 @@ cout << currentTarget << "/" << targets.size() << endl;
                 remSet.removeOption(badLocations[k]);
               }
             }
-            ccTol[nextLevel][i][i] = de;
+            ccTol[i] = de;
             if (numLocs != remSet.size()) {
               // this both updates the bound and checks that there are still
               // feasible solutions left

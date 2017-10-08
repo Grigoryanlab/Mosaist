@@ -189,7 +189,7 @@ class FASST {
     Structure queryStruct;
     vector<Structure*> targetStructs;
     vector<AtomPointerVector> query;         // just the part of the query that will be sought, split by segment
-    vector<AtomPointerVector> querySegCents; // palcehoder for centroids of query segments, at each recursion level
+    // vector<AtomPointerVector> querySegCents; // palcehoder for centroids of query segments, at each recursion level
     vector<AtomPointerVector> targets;       // just the part of the target structure that will be searched over
     vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
@@ -218,9 +218,9 @@ class FASST {
     // at recursion level L.
     vector<vector<optList> > remOptions;
 
-    // ccTol[L][i][j], j > i, is the acceptable tolerance (the delta) on the
-    // center-to-center distance between segments i and j at recursion level L
-    vector<vector<vector<mstreal> > > ccTol;
+    // // ccTol[L][i][j], j > i, is the acceptable tolerance (the delta) on the
+    // // center-to-center distance between segments i and j at recursion level L
+    // vector<vector<vector<mstreal> > > ccTol;
 
     // alignment indices for segments visited up to the current recursion level
     vector<int> currAlignment;
