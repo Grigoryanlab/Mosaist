@@ -176,10 +176,11 @@ class FASST {
     bool parseChain(const Chain& S, AtomPointerVector& searchable);
     mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
-    void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
+    // void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
     int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
-    mstreal centToCentTol(int i, bool recomputeResidual = false, bool recomputeBound = false);
+    mstreal centToCentTol(int i);
+    mstreal segCentToPrevSegCentTol(int i);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     void stripSidechains(Structure& S);
@@ -227,11 +228,23 @@ class FASST {
     // the residual of the above alignment, computed and stored
     mstreal currResidual;
 
+    // the same residuals for each recursion level
+    vector<mstreal> currResiduals;
+
+    // the centroids of the currently aligned portion, at each recursion level
+    vector<CartesianPoint> currCents;
+
     // the bound on the parts remaining to align, computed and stored
     mstreal currRemBound;
 
-    // center-to-center distances between segments of the query
-    vector<vector<mstreal> > centToCentDist;
+    // the distance between the centroid of each segment and the centroid of the
+    // "previous" segment, in the order in which they will be placed
+    vector<mstreal> segCentToPrevSegCentDist;
+
+    // cumulative center-to-center distances in the query. That is, the distance
+    // between the centroid of each segment and the centroid of all segments
+    // preceeding it, in the order in which segments will be placed
+    vector<mstreal> centToCentDist;
 
     // set of solutions, sorted by RMSD
     set<fasstSolution> solutions;

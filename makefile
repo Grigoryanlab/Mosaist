@@ -1,5 +1,5 @@
 CC = g++
-CPPFLAGS=-O3 -std=c++11 -fPIC
+CPPFLAGS=-g -std=c++11 -fPIC
 ODIR = objs
 SDIR = src
 LDIR = lib
