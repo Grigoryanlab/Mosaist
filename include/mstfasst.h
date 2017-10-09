@@ -116,7 +116,7 @@ class FASST {
     };
 
     /* TODO: add setSufficientNumMatches(int)
-     * TODO: implement and try out the QCP RMSD calculation algorithm (by Theobold)
+     * TODO: make sure there isn't a ton of overhead for single-segment searches
      * TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
      * TODO: pre-sort query segments in order of decreasing size (remember original oder); check performance
      * TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
@@ -179,12 +179,8 @@ class FASST {
     // void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
     int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
-    mstreal centToCentTol(int i, int j, bool recomputeResidual = false, bool recomputeBound = false);
-    // /* This is a key function for the algorithm. It computes the maximal
-    //  * tollerable error in the distance between the centroid of any already
-    //  * placed segment and the to-be-placed segment i. So that means something
-    //  * has to have been placed before this function is called. */
-    // mstreal centToCentTol(int i, bool recomputeResidual = false, bool recomputeBound = false);
+    mstreal centToCentTol(int i);
+    mstreal segCentToPrevSegCentTol(int i);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     void stripSidechains(Structure& S);
@@ -209,7 +205,7 @@ class FASST {
     // its starting residue aligns with the residue index j in the target
     vector<vector<mstreal> > segmentResiduals;
 
-    int recLevel;
+    int recLevel;                            // segments up to index recLevel are already placed
     int atomsPerRes;
     searchType type;
     vector<vector<string> > searchableAtomTypes;
@@ -222,22 +218,33 @@ class FASST {
     // at recursion level L.
     vector<vector<optList> > remOptions;
 
-    // ccTol[L][i][j], j > i, is the acceptable tolerance (the delta) on the
-    // center-to-center distance between segments i and j at recursion level L
-    vector<vector<vector<mstreal> > > ccTol;
+    // // ccTol[L][i][j], j > i, is the acceptable tolerance (the delta) on the
+    // // center-to-center distance between segments i and j at recursion level L
+    // vector<vector<vector<mstreal> > > ccTol;
 
     // alignment indices for segments visited up to the current recursion level
     vector<int> currAlignment;
 
-    // the residual of the above alignment, computed and stored; as well as
-    // broken by individual segment
+    // the residual of the above alignment, computed and stored
     mstreal currResidual;
-    vector<mstreal> currSegResiduals;
+
+    // the same residuals for each recursion level
+    vector<mstreal> currResiduals;
+
+    // the centroids of the currently aligned portion, at each recursion level
+    vector<CartesianPoint> currCents;
 
     // the bound on the parts remaining to align, computed and stored
     mstreal currRemBound;
 
-    // center-to-center distances between segments of the query
+    // the distance between the centroid of each segment and the centroid of the
+    // "previous" segment, in the order in which they will be placed
+    vector<mstreal> segCentToPrevSegCentDist;
+
+    // distances between the centroid of the already placed sub-query and every
+    // sub-sequence segment. I.e., centToCentDist[L][i] is the distance between
+    // the centroid of the sub-query placed at recursion level L (i.e., segments
+    // 0 through L) and some sub-sequent segment i (i > L)
     vector<vector<mstreal> > centToCentDist;
 
     // set of solutions, sorted by RMSD

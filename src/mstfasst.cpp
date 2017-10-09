@@ -202,14 +202,31 @@ void FASST::processQuery() {
   }
   currAlignment.resize(query.size(), -1);
 
-  // center-to-center distances in the qyery
+  // // center-to-center distances in the qyery
+  // centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
+  // for (int i = 0; i < query.size(); i++) {
+  //   for (int j = i+1; j < query.size(); j++) {
+  //     centToCentDist[i][j] = query[i].getGeometricCenter().distancenc(query[j].getGeometricCenter());
+  //     centToCentDist[j][i] = centToCentDist[i][j];
+  //   }
+  // }
+
+  // the distance from the centroid of each segment and the centroid of the
+  // previous segments considered together
   centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
-  for (int i = 0; i < query.size(); i++) {
-    for (int j = 0; j < query[i].size(); j++) query[i][j]->addAlternative(query[i][j]->getX(), query[i][j]->getY(), query[i][j]->getZ(), 0.0, 1.0);
-    for (int j = i+1; j < query.size(); j++) {
-      centToCentDist[i][j] = query[i].getGeometricCenter().distancenc(query[j].getGeometricCenter());
-      centToCentDist[j][i] = centToCentDist[i][j];
+  // segCentToPrevSegCentDist.resize(query.size(), 0.0); CartesianPoint cp(0, 0, 0);
+  CartesianPoint C(0, 0, 0);
+  int N = 0;
+  for (int L = 0; L < query.size(); L++) {
+    CartesianPoint ci = query[L].getGeometricCenter();
+    int n = query[L].size();
+    C = (C*N + ci*n)/(N + n);
+    for (int i = L + 1; i < query.size(); i++) {
+      centToCentDist[L][i] = C.distance(query[i].getGeometricCenter());
     }
+    N += n;
+    // segCentToPrevSegCentDist[i] = cp.distance(ci);
+    // cp = ci;
   }
 
   // set query masks (subsets of query segments involved at each recursion level)
@@ -222,9 +239,6 @@ void FASST::processQuery() {
     }
   }
   updateGrids = true;
-
-  // room for storing per-segment residuals
-  currSegResiduals.clear(); currSegResiduals.resize(query.size(), 0.0);
 
   // // room for storing query segment centroids at each recursion level
   // mstreal xc, yc, zc;
@@ -431,13 +445,14 @@ void FASST::prepForSearch(int ti) {
 
   // current residual starts with 0, since nothing is aligned yet
   currResidual = 0;
+  currResiduals.resize(query.size(), 0);
   currRemBound = boundOnRemainder(true);
 
-  // initialize center-to-center tolerances
-  ccTol.clear(); ccTol.resize(query.size());
-  for (int i = 0; i < query.size(); i++) {
-    ccTol[i].resize(query.size(), vector<mstreal>(query.size(), -1.0)); // unnecessary (unused) entries will stay as -1
-  }
+  // // initialize center-to-center tolerances
+  // ccTol.clear(); ccTol.resize(query.size());
+  // for (int i = 0; i < query.size(); i++) {
+  //   ccTol[i].resize(query.size(), vector<mstreal>(query.size(), -1.0)); // unnecessary (unused) entries will stay as -1
+  // }
 
   // make room for target atom masks at different recursion levels
   if (targetMasks.size()) targetMasks.back().deletePointers();
@@ -456,6 +471,10 @@ void FASST::prepForSearch(int ti) {
       }
     }
   }
+
+  // room for centroids of aligned sub-structure, at each recursion level
+  currCents.clear();
+  currCents.resize(query.size(), CartesianPoint(0, 0, 0));
 }
 
 mstreal FASST::boundOnRemainder(bool compute) {
@@ -466,19 +485,35 @@ mstreal FASST::boundOnRemainder(bool compute) {
   return currRemBound;
 }
 
-// mstreal FASST::centToCentTol(int i, bool recomputeResidual, bool recomputeBound) {
-//   mstreal remRes = residualCut - currentAlignmentResidual(recomputeResidual) - boundOnRemainder(recomputeBound);
-//   if (remRes < 0) return -1.0;
-//   return sqrt((remRes * (queryMasks[recLevel - 1].size() + query[i].size())) / (queryMasks[recLevel - 1].size() * query[i].size()));
-// }
+mstreal FASST::centToCentTol(int i) {
+  mstreal remRes = residualCut - currResidual - currRemBound;
+  if (remRes < 0) return -1.0;
+  return sqrt((remRes * (queryMasks[recLevel].size() + query[i].size())) / (queryMasks[recLevel].size() * query[i].size()));
+}
 
-mstreal FASST::centToCentTol(int i, int j, bool recomputeResidual, bool recomputeBound) {
-  mstreal remRes = residualCut - currentAlignmentResidual(recomputeResidual) - boundOnRemainder(recomputeBound);
-  if (recLevel > 1) { // if recLevel is 1, we would be subtracting and adding the same thing
-    remRes += currSegResiduals[i] - segmentResiduals[i][currAlignment[i]]; // segment i is the one already placed
+mstreal FASST::segCentToPrevSegCentTol(int i) {
+  int p = recLevel; // index of the previously placed segment
+
+  /* Say the distance between the centroid of some to-be-placed segment i and
+   * the segment p that was just placed is different from the corresponding
+   * distance in the query by D. Then, we are guaranteed that the residual from
+   * i and p in the final alignment will be at least Si + Sp + D^2 * (Ni * Np)/(Ni + Np),
+   * where Si and Sp are the residuals from aligning i and p on their own, and
+   * Ni and Np are the numbers of atoms in these segments. We also know that
+   * we will have at least some residual from subsequent segment placements:
+   *  + currRemBound = Si + all subsequent self-residuals
+   *  + segmentResiduals[p][currAlignment[p]] = Sp
+   * And, we also know the residual from placing all segments prior to p together:
+   *  + currResiduals[p - 1]
+   * (note that if there are segments prior to p, then recLevel is at least 2).
+   * Thus, D^2 * (Ni * Np)/(Ni + Np) must be no larger than the difference between
+   * residualCut (maximal allowed residual) and the three above components. */
+  mstreal remRes = residualCut - currRemBound - segmentResiduals[p][currAlignment[p]];
+  if (p > 0) {
+    remRes -= currResiduals[p - 1];
   }
   if (remRes < 0) return -1.0;
-  return sqrt((remRes * (query[i].size() + query[j].size())) / (query[i].size() * query[j].size()));
+  return sqrt((remRes * (query[p].size() + query[i].size())) / (query[p].size() * query[i].size()));
 }
 
 void FASST::search() {
@@ -490,6 +525,7 @@ void FASST::search() {
   solutions.clear();
   vector<int> segLen(query.size()); // number of residues in each query segment
   for (int i = 0; i < query.size(); i++) segLen[i] = atomToResIdx(query[i].size());
+  vector<mstreal> ccTol(query.size(), -1.0);
   for (currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
     // auto beginPrep = chrono::high_resolution_clock::now();
     prepForSearch(currentTarget);
@@ -523,89 +559,77 @@ void FASST::search() {
       // subset of the set of options on the previous level.
       int remSegs = query.size() - (recLevel + 1);
       if (remSegs > 0) {
-        recLevel++;
+        bool levelExhausted = false;
+        int nextLevel = recLevel + 1;
         // copy remaining options from the previous recursion level. This way,
         // we can compute bounds on this level and can do set intersections to
         // further narrow this down
-        for (int i = recLevel; i < query.size(); i++) {
-          remOptions[recLevel][i].copyIn(remOptions[recLevel-1][i]);
+        for (int i = nextLevel; i < query.size(); i++) {
+          remOptions[nextLevel][i].copyIn(remOptions[nextLevel-1][i]);
           // except that segments cannot overlap, so remove from consideration
           // all alignments that overlap with the segments that was just placed
-          remOptions[recLevel][i].removeOptions(currAlignment[recLevel - 1] - segLen[i] + 1,
-                                                currAlignment[recLevel - 1] + segLen[recLevel - 1] - 1);
+          remOptions[nextLevel][i].removeOptions(currAlignment[recLevel] - segLen[i] + 1,
+                                                currAlignment[recLevel] + segLen[recLevel] - 1);
         }
         // if any gap constraints exist, limit options at this recursion level accordingly
         if (gapConstraintsExist()) {
-          bool levelExhausted = false;
-          for (int j = 0; j < recLevel; j++) {
-            for (int i = recLevel; i < query.size(); i++) {
-              if (minGapSet[i][j]) remOptions[recLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
-              if (maxGapSet[i][j]) remOptions[recLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
-              if (minGapSet[j][i]) remOptions[recLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
-              if (maxGapSet[j][i]) remOptions[recLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
-              if (remOptions[recLevel][i].empty()) {
-                recLevel--;
-                levelExhausted = true;
-                break;
-              }
+          for (int j = 0; j < nextLevel; j++) {
+            for (int i = nextLevel; i < query.size(); i++) {
+              if (minGapSet[i][j]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
+              if (maxGapSet[i][j]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
+              if (minGapSet[j][i]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
+              if (maxGapSet[j][i]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
+              if (remOptions[nextLevel][i].empty()) { levelExhausted = true; break; }
             }
             if (levelExhausted) break;
           }
           if (levelExhausted) continue;
         }
-        mstreal dij, de, d, eps = 10E-8;
+        mstreal di, de, d, dePrev, eps = 10E-8;
+        CartesianPoint& currCent = currCents[recLevel];
         for (int c = 0; true; c++) {
-          bool updated = false, levelExhausted = false;
-          for (int i = recLevel; i < query.size(); i++) {
-            FASST::optList& remSet = remOptions[recLevel][i];
-            for (int j = 0; j < recLevel; j++) {  // j runs over already placed segments
-              de = centToCentTol(j, i);
-              if (de < 0) {
-                recLevel--;
-                levelExhausted = true;
-                break;
-              }
-              dij = centToCentDist[i][j];
-              mstreal dePrev = ((c == 0) ? ccTol[recLevel-1][j][i] : ccTol[recLevel][j][i]);
-              int numLocs = remSet.size();
-              CartesianPoint& cj = ps[j].getPoint(currAlignment[j]); // the current centroid of segment j
-              // cj = querySegCents[recLevel-1][j]; // the centroid of the j-th segment in the query in the current alignment
+          bool updated = false;
+          for (int i = nextLevel; i < query.size(); i++) {
+            FASST::optList& remSet = remOptions[nextLevel][i];
+            de = centToCentTol(i);
+            if (de < 0) { levelExhausted = true; break; }
+            di = centToCentDist[recLevel][i];
+            dePrev = ((c == 0) ? -1 : ccTol[i]);
+            int numLocs = remSet.size();
 
-              // If the set of options for the current segment was arrived at,
-              // in part, by limiting center-to-center distances, then we will
-              // tighten that list by removing options that are outside of the
-              // range allowed at this recursion level. Otherwise, we will do a
-              // general proximity search given the current tolerance and will
-              // tighten the list that way.
-              if (dePrev < 0) {
-                okLocations.resize(0);
-                ps[i].pointsWithin(cj, max(dij - de, 0.0), dij + de, &okLocations);
-                remSet.intersectOptions(okLocations);
-              } else {
-                badLocations.resize(0);
-                ps[i].pointsWithin(cj, max(dij - dePrev, 0.0), dij - de - eps, &badLocations);
-                ps[i].pointsWithin(cj, dij + de + eps, dij + dePrev, &badLocations);
-                for (int k = 0; k < badLocations.size(); k++) {
-                  remSet.removeOption(badLocations[k]);
-                }
-              }
-              ccTol[recLevel][j][i] = de;
-              if (numLocs != remSet.size()) {
-                // this both updates the bound and checks that there are still
-                // feasible solutions left
-                if ((remSet.empty()) || (currResidual + boundOnRemainder(true) > residualCut)) {
-                  recLevel--;
-                  levelExhausted = true;
-                  break;
-                }
-                updated = true;
+            // If the set of options for the current segment was arrived at,
+            // in part, by limiting center-to-center distances, then we will
+            // tighten that list by removing options that are outside of the
+            // range allowed at this recursion level. Otherwise, we will do a
+            // general proximity search given the current tolerance and will
+            // tighten the list that way.
+            if (dePrev < 0) {
+              okLocations.resize(0);
+              ps[i].pointsWithin(currCent, max(di - de, 0.0), di + de, &okLocations);
+              remSet.intersectOptions(okLocations);
+            } else if (dePrev - de > eps) {
+              badLocations.resize(0);
+              ps[i].pointsWithin(currCent, max(di - dePrev, 0.0), di - de - eps, &badLocations);
+              ps[i].pointsWithin(currCent, di + de + eps, di + dePrev, &badLocations);
+              for (int k = 0; k < badLocations.size(); k++) {
+                remSet.removeOption(badLocations[k]);
               }
             }
-            if (levelExhausted) break;
+            ccTol[i] = de;
+            if (numLocs != remSet.size()) {
+              // this both updates the bound and checks that there are still
+              // feasible solutions left
+              if ((remSet.empty()) || (currResidual + boundOnRemainder(true) > residualCut)) {
+                levelExhausted = true; break;
+              }
+              updated = true;
+            }
           }
           if (levelExhausted) break;
           if (!updated) break;
         }
+        if (levelExhausted) continue;
+        recLevel = nextLevel;
       } else {
         // if at the lowest recursion level already, then record the solution
         solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), currentTarget, solutions.size()));
@@ -632,7 +656,7 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
   if (compute) {
     if (query.size() == 1) {
       // this is a special case, because will not need to calculate centroid
-      // locations for subsequent segments (since there are no other segments)
+      // locations for subsequent sub-queries
       currResidual = segmentResiduals[0][currAlignment[0]];
     } else {
       // fill up sub-alignment with target atoms
@@ -643,23 +667,13 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
       for (int i = 0; i < n; i++) {
         targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
       }
-
-      // align query onto target region and calculate residuals by segment
-      RC.align(queryMasks[recLevel], targetMasks[recLevel], queryMasks[recLevel]);
-      mstreal res; int k = 0;
-      currResidual = 0.0;
-      for (int si = 0; si <= recLevel; si++) {
-        currSegResiduals[si] = 0.0;
-        for (int i = 0; i < query[si].size(); i++) {
-          res = query[si][i]->distance2(targetMasks[recLevel][k]);
-          currResidual += res;
-          currSegResiduals[si] += res;
-          k++;
-        }
+      currResidual = RC.bestResidual(queryMasks[recLevel], targetMasks[recLevel]);
+      currResiduals[recLevel] = currResidual;
+      if (recLevel == 0) {
+        currCents[recLevel] = ps[recLevel].getPoint(currAlignment[recLevel]);
+      } else {
+        currCents[recLevel] = (currCents[recLevel - 1] * (N - n) +  ps[recLevel].getPoint(currAlignment[recLevel]) * n) / N;
       }
-
-      // return the original query coordinates
-      for (int i = 0; i < queryMasks[recLevel].size(); i++) queryMasks[recLevel][i]->makeAlternativeMain(0);
     }
   }
   return currResidual;
