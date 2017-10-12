@@ -50,7 +50,7 @@ libs: $(OBJECTS)
 	ar rs lib/libmstcondeg.a $(ODIR)/mstcondeg.o $(ODIR)/mstrotlib.o $(ODIR)/msttransforms.o
 	ar rs lib/libmstlinalg.a $(ODIR)/mstlinalg.o
 	ar rs lib/libmstoptim.a $(ODIR)/mstoptim.o $(ODIR)/mstlinalg.o
-	ar rs lib/libmstfuser.a $(ODIR)/mstfuser.o $(ODIR)/msttypes.o $(ODIR)/mstoptim.o
+	ar rs lib/libmstfuser.a $(ODIR)/mstfuser.o $(ODIR)/msttypes.o $(ODIR)/mstoptim.o $(ODIR)/msttransforms.o
 	ar rs lib/libmstfasst.a $(ODIR)/mstfasst.o $(ODIR)/msttypes.o $(ODIR)/mstsequence.o $(ODIR)/msttransforms.o
 
 

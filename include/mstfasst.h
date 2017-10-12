@@ -116,10 +116,10 @@ class FASST {
     };
 
     /* TODO: add setSufficientNumMatches(int)
-     * TODO: make sure there isn't a ton of overhead for single-segment searches
-     * TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
-     * TODO: pre-sort query segments in order of decreasing size (remember original oder); check performance
      * TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
+     * TODO: pre-sort query segments in order of decreasing size (remember original oder); check performance
+             OR, pre-sort in the order of badness of own residual (how to measure? worst? best? median?)
+     * TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
      * TODO: Jianfu and Craig will look for fast ways of NN searches in Hamming distnce space
      * TODO: goal is to define redundancy as follows:
      * 1. define the redundancy of each segment alignment separately
