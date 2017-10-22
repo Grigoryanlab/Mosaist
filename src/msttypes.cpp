@@ -907,7 +907,7 @@ mstreal Residue::getOmega(bool strict) {
   return CartesianGeometry::dihedral(*A, *B, *C, *D);
 }
 
-Atom* Residue::findAtom(string _name, bool strict) {
+Atom* Residue::findAtom(string _name, bool strict) const {
   for (int i = 0; i < atoms.size(); i++) {
     if (atoms[i]->isNamed(_name)) return atoms[i];
   }

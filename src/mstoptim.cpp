@@ -145,6 +145,8 @@ mstreal Optim::gradDescent(optimizerEvaluator& E, vector<mstreal>& solution, int
     x1 = x0 - gamma * g0;
     v1 = E.eval(x1, g1);
     if (fabs(v0 - v1) < tol) break;
+    if (v1 < v0) gamma *= 1.1; // adaptively change the learning rate
+    else gamma /= 1.2;
     x0 = x1; v0 = v1; g0 = g1;
   }
   solution = x0;

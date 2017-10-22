@@ -23,7 +23,7 @@ class Optim {
 
     // --- Nelder-Mead simplex algorithm as in Matlab's fminsearch
     static mstreal fminsearch(optimizerEvaluator& E, int numIters, vector<mstreal>& solution, bool verbose = false);
-    static mstreal gradDescent(optimizerEvaluator& E, vector<mstreal>& solution, int numIters = 1000, mstreal tol = 10E-6, bool verbose = false);
+    static mstreal gradDescent(optimizerEvaluator& E, vector<mstreal>& solution, int numIters = 1000, mstreal tol = 10E-8, bool verbose = false);
 
 };
 

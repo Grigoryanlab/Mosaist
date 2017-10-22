@@ -2,7 +2,12 @@
 
 /* --------- fusionEvaluator ----------- */
 
-fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> _fixedResidues, bool _verbose) {
+fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> _fixedResidues, const fusionParams& _params) {
+  params = _params;
+  kb = 10;            // internal coordinate force constants
+  ka =  0.02;
+  kh = 0.001;
+
   vector<string> bba = {"N", "CA", "C", "O"};
   // copy overlapping residues
   overlappingResidues = resTopo;
@@ -33,17 +38,7 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
     }
   }
   fused.renumber();
-  guess = fused; // save initial guess for later alignment (easier to visualize output)
-
-  // orient so that the first atom is at the origin, the second is along the X-
-  // axis and the third is in the XY plane
-  Frame L(CartesianPoint(0, 0, 0), CartesianPoint(1, 0, 0), CartesianPoint(0, 1, 0), CartesianPoint(0, 0, 1));
-  CartesianPoint A(fused[0][0][0]), B(fused[0][0][1]), C(fused[0][0][2]);
-  CartesianPoint X = (B - A).getUnit();
-  CartesianPoint Z = (X.cross(C - B)).getUnit();
-  Frame F(A, X, Z.cross(X), Z);
-  Transform T = TransformFactory::switchFrames(L, F);
-  T.apply(fused);
+  guess = fused; // save initial "averaged" guess for later alignment (easier to visualize output)
 
   /* Initialize alignedFrags. frags[C] designates a segment that moves
    * together (i.e., part of Chain pointed to by C), by storing which
@@ -72,16 +67,25 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
     alignedFrags.push_back(pair<AtomPointerVector, AtomPointerVector> (fusedAtoms, fragAtoms));
   }
 
-  // set internal coordinate force constants
-  kb = 10;
-  ka =  0.02;
-  kh = 0.001;
+  // optionally, initialize the structure using average IC's of overlapping segments
+  if (params.getCoorInitType() == fusionParams::coorInitType::meanIC) {
+    bool optCart = params.getOptimCartesian();
+    params.setOptimCartesian(false); // temporarily switch to IC coordinate representation
+    eval(vector<mstreal>(0));        // fill initial point with IC-built structure
+    eval(initPoint);                 // fill the Structure with corresponding coordinates
+    initPoint.resize(0);
+    params.setOptimCartesian(optCart);
+  }
 
-  // other initial parameters
-  verbose = _verbose;
-  optimCartesian = true; // optimize cartesian coordinates?
-  startWithMean = true;  // start optimization from the averaged structure; this is implied if optimCartesian is true
-  noise = 0; // the first time we provide a guess point, just take means (later can try noisy start points)
+  // orient so that the first atom is at the origin, the second is along the X-
+  // axis and the third is in the XY plane
+  Frame L(CartesianPoint(0, 0, 0), CartesianPoint(1, 0, 0), CartesianPoint(0, 1, 0), CartesianPoint(0, 0, 1));
+  CartesianPoint A(fused[0][0][0]), B(fused[0][0][1]), C(fused[0][0][2]);
+  CartesianPoint X = (B - A).getUnit();
+  CartesianPoint Z = (X.cross(C - B)).getUnit();
+  Frame F(A, X, Z.cross(X), Z);
+  Transform T = TransformFactory::switchFrames(L, F);
+  T.apply(fused);
 
   // initialize the random number number generator
   long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
@@ -102,9 +106,10 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
   int k = 0;
   Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;
+  mstreal noise = params.getNoise();
 
   Chain& F = fused[0];
-  if (optimCartesian) {
+  if (params.getOptimCartesian()) {
     for (int i = 0; i < F.residueSize(); i++) {
       if (fixed[i]) continue;
       Residue& res = F[i];
@@ -144,7 +149,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           } else {
             mstreal d0 = point[k]; k++;
             mstreal d1 = point[k]; k++;
-            mstreal a0 = point[k]; k++;
+            mstreal a0 = point[k]*M_PI/180; k++;
             N->setCoor(0.0, 0.0, 0.0);
             CA->setCoor(d0, 0.0, 0.0);
             C->setCoor(d0 - d1*cos(a0), d1*sin(a0), 0.0);
@@ -180,7 +185,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           // if this is the last residue, place the O relative to N-CA-C
           if (i == F.residueSize() - 1) {
             if (init) {
-              initPoint.push_back(bondInitValue(i, i, "C", "O", true) + bR * MstUtils::randUnit() * noise);
+              initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
               initPoint.push_back(angleInitValue(i, i, i, "CA", "C", "O") + aR * MstUtils::randUnit() * noise);
               initPoint.push_back(dihedralInitValue(i, i, i, i, "N", "CA", "C", "O") + dR * MstUtils::randUnit() * noise);
             } else {
@@ -192,7 +197,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       // place previous O relative to pCA, N, pC (an improper)
       if ((i > startIdx) && !fixed[i-1]) {
         if (init) {
-          initPoint.push_back(bondInitValue(i-1, i-1, "C", "O", true) + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(bondInitValue(i-1, i-1, "C", "O") + bR * MstUtils::randUnit() * noise);
           initPoint.push_back(angleInitValue(i, i-1, i-1, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
           initPoint.push_back(dihedralInitValue(i-1, i, i-1, i-1, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
         } else {
@@ -203,7 +208,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     }
 
     // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
-    for (int i = buildOriginRes; i >= 0; i--) {
+    for (int i = buildOriginRes - 1; i >= 0; i--) {
       Residue& res = F[i];
       Atom* N = &(res[0]);
       Atom* CA = &(res[1]);
@@ -239,7 +244,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
 
         // place O relative to pCA, pN, C (an improper)
         if (init) {
-          initPoint.push_back(bondInitValue(i, i, "C", "O", true) + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
           initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
           initPoint.push_back(dihedralInitValue(i, i+1, i, i, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
         } else {
@@ -327,7 +332,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       rmsdTot += r;
     }
   }
-  if (verbose) cout << "rmsdScore = " << rmsdScore << " (total RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
+  if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (total RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
 
   return rmsdScore + bondPenalty + anglPenalty + dihePenalty;
 }
@@ -344,22 +349,22 @@ AtomPointerVector fusionEvaluator::atomInstances(int ri, const string& ai) {
   return atoms;
 }
 
-mstreal fusionEvaluator::bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean) {
-  if (startWithMean && !negateStartWithMean) {
+mstreal fusionEvaluator::bondInitValue(int ri, int rj, const string& ai, const string& aj, bool doNotAverage) {
+  if ((params.getCoorInitType() == fusionParams::coorInitType::meanCoor) || doNotAverage) {
     return (fused.getResidue(ri).findAtom(ai))->distance(fused.getResidue(rj).findAtom(aj));
   }
   return bondInstances(ri, rj, ai, aj).mean();
 }
 
 mstreal fusionEvaluator::angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak) {
-  if (startWithMean) {
+  if (params.getCoorInitType() == fusionParams::coorInitType::meanCoor) {
     return (fused.getResidue(ri).findAtom(ai))->angle(fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak));
   }
   return angleInstances(ri, rj, rk, ai, aj, ak).mean();
 }
 
 mstreal fusionEvaluator::dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al) {
-  if (startWithMean) {
+  if (params.getCoorInitType() == fusionParams::coorInitType::meanCoor) {
     return (fused.getResidue(ri).findAtom(ai))->dihedral(fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak), fused.getResidue(rl).findAtom(al));
   }
   return CartesianGeometry::angleMean(dihedralInstances(ri, rj, rk, rl, ai, aj, ak, al));
@@ -518,31 +523,31 @@ mstreal fusionEvaluator::harmonicPenalty(mstreal val, const icBound& b) {
 
 /* --------- Fuser ----------- */
 
-Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, int Ni, int Nc, bool verbose) {
+Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, const fusionParams& params) {
   bool useGradDescent = true;
-  fusionEvaluator E(resTopo, fixed);
+  fusionEvaluator E(resTopo, fixed, params); E.setVerbose(false);
   vector<mstreal> bestSolution; mstreal score, bestScore;
   if (useGradDescent) {
-    bestScore = Optim::gradDescent(E, bestSolution, Ni, 10E-6, verbose);
+    bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
   } else {
-    mstreal bestScore = Optim::fminsearch(E, Ni, bestSolution);
+    mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution);
   }
   int bestAnchor = E.getBuildOrigin();
-  if (verbose) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
-  for (int i = 0; i < Nc-1; i++) {
+  if (params.isVerbose()) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
+  for (int i = 0; i < params.numCycles() - 1; i++) {
     E.noisifyGuessPoint(0.2);
     vector<mstreal> solution;
     int anchor = E.randomizeBuildOrigin();
     if (useGradDescent) {
-      score = Optim::gradDescent(E, solution, Ni, 10E-6, verbose);
+      score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
     } else {
-      score = Optim::fminsearch(E, Ni, solution);
+      score = Optim::fminsearch(E, params.numIters(), solution);
     }
     if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = anchor; }
-    if (verbose) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
+    if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
   }
   E.setBuildOrigin(bestAnchor);
-  if (verbose) {
+  if (params.isVerbose()) {
     cout << "best score = " << bestScore << ":" << endl;
     E.setVerbose(true);
   }
@@ -550,7 +555,7 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int
   return E.getAlignedStructure();
 }
 
-Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps, int Ni, int Nc, bool verbose) {
+Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps, const fusionParams& params) {
   // build a proximity search object
   mstreal closeDist = 2.0, pepBondMax = 2.0, pepBondMin = 0.5, pepBondIdeal = 1.3;
   AtomPointerVector CAs(residues.size(), NULL), Ns(residues.size(), NULL), Cs(residues.size(), NULL);;
@@ -669,6 +674,6 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
   }
 
   // call regular fuser to do all the work
-  if (verbose) cout << "Fuser::autofuse => fusing a structure of " << resTopo.size() << " residues, with " << fixedInTopo.size() << " positions fixed" << endl;
-  return fuse(resTopo, fixedInTopo, Ni, Nc, verbose);
+  if (params.isVerbose()) cout << "Fuser::autofuse => fusing a structure of " << resTopo.size() << " residues, with " << fixedInTopo.size() << " positions fixed" << endl;
+  return fuse(resTopo, fixedInTopo, params);
 }

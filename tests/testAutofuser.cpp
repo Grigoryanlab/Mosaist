@@ -17,6 +17,8 @@ int main(int argc, char *argv[]) {
     vector<Residue*> res = inputs.back().getResidues();
     toFuse.insert(toFuse.end(), res.begin(), res.end());
   }
-  Structure fused = Fuser::autofuse(toFuse, 1, 100, 1, true);
+  fusionParams opts; opts.setNumIters(1000); opts.setVerbose(true);
+  opts.setCoorInitType(fusionParams::coorInitType::meanIC);
+  Structure fused = Fuser::autofuse(toFuse, 3, opts);
 	fused.writePDB(outFile);
 }

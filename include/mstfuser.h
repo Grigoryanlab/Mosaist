@@ -9,6 +9,44 @@
 using namespace std;
 using namespace MST;
 
+class fusionParams {
+  public:
+    enum coorInitType { meanCoor = 1, meanIC };
+    fusionParams() { // default optimization params
+      startType = fusionParams::coorInitType::meanCoor;
+      verbose = false;
+      optimCartesian = true;
+      noise = 0;
+      Ni = 100;
+      Nc = 1;
+      tol = 0.0;
+    }
+    mstreal getNoise() const { return noise; }
+    fusionParams::coorInitType getCoorInitType() const { return startType; }
+    bool getOptimCartesian() const { return optimCartesian; }
+    bool isVerbose() const { return verbose; }
+    int numCycles() const { return Nc; }
+    int numIters() const { return Ni; }
+    mstreal errTol() const { return tol; }
+
+    void setNoise(mstreal _noise) { noise = _noise; }
+    void setVerbose(bool _verbose = true) { verbose = _verbose; }
+    void setCoorInitType(fusionParams::coorInitType _startType) { startType = _startType; }
+    void setOptimCartesian(bool _optimCartesian) { optimCartesian = _optimCartesian; }
+    void setNumCycles(int nc) { Nc = nc; }
+    void setNumIters(int ni) { Ni = ni; }
+    void setErrTol(mstreal _tol) { tol = _tol; }
+
+  private:
+    // start optimization from the averaged Cartesian structure or the structure
+    // that results from average internal coordinates?
+    fusionParams::coorInitType startType;
+    bool verbose, optimCartesian;
+    mstreal noise; // noise level for initalizing the starting point
+    int Ni, Nc;    // number of iterations per cycle and number of cycles
+    mstreal tol;   // error tolerance stopping criterion for optimization
+};
+
 class fusionEvaluator: public optimizerEvaluator {
   public:
     // broken means across a chain break
@@ -21,20 +59,17 @@ class fusionEvaluator: public optimizerEvaluator {
      * overlap with residue index i of the eventual fused structure. Thus, the
      * length of resTopo is also the length of the fused structure and resTopo[i]
      * has to have at least one entry for all i. */
-    fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> fixedResidues = vector<int>(), bool _verbose = false);
+    fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> fixedResidues = vector<int>(), const fusionParams& _params = fusionParams());
 
     mstreal eval(const vector<mstreal>& point);
 
     vector<mstreal> guessPoint() { if (initPoint.empty()) eval(vector<mstreal>()); return initPoint; }
     void setGuessPoint(const vector<mstreal>& _initPoint) { initPoint = _initPoint; }
-    void noisifyGuessPoint(mstreal _noise = 1.0) { noise = _noise; initPoint.resize(0); }
+    void noisifyGuessPoint(mstreal _noise = 1.0) { params.setNoise(_noise); initPoint.resize(0); }
     int numResidues() { return overlappingResidues.size(); }
     bool isAnchored() { return fixedResidues.size() > 0; }
     int numDF() {
       int df = 3*numMobileAtoms - 6;
-      // TODO: for now, use 3N degrees of freedom when optimizing in XYZ; will change
-      // later (need to position the initial conformation so that the first three
-      // atoms are in their stardard orientations)
       if (isAnchored()) df += 6;
       return df;
     }
@@ -42,7 +77,7 @@ class fusionEvaluator: public optimizerEvaluator {
     void setBuildOrigin(int _buildOriginRes) { buildOriginRes = _buildOriginRes; }
     Structure getStructure() { return fused; }
     Structure getAlignedStructure();
-    void setVerbose(bool _verbose) { verbose = _verbose; }
+    void setVerbose(bool _verbose) { params.setVerbose(_verbose); }
     int randomizeBuildOrigin() {
       buildOriginRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : MstUtils::randInt(0, numResidues() - 1);
       return buildOriginRes;
@@ -53,6 +88,10 @@ class fusionEvaluator: public optimizerEvaluator {
       icBound(icType _type, mstreal _minVal, mstreal _maxVal, string _name = "") { type = _type; minVal = _minVal; maxVal = _maxVal; name = _name; }
       icBound(icType _type, const pair<mstreal, mstreal>& b, string _name = "") { type = _type; minVal = b.first; maxVal = b.second; name = _name; }
       icBound(const icBound& icb) { type = icb.type; minVal = icb.minVal; maxVal = icb.maxVal; name = icb.name; }
+      friend ostream & operator<<(ostream &_os, const icBound& _b) {
+        _os << "BOUND of type '" << _b.type << "', name '" << _b.name << "', limits [" << _b.minVal << ", " << _b.maxVal << "]";
+        return _os;
+      }
 
       icType type;
       mstreal minVal, maxVal;
@@ -61,7 +100,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
   protected:
     AtomPointerVector atomInstances(int ri, const string& ai);
-    mstreal bondInitValue(int ri, int rj, const string& ai, const string& aj, bool negateStartWithMean = false);
+    mstreal bondInitValue(int ri, int rj, const string& ai, const string& aj, bool doNotAverage = false);
     mstreal angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak);
     mstreal dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al);
     CartesianPoint bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache = false);
@@ -104,8 +143,7 @@ class fusionEvaluator: public optimizerEvaluator {
 
     mstreal kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     vector<mstreal> initPoint;
-    bool verbose, startWithMean, optimCartesian;
-    mstreal noise;
+    fusionParams params;
 };
 
 class Fuser {
@@ -115,7 +153,7 @@ class Fuser {
      * eventual chain, and resTopo[i] is a list of residues, of length 1 or more
      * that overlap with the i-th residue in the chain, in the N-to-C order,
      * starting with 0. Returns the the fused chain as a Structure object. */
-    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed = vector<int>(), int Ni = 100, int Nc = 1, bool verbose = false);
+    static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
 
     /* This function is a simplified version of Fuser::fuse(), in that it guesses
      * the topology automatically. Argument residues is a flat vector of all the
@@ -125,7 +163,7 @@ class Fuser {
      * order. The function guesses the topology by finding residues that are
      * likely overlapping (i.e., have close CA atoms). This should not give
      * incorrect topologies in "normal" circumstances, but in strange cases can. */
-    static Structure autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps = -1, int Ni = 100, int Nc = 1, bool verbose = false);
+    static Structure autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps = -1, const fusionParams& params = fusionParams());
 };
 
 

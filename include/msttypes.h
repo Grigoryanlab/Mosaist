@@ -191,7 +191,7 @@ class Residue {
     int atomSize() const { return atoms.size(); }
     vector<Atom*> getAtoms() { return atoms; }
     Atom& operator[](int i) const { return *(atoms[i]); }
-    Atom& getAtom(int i) { return *(atoms[i]); }
+    Atom& getAtom(int i) const { return *(atoms[i]); }
     Chain* getChain() { return parent; }
     string getChainID(bool strict = true);
     string getName() const { return resname; }
@@ -199,7 +199,7 @@ class Residue {
     char getIcode() const { return icode; }
     bool isNamed(string& _name) { return (resname.compare(_name) == 0); }
     bool isNamed(const char* _name) { return (strcmp(resname.c_str(), _name) == 0); }
-    Atom* findAtom(string _name, bool strict = true); // returns NULL if not found and if strict is false
+    Atom* findAtom(string _name, bool strict = true) const; // returns NULL if not found and if strict is false
     bool atomExists(string _name) { return (findAtom(_name, false) != NULL); } // mostly for interchangeability with MSL, better to use findAtom and check for NULL
     Chain* getParent() const { return parent; }
     Structure* getStructure() const { return (parent == NULL) ? NULL : parent->getParent(); }
