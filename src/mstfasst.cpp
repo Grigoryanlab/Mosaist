@@ -339,7 +339,7 @@ void FASST::readDatabase(const string& dbFile) {
     Structure* targetStruct = new Structure();
     int loc = ifs.tellg();
     targetStruct->readData(ifs);
-    targetSource.push_back(targetInfo(dbFile, targetFileType::BINDATABASE, loc, false));
+    targetSource.push_back(targetInfo(dbFile, targetFileType::BINDATABASE, loc, memSave));
     addTargetStructure(targetStruct);
   }
   ifs.close();

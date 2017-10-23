@@ -5,7 +5,7 @@
 
 int main(int argc, char *argv[]) {
   MstOptions op;
-  op.setTitle("Implements the FASSA (FAst Structure Search Algorithm). Options:");
+  op.setTitle("Implements the FASST (FAst Structure Search Algorithm). Options:");
   op.addOption("q", "query PDB file.", true);
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
