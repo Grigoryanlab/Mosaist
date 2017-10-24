@@ -113,7 +113,7 @@ FASST::FASST() {
   updateGrids = false;
   gridSpacing = 15.0;
   memSave = false;
-  maxNumMatches = minNumMatches = -1;
+  maxNumMatches = minNumMatches = suffNumMatches = -1;
   gapConstSet = false;
 }
 
@@ -131,12 +131,24 @@ void FASST::setCurrentRMSDCutoff(mstreal cut) {
 
 void FASST::setMaxNumMatches(int _max) {
   maxNumMatches = _max;
-  if ((minNumMatches >= 0) && (minNumMatches > maxNumMatches)) MstUtils::error("invalid pairing of min and max number of matches: " + MstUtils::toString(minNumMatches) + " and " + MstUtils::toString(maxNumMatches), "FASST::setMaxNumMatches");
+  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setMaxNumMatches");
 }
 
 void FASST::setMinNumMatches(int _min) {
   minNumMatches = _min;
-  if ((maxNumMatches >= 0) && (minNumMatches > maxNumMatches)) MstUtils::error("invalid pairing of min and max number of matches: " + MstUtils::toString(minNumMatches) + " and " + MstUtils::toString(maxNumMatches), "FASST::setMinNumMatches");
+  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setMinNumMatches");
+}
+
+void FASST::setSufficientNumMatches(int _suff) {
+  suffNumMatches = _suff;
+  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setSufficientNumMatches");
+}
+
+bool FASST::areNumMatchConstraintsConsistent() {
+  if (isMaxNumMatchesSet() && isMinNumMatchesSet() && (minNumMatches > maxNumMatches)) return false;
+  if (isMaxNumMatchesSet() && isSufficientNumMatchesSet() && (maxNumMatches < suffNumMatches)) return false;
+  if (isMinNumMatchesSet() && isSufficientNumMatchesSet() && (minNumMatches > suffNumMatches)) return false;
+  return true;
 }
 
 void FASST::setMinGap(int i, int j, int gapLim) {
@@ -633,7 +645,7 @@ void FASST::search() {
       } else {
         // if at the lowest recursion level already, then record the solution
         solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), currentTarget, solutions.size()));
-        // if ((maxNumMatches > 0) && (solutions.size() > maxNumMatches)) {
+        if (isSufficientNumMatchesSet() && solutions.size() == suffNumMatches) return;
         if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
           solutions.erase(--solutions.end());
           setCurrentRMSDCutoff(solutions.rbegin()->getRMSD());

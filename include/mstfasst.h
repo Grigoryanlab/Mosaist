@@ -149,10 +149,14 @@ class FASST {
     int numMatches() { return solutions.size(); }
     void setMaxNumMatches(int _max);
     void setMinNumMatches(int _min);
+    void setSufficientNumMatches(int _suff);
+    void unsetSufficientNumMatches() { suffNumMatches = -1; }
     int getMaxNumMatches() { return maxNumMatches; }
     int getMinNumMatches() { return minNumMatches; }
+    int getSufficientNumMatches() { return suffNumMatches; }
     bool isMaxNumMatchesSet() { return (maxNumMatches > 0); }
     bool isMinNumMatchesSet() { return (minNumMatches > 0); }
+    bool isSufficientNumMatchesSet() { return (suffNumMatches > 0); }
     set<fasstSolution> getMatches() { return solutions; }
     string toString(const fasstSolution& sol);
 
@@ -184,6 +188,7 @@ class FASST {
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     void stripSidechains(Structure& S);
+    bool areNumMatchConstraintsConsistent();
 
   private:
     Structure queryStruct;
@@ -210,7 +215,7 @@ class FASST {
     searchType type;
     vector<vector<string> > searchableAtomTypes;
     int querySize;
-    int maxNumMatches, minNumMatches;
+    int maxNumMatches, minNumMatches, suffNumMatches;
 
     // remOptions[L][i] is a set of alignments for segment i (i >= L) at recursion level
     // L, which are stored sorted by their own residual, through the optList
