@@ -208,7 +208,8 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     }
 
     // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
-    for (int i = buildOriginRes - 1; i >= 0; i--) {
+    startIdx = isAnchored() ? buildOriginRes : -1;
+    for (int i = startIdx; i >= 0; i--) {
       Residue& res = F[i];
       Atom* N = &(res[0]);
       Atom* CA = &(res[1]);
