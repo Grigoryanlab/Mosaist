@@ -130,11 +130,11 @@ class FASST {
      * 4. some windows will not be expandable (hit a chain terminus), in which
      *    case we will compare the common portion of any two windows. Both the
      *    RMSD cutoff and the sequence identity cutoff have to scale.
-     * TODO: need to define chain ends. Do so via the standard information. */
+     * TODO: need to define chain ends. Do so via the standard information.
+     * TODO: enable checking for continuity of gaps */
 
     ~FASST();
     FASST();
-    // TODO: enable checking for continuity of gaps
     void setQuery(const string& pdbFile);
     void setQuery(const Structure& Q);
     Structure getQuery() { return queryStruct; }
@@ -172,6 +172,12 @@ class FASST {
     void getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
     void writeDatabase(const string& dbFile);
     void readDatabase(const string& dbFile);
+
+    // TODO:
+    // results caching
+    int cacheSearch();            // save current search results (needs to also save the query)
+    void recallFromCache(int i);  // overwrite the current results with those from the cache (solutions, query, ...)
+    // TODO: name match structures; match.setName(targetStruct->getName()) on line 768
 
   protected:
     void processQuery();

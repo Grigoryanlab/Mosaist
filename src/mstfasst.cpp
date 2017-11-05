@@ -766,6 +766,7 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
       int solIndex = solIndices[i];
       const fasstSolution& sol = sols[solIndex];
       Structure& match = matches[solIndex];
+      match.setName(targetStruct->getName());
       vector<int> alignment = sol.getAlignment();
       if (alignment.size() != query.size()) {
         MstUtils::error("solution alignment size inconsistent with number of query segments", "FASST::getMatchStructures");
