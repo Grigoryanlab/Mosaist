@@ -122,6 +122,7 @@ FASST::~FASST() {
   // higher levels we point to the same atoms
   if (targetMasks.size()) targetMasks.back().deletePointers();
   for (int i = 0; i < targetStructs.size(); i++) delete targetStructs[i];
+  for (int i = 0; i < ps.size(); i++) delete ps[i];
 }
 
 void FASST::setCurrentRMSDCutoff(mstreal cut) {
@@ -214,19 +215,16 @@ void FASST::processQuery() {
   }
   currAlignment.resize(query.size(), -1);
 
-  // // center-to-center distances in the qyery
-  // centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
-  // for (int i = 0; i < query.size(); i++) {
-  //   for (int j = i+1; j < query.size(); j++) {
-  //     centToCentDist[i][j] = query[i].getGeometricCenter().distancenc(query[j].getGeometricCenter());
-  //     centToCentDist[j][i] = centToCentDist[i][j];
-  //   }
-  // }
+  // re-order query segments by length (longest first)
+  queryOrig = query;
+  qSegOrd.resize(query.size());
+  for (int i = 0; i < qSegOrd.size(); i++) qSegOrd[i] = i;
+  sort(qSegOrd.begin(), qSegOrd.end(), [this](size_t i, size_t j) {return query[i].size() > query[j].size();});
+  for (int i = 0; i < qSegOrd.size(); i++) query[i] = queryOrig[qSegOrd[i]];
 
   // the distance from the centroid of each segment and the centroid of the
   // previous segments considered together
   centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
-  // segCentToPrevSegCentDist.resize(query.size(), 0.0); CartesianPoint cp(0, 0, 0);
   CartesianPoint C(0, 0, 0);
   int N = 0;
   for (int L = 0; L < query.size(); L++) {
@@ -237,8 +235,6 @@ void FASST::processQuery() {
       centToCentDist[L][i] = C.distance(query[i].getGeometricCenter());
     }
     N += n;
-    // segCentToPrevSegCentDist[i] = cp.distance(ci);
-    // cp = ci;
   }
 
   // set query masks (subsets of query segments involved at each recursion level)
@@ -251,19 +247,6 @@ void FASST::processQuery() {
     }
   }
   updateGrids = true;
-
-  // // room for storing query segment centroids at each recursion level
-  // mstreal xc, yc, zc;
-  // for (int i = 0; i < querySegCents.size(); i++) querySegCents[i].deletePointers();
-  // querySegCents.resize(query.size());
-  // for (int i = 0; i < querySegCents.size(); i++) {
-  //   querySegCents[i].resize(i+1);
-  //   for (int j = 0; j <= i; j++) {
-  //     query[j].getGeometricCenter(xc, yc, zc);
-  //     querySegCents[i][j] = new Atom(1, "CEN" + MstUtils::toString(j), xc, yc, zc, 0.0, 1.0, true);
-  //     querySegCents[i][j]->addAlternative(xc, yc, zc, 0.0, 1.0);
-  //   }
-  // }
 
   // set gap constraints structure
   resetGapConstraints();
@@ -406,9 +389,9 @@ void FASST::rebuildProximityGrids() {
   if (ylo == yhi) { ylo -= gridSpacing/2; yhi += gridSpacing/2; }
   if (zlo == zhi) { zlo -= gridSpacing/2; zhi += gridSpacing/2; }
   int N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/gridSpacing));
-  ps.clear(); ps.resize(query.size());
+  ps.clear(); ps.resize(query.size(), NULL);
   for (int i = 0; i < query.size(); i++) {
-    ps[i] = ProximitySearch(xlo, ylo, zlo, xhi, yhi, zhi, N);
+    ps[i] = new ProximitySearch(xlo, ylo, zlo, xhi, yhi, zhi, N);
   }
   updateGrids = false;
 }
@@ -427,7 +410,7 @@ void FASST::prepForSearch(int ti) {
   mstreal xc, yc, zc;
   segmentResiduals.resize(query.size());
   for (int i = 0; i < query.size(); i++) {
-    ps[i].dropAllPoints();
+    ps[i]->dropAllPoints();
     AtomPointerVector& seg = query[i];
     int Na = atomToResIdx(target.size()) - atomToResIdx(seg.size()) + 1; // number of possible alignments
     segmentResiduals[i].resize(MstUtils::max(Na, 0));
@@ -439,7 +422,7 @@ void FASST::prepForSearch(int ti) {
       AtomPointerVector targSeg = target.subvector(resToAtomIdx(j), resToAtomIdx(j) + query[i].size());
       segmentResiduals[i][j] = RC.bestResidual(query[i], targSeg);
       targSeg.getGeometricCenter(xc, yc, zc);
-      if (query.size() > 1) ps[i].addPoint(xc, yc, zc, j);
+      if (query.size() > 1) ps[i]->addPoint(xc, yc, zc, j);
     }
   }
 
@@ -459,12 +442,6 @@ void FASST::prepForSearch(int ti) {
   currResidual = 0;
   currResiduals.resize(query.size(), 0);
   currRemBound = boundOnRemainder(true);
-
-  // // initialize center-to-center tolerances
-  // ccTol.clear(); ccTol.resize(query.size());
-  // for (int i = 0; i < query.size(); i++) {
-  //   ccTol[i].resize(query.size(), vector<mstreal>(query.size(), -1.0)); // unnecessary (unused) entries will stay as -1
-  // }
 
   // make room for target atom masks at different recursion levels
   if (targetMasks.size()) targetMasks.back().deletePointers();
@@ -501,31 +478,6 @@ mstreal FASST::centToCentTol(int i) {
   mstreal remRes = residualCut - currResidual - currRemBound;
   if (remRes < 0) return -1.0;
   return sqrt((remRes * (queryMasks[recLevel].size() + query[i].size())) / (queryMasks[recLevel].size() * query[i].size()));
-}
-
-mstreal FASST::segCentToPrevSegCentTol(int i) {
-  int p = recLevel; // index of the previously placed segment
-
-  /* Say the distance between the centroid of some to-be-placed segment i and
-   * the segment p that was just placed is different from the corresponding
-   * distance in the query by D. Then, we are guaranteed that the residual from
-   * i and p in the final alignment will be at least Si + Sp + D^2 * (Ni * Np)/(Ni + Np),
-   * where Si and Sp are the residuals from aligning i and p on their own, and
-   * Ni and Np are the numbers of atoms in these segments. We also know that
-   * we will have at least some residual from subsequent segment placements:
-   *  + currRemBound = Si + all subsequent self-residuals
-   *  + segmentResiduals[p][currAlignment[p]] = Sp
-   * And, we also know the residual from placing all segments prior to p together:
-   *  + currResiduals[p - 1]
-   * (note that if there are segments prior to p, then recLevel is at least 2).
-   * Thus, D^2 * (Ni * Np)/(Ni + Np) must be no larger than the difference between
-   * residualCut (maximal allowed residual) and the three above components. */
-  mstreal remRes = residualCut - currRemBound - segmentResiduals[p][currAlignment[p]];
-  if (p > 0) {
-    remRes -= currResiduals[p - 1];
-  }
-  if (remRes < 0) return -1.0;
-  return sqrt((remRes * (query[p].size() + query[i].size())) / (query[p].size() * query[i].size()));
 }
 
 void FASST::search() {
@@ -617,12 +569,12 @@ void FASST::search() {
             // tighten the list that way.
             if (dePrev < 0) {
               okLocations.resize(0);
-              ps[i].pointsWithin(currCent, max(di - de, 0.0), di + de, &okLocations);
+              ps[i]->pointsWithin(currCent, max(di - de, 0.0), di + de, &okLocations);
               remSet.intersectOptions(okLocations);
             } else if (dePrev - de > eps) {
               badLocations.resize(0);
-              ps[i].pointsWithin(currCent, max(di - dePrev, 0.0), di - de - eps, &badLocations);
-              ps[i].pointsWithin(currCent, di + de + eps, di + dePrev, &badLocations);
+              ps[i]->pointsWithin(currCent, max(di - dePrev, 0.0), di - de - eps, &badLocations);
+              ps[i]->pointsWithin(currCent, di + de + eps, di + dePrev, &badLocations);
               for (int k = 0; k < badLocations.size(); k++) {
                 remSet.removeOption(badLocations[k]);
               }
@@ -644,7 +596,7 @@ void FASST::search() {
         recLevel = nextLevel;
       } else {
         // if at the lowest recursion level already, then record the solution
-        solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), currentTarget, solutions.size()));
+        solutions.insert(fasstSolution(currAlignment, sqrt(currResidual/querySize), currentTarget, solutions.size(), qSegOrd));
         if (isSufficientNumMatchesSet() && solutions.size() == suffNumMatches) return;
         if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
           solutions.erase(--solutions.end());
@@ -682,20 +634,14 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
       currResidual = RC.bestResidual(queryMasks[recLevel], targetMasks[recLevel]);
       currResiduals[recLevel] = currResidual;
       if (recLevel == 0) {
-        currCents[recLevel] = ps[recLevel].getPoint(currAlignment[recLevel]);
+        currCents[recLevel] = ps[recLevel]->getPoint(currAlignment[recLevel]);
       } else {
-        currCents[recLevel] = (currCents[recLevel - 1] * (N - n) +  ps[recLevel].getPoint(currAlignment[recLevel]) * n) / N;
+        currCents[recLevel] = (currCents[recLevel - 1] * (N - n) +  ps[recLevel]->getPoint(currAlignment[recLevel]) * n) / N;
       }
     }
   }
   return currResidual;
 }
-
-// void FASST::updateQueryCentroids() {
-//   AtomPointerVector& cents = querySegCents[recLevel];
-//   for (int i = 0; i < cents.size(); i++) cents[i]->makeAlternativeMain(0); // first, return the original coordinates
-//   RC.applyLastTransformation(cents); // then, apply transformation
-// }
 
 void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed, matchType type) {
   vector<Structure> matches;
@@ -728,8 +674,8 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
 
   // flatten query into a single array of atoms
   AtomPointerVector queryAtoms;
-  for (int k = 0; k < query.size(); k++) {
-    for (int ai = 0; ai < query[k].size(); ai++) queryAtoms.push_back(query[k][ai]);
+  for (int k = 0; k < queryOrig.size(); k++) {
+    for (int ai = 0; ai < queryOrig[k].size(); ai++) queryAtoms.push_back(queryOrig[k][ai]);
   }
   AtomPointerVector matchAtoms; matchAtoms.reserve(queryAtoms.size());
 
@@ -768,7 +714,7 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
       Structure& match = matches[solIndex];
       match.setName(targetStruct->getName());
       vector<int> alignment = sol.getAlignment();
-      if (alignment.size() != query.size()) {
+      if (alignment.size() != queryOrig.size()) {
         MstUtils::error("solution alignment size inconsistent with number of query segments", "FASST::getMatchStructures");
       }
 
@@ -777,7 +723,7 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
       for (int k = 0; k < alignment.size(); k++) {
         // copy matching residues from the original target structure
         int si = resToAtomIdx(alignment[k]);
-        int L = query[k].size();
+        int L = queryOrig[k].size();
         if (si + L > target.size()) {
           MstUtils::error("solution points to atom outside of target range", "FASST::getMatchStructures");
         }
@@ -789,7 +735,7 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
         case matchType::REGION: {
           for (int k = 0; k < alignment.size(); k++) {
             int si = resToAtomIdx(alignment[k]);
-            int L = query[k].size();
+            int L = queryOrig[k].size();
             for (int ri = atomToResIdx(si); ri < atomToResIdx(si + L); ri++) {
               Residue* res = target[resToAtomIdx(ri)]->getResidue();
               if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
@@ -801,16 +747,16 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
         case matchType::WITHGAPS: {
           // figure out the range of residues to excise from target structure
           vector<bool> toInclude(targetStruct->residueSize());
-          for (int i = 0; i < query.size(); i++) {
+          for (int i = 0; i < queryOrig.size(); i++) {
             // each individual segments should be included
-            for (int k = alignment[i]; k < alignment[i] + atomToResIdx(query[i].size()); k++) toInclude[k] = true;
+            for (int k = alignment[i]; k < alignment[i] + atomToResIdx(queryOrig[i].size()); k++) toInclude[k] = true;
             // then some gaps also
-            for (int j = 0; j < query.size(); j++) {
+            for (int j = 0; j < queryOrig.size(); j++) {
               if (i == j) continue;
               // if gap constrained, fill in between these two segments
               if (gapConstrained(i, j)) {
                 if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchStructures");
-                for (int k = alignment[i] + atomToResIdx(query[i].size()); k < alignment[j]; k++) {
+                for (int k = alignment[i] + atomToResIdx(queryOrig[i].size()); k < alignment[j]; k++) {
                   toInclude[k] = true;
                 }
               }

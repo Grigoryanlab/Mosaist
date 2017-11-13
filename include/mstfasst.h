@@ -10,8 +10,11 @@ using namespace MST;
 
 class fasstSolution {
   public:
-    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, int _foundOrder) {
+    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, int _foundOrder, vector<int> segOrder = vector<int>()) {
       alignment = _alignment; rmsd = _rmsd; targetIndex = _target; foundOrder = _foundOrder;
+      if (!segOrder.empty()) {
+        for (int i = 0; i < _alignment.size(); i++) alignment[segOrder[i]] = _alignment[i];
+      }
     }
     fasstSolution(const fasstSolution& _sol) {
       alignment = _sol.alignment; rmsd = _sol.rmsd; targetIndex = _sol.targetIndex; foundOrder = _sol.foundOrder;
@@ -115,10 +118,7 @@ class FASST {
         int numIn;
     };
 
-    /* TODO: add setSufficientNumMatches(int)
-     * TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
-     * TODO: pre-sort query segments in order of decreasing size (remember original oder); check performance
-             OR, pre-sort in the order of badness of own residual (how to measure? worst? best? median?)
+    /* TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
      * TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
      * TODO: Jianfu and Craig will look for fast ways of NN searches in Hamming distnce space
      * TODO: goal is to define redundancy as follows:
@@ -199,9 +199,10 @@ class FASST {
   private:
     Structure queryStruct;
     vector<Structure*> targetStructs;
-    vector<AtomPointerVector> query;         // just the part of the query that will be sought, split by segment
-    // vector<AtomPointerVector> querySegCents; // palcehoder for centroids of query segments, at each recursion level
-    vector<AtomPointerVector> targets;       // just the part of the target structure that will be searched over
+    vector<AtomPointerVector> queryOrig;     // just the part of the query that will be sought, split by segment
+    vector<AtomPointerVector> query;         // same as above, but with segments re-orderd for optimal searching
+    vector<int> qSegOrd;                     // qSegOrd[i] is the index (in the original queryOrig) of the i-th segment in query
+    vector<AtomPointerVector> targets;       // target structures (just the parts that will be searched over)
     vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
@@ -263,7 +264,7 @@ class FASST {
 
     // ProximitySearch for finding nearby centroids of target segments (there
     // will be one ProximitySearch object per query segment)
-    vector<ProximitySearch> ps;
+    vector<ProximitySearch*> ps;
 
     // various solution constraints
     mstreal rmsdCutRequested, rmsdCut, residualCut;

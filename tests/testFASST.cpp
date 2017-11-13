@@ -12,6 +12,7 @@ int main(int argc, char *argv[]) {
   op.addOption("r", "RMSD cutoff.", true);
   op.addOption("min", "min number of matches.");
   op.addOption("max", "max number of matches.");
+  op.addOption("strOut", "dump structures into this directory.");
   op.setOptions(argc, argv);
 
   FASST S;
@@ -44,7 +45,9 @@ int main(int argc, char *argv[]) {
   set<fasstSolution> matches = S.getMatches(); int i = 0;
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << S.toString(*it) << endl;
-    // Structure match = S.getMatchStructure(*it, true, FASST::matchType::FULL);
-//    match.writePDB("/tmp/match" + MstUtils::toString(i) + ".pdb");
+    if (op.isGiven("strOut")) {
+      Structure match = S.getMatchStructure(*it);
+      match.writePDB(op.getString("strOut") + "/match" + MstUtils::toString(i) + ".pdb");
+    }
   }
 }
