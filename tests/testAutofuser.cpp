@@ -18,7 +18,8 @@ int main(int argc, char *argv[]) {
     toFuse.insert(toFuse.end(), res.begin(), res.end());
   }
   fusionParams opts; opts.setNumIters(1000); opts.setVerbose(true);
-  opts.setCoorInitType(fusionParams::coorInitType::meanIC);
+  opts.setCoorInitType(fusionParams::coorInitType::meanCoor);
+  opts.setVerbose();
   Structure fused = Fuser::autofuse(toFuse, 3, opts);
 	fused.writePDB(outFile);
 }

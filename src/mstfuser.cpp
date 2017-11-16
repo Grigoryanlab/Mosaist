@@ -601,58 +601,67 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
     }
   }
 
-  // vector<bool> counted(residues.size(), false);
-  // for (int i = 0; i < residues.size(); i++) {
-  //   if (counted[i]) continue;
-  //   resTopo.push_back(vector<Residue*>());
-  //   vector<int> bucket = psCA.getPointsWithin(CAs[i]->getCoor(), 0, closeDist);
-  //   for (int j = 0; j < bucket.size(); j++) {
-  //     resTopo.back().push_back(residues[bucket[j]]);
-  //     resTopoIdx[residues[bucket[j]]] = resTopo.size() - 1;
-  //     counted[bucket[j]] = true;
-  //   }
-  // }
-
-  // now order residues N-to-C of the final chain
-  vector<int> ntoc(1, 0); // put first residue in chain
-  // keep growing the chain by finding bonded neighbors on either end
-  for (int nc = 0; nc < 2; nc++) {
-    while (ntoc.size() != resTopo.size()) {
-      int ri = nc ? ntoc.front() : ntoc.back();
-      bool found = false;
-      for (int i = 0; i < resTopo[ri].size(); i++) {
-        Residue* r = resTopo[ri][i];
-        Atom* n = nc ? r->findAtom("N") : r->findAtom("C");
-        vector<int> neigh = (nc ? psC.getPointsWithin(n->getCoor(), pepBondMin, pepBondMax) : psN.getPointsWithin(n->getCoor(), pepBondMin, pepBondMax));
-        if (neigh.empty()) continue;
-
-        // if more than one residue is within a peptide-bond distance, pick the
-        // one with the most close-to-ideal bond length
-        int next = neigh[0];
-        mstreal btol = fabs(n->distance(residues[next]->findAtom(nc ? "C" : "N")) - pepBondIdeal);
-        for (int ii = 0; ii < neigh.size(); ii++) {
-          mstreal tol = n->distance(residues[neigh[ii]]->findAtom(nc ? "C" : "N")) - pepBondIdeal;
-          if (btol > tol) {
-            next = neigh[ii];
-            btol = tol;
-          }
-        }
-
-        // now add neighbor on the correct side of the growing chain
-        if (nc) ntoc.insert(ntoc.begin(), resTopoIdx[residues[next]]);
-        else ntoc.push_back(resTopoIdx[residues[next]]);
-        found = true;
-        break;
-      }
-      if (!found) break;
+  if (params.isVerbose()) {
+    cout << "autofuser generated topology:" << endl;
+    for (int i = 0; i < resTopo.size(); i++) {
+      cout << i+1 << ": ";
+      for (int j = 0; j < resTopo[i].size(); j++) cout << *(resTopo[i][j]) << " ";
+      cout << endl;
     }
   }
-  MstUtils::assert(ntoc.size() == resTopo.size(), "could not deduce chain connectivity automatically", "Fuser::autofuse");
+
+  // now order residues N-to-C of the final chain
+  vector<int> chain;
+  vector<bool> unassigned(resTopo.size(), true);
+  while (chain.size() != resTopo.size()) {
+    // grab a residue that has not yet been assigned to a chain and put it in a new chain
+    vector<int> ntoc;
+    for (int i = 0; i < unassigned.size(); i++) {
+      if (unassigned[i]) { unassigned[i] = false; ntoc.push_back(i); break; }
+    }
+    if (params.isVerbose()) cout << "growing a new chain starting from residue " << ntoc[0] << "..." << endl;
+    // keep growing the chain by finding bonded neighbors on either end
+    for (int nc = 0; nc < 2; nc++) {
+      while (ntoc.size() != resTopo.size()) {
+        int ri = nc ? ntoc.front() : ntoc.back();
+        bool found = false;
+        for (int i = 0; i < resTopo[ri].size(); i++) {
+          Residue* r = resTopo[ri][i];
+          Atom* n = nc ? r->findAtom("N") : r->findAtom("C");
+          vector<int> neigh = (nc ? psC.getPointsWithin(n->getCoor(), pepBondMin, pepBondMax) : psN.getPointsWithin(n->getCoor(), pepBondMin, pepBondMax));
+          if (neigh.empty()) continue;
+
+          // if more than one residue is within a peptide-bond distance, pick the
+          // one with the most close-to-ideal bond length
+          int next = neigh[0];
+          mstreal btol = fabs(n->distance(residues[next]->findAtom(nc ? "C" : "N")) - pepBondIdeal);
+          for (int ii = 0; ii < neigh.size(); ii++) {
+            mstreal tol = n->distance(residues[neigh[ii]]->findAtom(nc ? "C" : "N")) - pepBondIdeal;
+            if (btol > tol) {
+              next = neigh[ii];
+              btol = tol;
+            }
+          }
+
+          // now add neighbor on the correct side of the growing chain
+          if (params.isVerbose()) cout << "\tN-to-C bond: " << (nc ? resTopoIdx[residues[next]] : ntoc.back()) + 1 << " -- " << (nc ? ntoc.front() : resTopoIdx[residues[next]]) + 1 << endl;
+          if (nc) ntoc.insert(ntoc.begin(), resTopoIdx[residues[next]]);
+          else ntoc.push_back(resTopoIdx[residues[next]]);
+          unassigned[resTopoIdx[residues[next]]] = false;
+          found = true;
+          break;
+        }
+        if (!found) break;
+      }
+    }
+    chain.insert(chain.end(), ntoc.begin(), ntoc.end()); // append the last found chain
+  }
+//  MstUtils::assert(chain.size() == resTopo.size(), "could not deduce chain connectivity automatically", "Fuser::autofuse");
 
   // finally, re-order
   vector<vector<Residue*> > oldResTopo = resTopo;
-  for (int i = 0; i < ntoc.size(); i++) {
-    resTopo[i] = oldResTopo[ntoc[i]];
+  for (int i = 0; i < chain.size(); i++) {
+    resTopo[i] = oldResTopo[chain[i]];
   }
 
   // if specified, mark as fixed all positions except those that are close enough
