@@ -281,6 +281,7 @@ void FASST::addTargetStructure(Structure* targetStruct) {
     parseChain(targetStruct->getChain(i), target, &seq);
   }
   MstUtils::assert(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
+  seq.setName(targetStruct->getName());
 
   // orient the target structure in common frame (remember the transform)
   tr.push_back(TransformFactory::translate(-target.getGeometricCenter()));
@@ -559,20 +560,20 @@ void FASST::search() {
           // except that segments cannot overlap, so remove from consideration
           // all alignments that overlap with the segments that was just placed
           remOptions[nextLevel][i].removeOptions(currAlignment[recLevel] - segLen[i] + 1,
-                                                currAlignment[recLevel] + segLen[recLevel] - 1);
+                                                 currAlignment[recLevel] + segLen[recLevel] - 1);
         }
         // if any gap constraints exist, limit options at this recursion level accordingly
         if (gapConstraintsExist()) {
           for (int j = 0; j < nextLevel; j++) {
             for (int i = nextLevel; i < query.size(); i++) {
-              // if (minGapSet[i][j]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
-              // if (maxGapSet[i][j]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
-              // if (minGapSet[j][i]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
-              // if (maxGapSet[j][i]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
-              if (minGapSet[i][j]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] - minGap[i][j] - segLen[i]);
-              if (maxGapSet[i][j]) remOptions[nextLevel][i].constrainRange(currAlignment[j] - maxGap[i][j] - segLen[i], targChainEnd[currAlignment[j]]);
-              if (minGapSet[j][i]) remOptions[nextLevel][i].constrainRange(currAlignment[j] + minGap[j][i] + segLen[j], targChainEnd[currAlignment[j]]);
-              if (maxGapSet[j][i]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] + maxGap[j][i] + segLen[j]);
+              // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              // if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i], targChainEnd[currAlignment[j]]);
+              if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j], targChainEnd[currAlignment[j]]);
+              if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
               if (remOptions[nextLevel][i].empty()) { levelExhausted = true; break; }
             }
             if (levelExhausted) break;
@@ -761,53 +762,96 @@ void FASST::getMatchStructures(const vector<fasstSolution>& sols, vector<Structu
       }
 
       // cut out the part of the target Structure that will constitute the returned match
-      switch(type) {
-        case matchType::REGION: {
-          for (int k = 0; k < alignment.size(); k++) {
-            int si = resToAtomIdx(alignment[k]);
-            int L = queryOrig[k].size();
-            for (int ri = atomToResIdx(si); ri < atomToResIdx(si + L); ri++) {
-              Residue* res = target[resToAtomIdx(ri)]->getResidue();
-              if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
-              match.addResidue(res);
-            }
-          }
-          break;
+      if (type == matchType::FULL) {
+        match = *targetStruct;
+      } else {
+        vector<int> resIndices = getMatchResidueIndices(sol, type);
+        for (auto ri = resIndices.begin(); ri != resIndices.end(); ri++) {
+          Residue* res = target[resToAtomIdx(*ri)]->getResidue();
+          if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
+          match.addResidue(res);
         }
-        case matchType::WITHGAPS: {
-          // figure out the range of residues to excise from target structure
-          vector<bool> toInclude(targetStruct->residueSize());
-          for (int i = 0; i < queryOrig.size(); i++) {
-            // each individual segments should be included
-            for (int k = alignment[i]; k < alignment[i] + atomToResIdx(queryOrig[i].size()); k++) toInclude[k] = true;
-            // then some gaps also
-            for (int j = 0; j < queryOrig.size(); j++) {
-              if (i == j) continue;
-              // if gap constrained, fill in between these two segments
-              if (gapConstrained(i, j)) {
-                if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchStructures");
-                for (int k = alignment[i] + atomToResIdx(queryOrig[i].size()); k < alignment[j]; k++) {
-                  toInclude[k] = true;
-                }
-              }
-            }
-          }
-          for (int ri = 0; ri < toInclude.size(); ri++) {
-            if (toInclude[ri]) match.addResidue(&(targetStruct->getResidue(ri)));
-          }
-          break;
-        }
-        case matchType::FULL:
-          match = *targetStruct;
-          break;
-        default:
-          MstUtils::error("unknown match output type", "FASST::getMatchStructures");
       }
 
       // align matching region onto query, transforming the match itself
       rc.align(matchAtoms, queryAtoms, match);
     }
   }
+}
+
+vector<Sequence> FASST::getMatchSequences(const vector<fasstSolution>& sols, matchType type) {
+  vector<Sequence> seqs(sols.size());
+  for (int i = 0; i < sols.size(); i++) {
+    const fasstSolution& sol = sols[i];
+    int idx = sol.getTargetIndex();
+    MstUtils::assert((idx >= 0) && (idx < targSeqs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
+    vector<int> alignment = sol.getAlignment();
+    seqs[i].setName(targSeqs[idx].getName());
+
+    // isolate out the part of the target Sequence that will constitute the returned match
+    vector<int> resIndices = getMatchResidueIndices(sol, type);
+    for (auto ri = resIndices.begin(); ri != resIndices.end(); ri++) seqs[i].appendResidue(targSeqs[idx][*ri]);
+  }
+  return seqs;
+}
+
+vector<Sequence> FASST::getMatchSequences(const set<fasstSolution>& sols, matchType type) {
+  vector<fasstSolution> vec; vec.reserve(sols.size());
+  int i = 0;
+  for (auto it = sols.begin(); it != sols.end(); ++it, ++i) vec[i] = *it;
+  return getMatchSequences(vec, type);
+}
+
+Sequence FASST::getMatchSequence(const fasstSolution& sol, matchType type) {
+  vector<Sequence> seqs = getMatchSequences(vector<fasstSolution>(1, sol), type);
+  return seqs[0];
+}
+
+vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType type) {
+  vector<int> residueIndices;
+  vector<int> alignment = sol.getAlignment();
+  switch(type) {
+    case matchType::REGION: {
+      for (int k = 0; k < alignment.size(); k++) {
+        int si = alignment[k];
+        int L = atomToResIdx(queryOrig[k].size());
+        for (int ri = si; ri < si + L; ri++) residueIndices.push_back(ri);
+      }
+      break;
+    }
+    case matchType::WITHGAPS: {
+      set<int> toInclude;
+      for (int i = 0; i < queryOrig.size(); i++) {
+        // each individual segments should be included
+        for (int k = alignment[i]; k < alignment[i] + atomToResIdx(queryOrig[i].size()); k++) toInclude.insert(k);
+        // then some gaps also
+        for (int j = 0; j < queryOrig.size(); j++) {
+          if (i == j) continue;
+          // if gap constrained, fill in between these two segments
+          if (gapConstrained(i, j)) {
+            if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchResidueIndices");
+            for (int k = alignment[i] + atomToResIdx(queryOrig[i].size()); k < alignment[j]; k++) {
+              toInclude.insert(k);
+            }
+          }
+        }
+      }
+      for (auto it = toInclude.begin(); it != toInclude.end(); it++) {
+        residueIndices.push_back(*it);
+      }
+      break;
+    }
+    case matchType::FULL: {
+      int idx = sol.getTargetIndex();
+      MstUtils::assert((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchResidueIndices");
+      for (int i = 0; i < targetStructs[idx]->residueSize(); i++) residueIndices.push_back(i);
+      break;
+    }
+    default:
+      MstUtils::error("unknown match output type", "FASST::getMatchResidueIndices");
+  }
+
+  return residueIndices;
 }
 
 string FASST::toString(const fasstSolution& sol) {

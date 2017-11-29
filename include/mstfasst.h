@@ -173,6 +173,9 @@ class FASST {
     Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION);
     void getMatchStructures(const set<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
     void getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
+    vector<Sequence> getMatchSequences(const set<fasstSolution>& sols, matchType type = matchType::REGION);
+    vector<Sequence> getMatchSequences(const vector<fasstSolution>& sols, matchType type = matchType::REGION);
+    Sequence getMatchSequence(const fasstSolution& sol, matchType type = matchType::REGION);
     void writeDatabase(const string& dbFile);
     void readDatabase(const string& dbFile);
 
@@ -198,6 +201,7 @@ class FASST {
     void addTargetStructure(Structure* targetStruct);
     void stripSidechains(Structure& S);
     bool areNumMatchConstraintsConsistent();
+    vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type); // figure out the range of residues to excise from target structure
 
   private:
     vector<Structure*> targetStructs;

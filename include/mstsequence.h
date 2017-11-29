@@ -16,8 +16,11 @@ class Sequence {
     string toString(bool triple = false, const string& delim = "");
     string getElement(int i, bool triple = false);
     int& operator[] (int i) { return seq[i]; }
+    int operator[] (int i) const { return seq[i]; }
     int length() const { return seq.size(); }
     void appendResidue(const string& aa);
+    void appendResidue(int aai) { seq.push_back(aai); }
+    friend ostream & operator<<(ostream &_os, const Sequence& _seq);
 
   private:
     vector<int> seq;

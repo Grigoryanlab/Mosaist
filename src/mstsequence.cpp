@@ -192,3 +192,13 @@ string Sequence::getElement(int i, bool triple) {
   if (triple) return SeqTools::idxToTriple(seq[i]);
   return SeqTools::idxToSingle(seq[i]);
 }
+
+ostream& MST::operator<<(ostream &_os, const Sequence& _seq) {
+  _os << "> " << _seq.getName() << endl;
+  int k = 0;
+  for (int i = 0; i < _seq.length(); i++) {
+    if (k >= 40) { _os << endl; k = 0; }
+    _os << SeqTools::idxToSingle(_seq[i]); k++;
+  }
+  return _os;
+}
