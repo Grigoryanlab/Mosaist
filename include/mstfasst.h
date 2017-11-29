@@ -3,6 +3,7 @@
 
 #include "msttypes.h"
 #include "msttransforms.h"
+#include "mstsequence.h"
 #include <list>
 #include <chrono>
 
@@ -86,6 +87,8 @@ class FASST {
         void constrainLE(int idx);
         // keep only options with indices greater than or equal to the given one
         void constrainGE(int idx);
+        // keep only options with indices in the range [idxLow, idxHigh]
+        void constrainRange(int idxLow, int idxHigh);
         // wipe all options
         void removeAllOptions();
         // copy the valid options from a different set of the same options
@@ -183,7 +186,7 @@ class FASST {
     void processQuery();
     void setCurrentRMSDCutoff(mstreal cut);
     void prepForSearch(int ti);
-    bool parseChain(const Chain& S, AtomPointerVector& searchable);
+    bool parseChain(const Chain& S, AtomPointerVector& searchable, Sequence* seq = NULL);
     mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
     // void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
@@ -197,17 +200,21 @@ class FASST {
     bool areNumMatchConstraintsConsistent();
 
   private:
-    Structure queryStruct;
     vector<Structure*> targetStructs;
+    vector<AtomPointerVector> targets;       // target structures (just the parts that will be searched over)
+    vector<Sequence> targSeqs;               // target sequences (of just the parts that will be searched over)
+    vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
+    vector<int> targChainBeg, targChainEnd;  // targChainBeg[i] and targChainEnd[i] contain the chain start and end indices for the chain
+                                             // that contains the residue with index i (in the overal fused sequence)
+    vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
+    int currentTarget;                       // the index of the target currently being searched for
+
+    Structure queryStruct;
     vector<AtomPointerVector> queryOrig;     // just the part of the query that will be sought, split by segment
     vector<AtomPointerVector> query;         // same as above, but with segments re-orderd for optimal searching
     vector<int> qSegOrd;                     // qSegOrd[i] is the index (in the original queryOrig) of the i-th segment in query
-    vector<AtomPointerVector> targets;       // target structures (just the parts that will be searched over)
-    vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
-    vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
     bool memSave;                            // save memory by storing only the backbone of targets?
-    int currentTarget;                       // the index of the target currently being searched for
 
     vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
     vector<vector<bool> > minGapSet, maxGapSet;

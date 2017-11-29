@@ -104,6 +104,11 @@ void FASST::optList::constrainGE(int idx) {
   for (int i = 0; i < MstUtils::min(idx, (int) isIn.size()); i++) removeOption(i);
 }
 
+void FASST::optList::constrainRange(int idxLow, int idxHigh) {
+  constrainGE(idxLow);
+  constrainLE(idxHigh);
+}
+
 /* --------- FASST --------- */
 FASST::FASST() {
   recLevel = 0;
@@ -268,10 +273,12 @@ void FASST::addTargetStructure(Structure* targetStruct) {
   if (memSave) stripSidechains(*targetStruct);
   targetStructs.push_back(targetStruct);
   targets.push_back(AtomPointerVector());
+  targSeqs.push_back(Sequence());
   AtomPointerVector& target = targets.back();
+  Sequence& seq = targSeqs.back();
   // we don't care about the chain topology of the target, so append all residues
   for (int i = 0; i < targetStruct->chainSize(); i++) {
-    parseChain(targetStruct->getChain(i), target);
+    parseChain(targetStruct->getChain(i), target, &seq);
   }
   MstUtils::assert(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
 
@@ -296,7 +303,7 @@ void FASST::addTargets(const vector<string>& pdbFiles) {
   for (int i = 0; i < pdbFiles.size(); i++) addTarget(pdbFiles[i]);
 }
 
-bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable) {
+bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable, Sequence* seq) {
   bool foundAll = true;
   for (int i = 0; i < C.residueSize(); i++) {
     Residue& res = C.getResidue(i);
@@ -312,7 +319,10 @@ bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable) {
           if (a == NULL) { foundAll = false; break; }
           bb.push_back(a);
         }
-        if (bb.size() == searchableAtomTypes.size()) searchable.insert(searchable.end(), bb.begin(), bb.end());
+        if (bb.size() == searchableAtomTypes.size()) {
+          searchable.insert(searchable.end(), bb.begin(), bb.end());
+          if (seq != NULL) seq->appendResidue(res.getName());
+        }
         break;
       }
       default:
@@ -464,6 +474,22 @@ void FASST::prepForSearch(int ti) {
   // room for centroids of aligned sub-structure, at each recursion level
   currCents.clear();
   currCents.resize(query.size(), CartesianPoint(0, 0, 0));
+
+  // mark chain beginning and end indices (if gap constraints are present)
+  if (gapConstraintsExist()) {
+    targChainBeg.resize(atomToResIdx(target.size()), 0);
+    for (int i = 1; i < targChainBeg.size(); i++) {
+      if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i-1)]->getChain()) targChainBeg[i] = targChainBeg[i-1];
+      else targChainBeg[i] = i;
+    }
+    targChainEnd.resize(atomToResIdx(target.size()), atomToResIdx(target.size()));
+    for (int i = targChainEnd.size() - 2; i >= 0; i--) {
+      if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i+1)]->getChain()) targChainEnd[i] = targChainEnd[i+1];
+      else targChainEnd[i] = i;
+    }
+  } else {
+    targChainBeg.resize(0); targChainEnd.resize(0);
+  }
 }
 
 mstreal FASST::boundOnRemainder(bool compute) {
@@ -539,10 +565,14 @@ void FASST::search() {
         if (gapConstraintsExist()) {
           for (int j = 0; j < nextLevel; j++) {
             for (int i = nextLevel; i < query.size(); i++) {
-              if (minGapSet[i][j]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
-              if (maxGapSet[i][j]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
-              if (minGapSet[j][i]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
-              if (maxGapSet[j][i]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
+              // if (minGapSet[i][j]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[i][j] - segLen[i]);
+              // if (maxGapSet[i][j]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[i][j] - segLen[i]);
+              // if (minGapSet[j][i]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[j][i] + segLen[j]);
+              // if (maxGapSet[j][i]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[j][i] + segLen[j]);
+              if (minGapSet[i][j]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] - minGap[i][j] - segLen[i]);
+              if (maxGapSet[i][j]) remOptions[nextLevel][i].constrainRange(currAlignment[j] - maxGap[i][j] - segLen[i], targChainEnd[currAlignment[j]]);
+              if (minGapSet[j][i]) remOptions[nextLevel][i].constrainRange(currAlignment[j] + minGap[j][i] + segLen[j], targChainEnd[currAlignment[j]]);
+              if (maxGapSet[j][i]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] + maxGap[j][i] + segLen[j]);
               if (remOptions[nextLevel][i].empty()) { levelExhausted = true; break; }
             }
             if (levelExhausted) break;

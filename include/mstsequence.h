@@ -34,6 +34,7 @@ class SeqTools {
     static string singleToTriple(const string single, string del = "");
     static vector<int> seqToIdx(const string single, string del = "");
     static int aaToIdx(const string aa);
+    static int unknownIdx() { return unkIdx; }
     static string idxToTriple(int idx);
     static string idxToSingle(int idx);
     static string toTriple(const string aa);
@@ -46,6 +47,7 @@ class SeqTools {
     static map<string, int> aa3ToIdx, aa1ToIdx;
     static vector<string> idxToAA3, idxToAA1;
     static bool initialized;
+    static int unkIdx;
 };
 
 

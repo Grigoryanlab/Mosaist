@@ -7,14 +7,15 @@ using namespace MST;
 vector<string> SeqTools::aa1, SeqTools::aa3;
 map<string, int> SeqTools::aa3ToIdx, SeqTools::aa1ToIdx;
 vector<string> SeqTools::idxToAA3, SeqTools::idxToAA1;
+int SeqTools::unkIdx;
 bool initialized = SeqTools::initConstants();
 
 int SeqTools::aaToIdx(const string aa) {
   if (aa.length() == 1) {
-    if (aa1ToIdx.find(aa) == aa1ToIdx.end()) return -1;
+    if (aa1ToIdx.find(aa) == aa1ToIdx.end()) SeqTools::unknownIdx();
     return aa1ToIdx[aa];
   } else if (aa.length() == 3) {
-    if (aa3ToIdx.find(aa) == aa3ToIdx.end()) return -1;
+    if (aa3ToIdx.find(aa) == aa3ToIdx.end()) SeqTools::unknownIdx();
     return aa3ToIdx[aa];
   }
   MstUtils::error("uknown amino acid '" + aa + "'", "SeqTools::aaToIdx");
@@ -100,6 +101,7 @@ bool SeqTools::initConstants() {
   aa3.push_back("SEP"); aa1.push_back("S"); // phosphoserine
   aa3.push_back("TPO"); aa1.push_back("T"); // phosphothreonine
   aa3.push_back("PTR"); aa1.push_back("Y"); // o-phosphotyrosine
+  aa3.push_back("UNK"); aa1.push_back("?"); // unknown residue
 
   idxToAA3.resize(aa3.size());
   idxToAA1.resize(aa1.size());
@@ -111,6 +113,7 @@ bool SeqTools::initConstants() {
     idxToAA3[i] = aa3[i];
     idxToAA1[i] = aa1[i];
   }
+  unkIdx = aa1ToIdx["?"];
   return true;
 }
 

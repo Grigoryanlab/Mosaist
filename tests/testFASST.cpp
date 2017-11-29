@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
   S.setRMSDCutoff(op.getReal("r"));
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
-  // S.setMaxGap(0, 1, 6); S.setMinGap(0, 1, 1);
+  S.setMaxGap(0, 1, 6); S.setMinGap(0, 1, 1);
   auto end = chrono::high_resolution_clock::now();
   cout << "DB reading took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "Searching..." << endl;
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << S.toString(*it) << endl;
     if (op.isGiven("strOut")) {
-      Structure match = S.getMatchStructure(*it);
+      Structure match = S.getMatchStructure(*it, true, FASST::matchType::FULL);
       match.writePDB(op.getString("strOut") + "/match" + MstUtils::toString(i) + ".pdb");
     }
   }
