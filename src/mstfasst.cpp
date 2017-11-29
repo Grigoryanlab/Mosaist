@@ -566,14 +566,17 @@ void FASST::search() {
         if (gapConstraintsExist()) {
           for (int j = 0; j < nextLevel; j++) {
             for (int i = nextLevel; i < query.size(); i++) {
-              // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
-              // if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
-              if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i], targChainEnd[currAlignment[j]]);
-              if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j], targChainEnd[currAlignment[j]]);
-              if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+// TODO: clean this up by hiding qSegOrd lookups inside getter functions
+// TODO: that means have to define qSegOrd upon setting the query
+              remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], targChainEnd[currAlignment[j]]);
+              if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i], targChainEnd[currAlignment[j]]);
+              // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j], targChainEnd[currAlignment[j]]);
+              // if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
               if (remOptions[nextLevel][i].empty()) { levelExhausted = true; break; }
             }
             if (levelExhausted) break;
