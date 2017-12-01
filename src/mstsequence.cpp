@@ -7,7 +7,7 @@ using namespace MST;
 vector<string> SeqTools::aa1, SeqTools::aa3;
 map<string, int> SeqTools::aa3ToIdx, SeqTools::aa1ToIdx;
 vector<string> SeqTools::idxToAA3, SeqTools::idxToAA1;
-int SeqTools::unkIdx;
+int SeqTools::_unkIdx, SeqTools::_gapIdx;
 bool initialized = SeqTools::initConstants();
 
 int SeqTools::aaToIdx(const string aa) {
@@ -102,6 +102,7 @@ bool SeqTools::initConstants() {
   aa3.push_back("TPO"); aa1.push_back("T"); // phosphothreonine
   aa3.push_back("PTR"); aa1.push_back("Y"); // o-phosphotyrosine
   aa3.push_back("UNK"); aa1.push_back("?"); // unknown residue
+  aa3.push_back("---"); aa1.push_back("-"); // gap
 
   idxToAA3.resize(aa3.size());
   idxToAA1.resize(aa1.size());
@@ -113,7 +114,8 @@ bool SeqTools::initConstants() {
     idxToAA3[i] = aa3[i];
     idxToAA1[i] = aa1[i];
   }
-  unkIdx = aa1ToIdx["?"];
+  _unkIdx = aa1ToIdx["?"];
+  _gapIdx = aa1ToIdx["-"];
   return true;
 }
 
@@ -188,9 +190,14 @@ string Sequence::toString(bool triple, const string& delim) {
 	return s;
 }
 
-string Sequence::getElement(int i, bool triple) {
+string Sequence::getResidue(int i, bool triple) {
   if (triple) return SeqTools::idxToTriple(seq[i]);
   return SeqTools::idxToSingle(seq[i]);
+}
+
+void Sequence::resize(int newLen, int newIdx) {
+  if (newIdx == -1) seq.resize(newLen, SeqTools::gapIdx());
+  else seq.resize(newLen, newIdx);
 }
 
 ostream& MST::operator<<(ostream &_os, const Sequence& _seq) {

@@ -14,12 +14,14 @@ class Sequence {
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }
     string toString(bool triple = false, const string& delim = "");
-    string getElement(int i, bool triple = false);
+    string getResidue(int i, bool triple = false);
     int& operator[] (int i) { return seq[i]; }
     int operator[] (int i) const { return seq[i]; }
     int length() const { return seq.size(); }
+    int size() const { return seq.size(); }
     void appendResidue(const string& aa);
     void appendResidue(int aai) { seq.push_back(aai); }
+    void resize(int newLen, int newIdx = -1);
     friend ostream & operator<<(ostream &_os, const Sequence& _seq);
 
   private:
@@ -37,7 +39,8 @@ class SeqTools {
     static string singleToTriple(const string single, string del = "");
     static vector<int> seqToIdx(const string single, string del = "");
     static int aaToIdx(const string aa);
-    static int unknownIdx() { return unkIdx; }
+    static int unknownIdx() { return _unkIdx; }
+    static int gapIdx() { return _gapIdx; }
     static string idxToTriple(int idx);
     static string idxToSingle(int idx);
     static string toTriple(const string aa);
@@ -50,7 +53,7 @@ class SeqTools {
     static map<string, int> aa3ToIdx, aa1ToIdx;
     static vector<string> idxToAA3, idxToAA1;
     static bool initialized;
-    static int unkIdx;
+    static int _unkIdx, _gapIdx;
 };
 
 

@@ -10,20 +10,21 @@
 using namespace MST;
 
 class fasstSolution {
+  friend class fasstSolutionSet;
   public:
-    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, int _foundOrder, vector<int> segOrder = vector<int>()) {
-      alignment = _alignment; rmsd = _rmsd; targetIndex = _target; foundOrder = _foundOrder;
-      if (!segOrder.empty()) {
-        for (int i = 0; i < _alignment.size(); i++) alignment[segOrder[i]] = _alignment[i];
-      }
-    }
-    fasstSolution(const fasstSolution& _sol) {
-      alignment = _sol.alignment; rmsd = _sol.rmsd; targetIndex = _sol.targetIndex; foundOrder = _sol.foundOrder;
-    }
+    fasstSolution() { rmsd = 0.0; context = NULL; }
+    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, int _foundOrder, vector<int> segOrder = vector<int>());
+    fasstSolution(const fasstSolution& _sol);
+    ~fasstSolution() { if (context != NULL) delete context; }
 
     mstreal getRMSD() const { return rmsd; }
     int getTargetIndex() const { return targetIndex; }
     vector<int> getAlignment() const { return alignment; }
+    int numSegments() const { return alignment.size(); }
+    int operator[](int i) const { return alignment[i]; }
+    bool seqContextDefined() const { return ((context != NULL) && (!context->segSeq.empty())); }
+    void setSeqContext(const vector<Sequence>& _segSeq, const vector<Sequence>& _nSeq, const vector<Sequence>& _cSeq);
+    void setStructContext(const vector<AtomPointerVector>& _segStr, const vector<AtomPointerVector>& _nStr, const vector<AtomPointerVector>& _cStr);
 
     friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
       if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
@@ -35,10 +36,45 @@ class fasstSolution {
       return _os;
     }
 
+  protected:
+    vector<Sequence> segmentSeqs() const { return context->segSeq; }
+    vector<Sequence> nTermContext() const { return context->nSeq; }
+    vector<Sequence> cTermContext() const { return context->cSeq; }
+
   private:
     vector<int> alignment;
     mstreal rmsd;
-    int targetIndex, foundOrder;
+    int targetIndex, foundOrder; // TODO: don't need foundOrder, can use targetIndex, then indices of the alignment for comparison
+    class solContext {
+      public:
+        vector<Sequence> segSeq, nSeq, cSeq; // sequence of each segment and N- and C-terminal contexts
+        vector<AtomPointerVector> segStr, nStr, cStr; // structure of each segment and N- and C-terminal contexts
+    };
+    solContext* context;
+};
+
+class fasstSolutionSet {
+  public:
+    fasstSolutionSet() { updated = false; }
+    bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
+    set<fasstSolution>::iterator begin() { return solsSet.begin(); }
+    set<fasstSolution>::reverse_iterator rbegin() { return solsSet.rbegin(); }
+    set<fasstSolution>::iterator end() { return solsSet.end(); }
+    set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it) { return solsSet.erase(it); updated = true; }
+    // const fasstSolution& operator[] (int i) const;
+    fasstSolution& operator[] (int i);
+    int size() const { return solsSet.size(); }
+    void clear() { solsSet.clear(); updated = true; }
+
+  protected:
+    // decides whether numID identities within an alignment of length numTot
+    // meets the identity cutoff cut established for alignment length L0
+    bool isWithinSeqID(int L0, mstreal cut, int numTot, int numID);
+
+  private:
+    set<fasstSolution> solsSet;
+    vector<fasstSolution*> solsVec;
+    bool updated;
 };
 
 /* FASST -- Fast Algorithm for Searching STructure */
@@ -121,8 +157,7 @@ class FASST {
         int numIn;
     };
 
-    /* TODO: add getMatchSequence and getMatchSequences, which return Sequence or vector<Sequence>
-     * TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
+    /* TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
      * TODO: Jianfu and Craig will look for fast ways of NN searches in Hamming distnce space
      * TODO: goal is to define redundancy as follows:
      * 1. define the redundancy of each segment alignment separately
@@ -132,9 +167,7 @@ class FASST {
      *    ungapped sequence alignment and judge by the score.
      * 4. some windows will not be expandable (hit a chain terminus), in which
      *    case we will compare the common portion of any two windows. Both the
-     *    RMSD cutoff and the sequence identity cutoff have to scale.
-     * TODO: need to define chain ends. Do so via the standard information.
-     * TODO: enable checking for continuity of gaps */
+     *    RMSD cutoff and the sequence identity cutoff have to scale. */
 
     ~FASST();
     FASST();
@@ -144,6 +177,8 @@ class FASST {
     void addTarget(const Structure& T);
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
+    int numTargets() const { return targetStructs.size(); }
+    Structure getTarget(int i) { return *(targetStructs[i]); }
     void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
     void setSearchType(searchType _searchType);
     void setMemorySaveMode(bool _memSave) { memSave = _memSave; }
@@ -160,7 +195,7 @@ class FASST {
     bool isMaxNumMatchesSet() { return (maxNumMatches > 0); }
     bool isMinNumMatchesSet() { return (minNumMatches > 0); }
     bool isSufficientNumMatchesSet() { return (suffNumMatches > 0); }
-    set<fasstSolution> getMatches() { return solutions; }
+    fasstSolutionSet getMatches() { return solutions; }
     string toString(const fasstSolution& sol);
 
     bool gapConstrained(int i, int j) { return (minGapSet[i][j] || maxGapSet[i][j]); }
@@ -171,13 +206,13 @@ class FASST {
     bool validateSearchRequest(); // make sure all user specified requirements are consistent
     void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION);
     Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION);
-    void getMatchStructures(const set<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
-    void getMatchStructures(const vector<fasstSolution>& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
-    vector<Sequence> getMatchSequences(const set<fasstSolution>& sols, matchType type = matchType::REGION);
-    vector<Sequence> getMatchSequences(const vector<fasstSolution>& sols, matchType type = matchType::REGION);
+    void getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
+    vector<Sequence> getMatchSequences(fasstSolutionSet& sols, matchType type = matchType::REGION);
     Sequence getMatchSequence(const fasstSolution& sol, matchType type = matchType::REGION);
     void writeDatabase(const string& dbFile);
     void readDatabase(const string& dbFile);
+
+    void pruneRedundancy(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
 
     // TODO:
     // results caching
@@ -202,6 +237,7 @@ class FASST {
     void stripSidechains(Structure& S);
     bool areNumMatchConstraintsConsistent();
     vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type); // figure out the range of residues to excise from target structure
+    void addSequenceContext(fasstSolution& sol, int currentTarget, const vector<int>& segLengths, int contextLength); // decorate the solution with sequence context
 
   private:
     vector<Structure*> targetStructs;
@@ -224,6 +260,10 @@ class FASST {
     vector<vector<bool> > minGapSet, maxGapSet;
     bool gapConstSet;
 
+    // redundancy options
+    int contextLength;                       // how long of a local window to consider when comparing segment alingments between solutions
+    mstreal redundancyCut;                   // maximum sequence identity (as a fraction), defined over contextLength-long windows
+
     // segmentResiduals[i][j] is the residual of the alignment of segment i, in which
     // its starting residue aligns with the residue index j in the target
     vector<vector<mstreal> > segmentResiduals;
@@ -240,10 +280,6 @@ class FASST {
     // data structure. Note that segments 0 through L-1 have already been place
     // at recursion level L.
     vector<vector<optList> > remOptions;
-
-    // // ccTol[L][i][j], j > i, is the acceptable tolerance (the delta) on the
-    // // center-to-center distance between segments i and j at recursion level L
-    // vector<vector<vector<mstreal> > > ccTol;
 
     // alignment indices for segments visited up to the current recursion level
     vector<int> currAlignment;
@@ -271,7 +307,7 @@ class FASST {
     vector<vector<mstreal> > centToCentDist;
 
     // set of solutions, sorted by RMSD
-    set<fasstSolution> solutions;
+    fasstSolutionSet solutions;
 
     // ProximitySearch for finding nearby centroids of target segments (there
     // will be one ProximitySearch object per query segment)

@@ -10,6 +10,7 @@ int main(int argc, char *argv[]) {
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
   op.addOption("r", "RMSD cutoff.", true);
+  op.addOption("red", "set redundancy cutoff level (default is 1.0, so no redundancy filtering).");
   op.addOption("min", "min number of matches.");
   op.addOption("max", "max number of matches.");
   op.addOption("strOut", "dump structures into this directory.");
@@ -33,7 +34,8 @@ int main(int argc, char *argv[]) {
   S.setRMSDCutoff(op.getReal("r"));
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
-  S.setMaxGap(0, 1, 6); //S.setMinGap(0, 1, 0);
+  S.setMaxGap(0, 1, 6); S.setMinGap(0, 1, 0);
+  S.pruneRedundancy(op.getReal("red", 1.0));
   auto end = chrono::high_resolution_clock::now();
   cout << "DB reading took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "Searching..." << endl;
@@ -42,7 +44,7 @@ int main(int argc, char *argv[]) {
   end = chrono::high_resolution_clock::now();
   cout << "Search took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "found " << S.numMatches() << " matches:" << endl;
-  set<fasstSolution> matches = S.getMatches(); int i = 0;
+  fasstSolutionSet matches = S.getMatches(); int i = 0;
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << S.toString(*it) << endl;
     if (op.isGiven("strOut")) {
