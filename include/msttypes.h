@@ -800,8 +800,10 @@ class MstUtils {
     // read to/from binary file
     template <class T>
     static void writeBin(fstream& ofs, const T& val); // binary output for primitive types
+    static void writeBin(fstream& ofs, const string& str) { ofs << str << '\0'; } // special overload for strings
     template <class T>
     static void readBin(fstream& ifs, T& val);
+    static void readBin(fstream& ifs, string& str) { getline(ifs, str, '\0'); };
 };
 
 template <class T>

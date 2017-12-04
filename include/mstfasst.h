@@ -157,9 +157,7 @@ class FASST {
         int numIn;
     };
 
-    /* TODO: pre-center queryMasks at each recursion level (means allocating separate space for each level)
-     * TODO: Jianfu and Craig will look for fast ways of NN searches in Hamming distnce space
-     * TODO: goal is to define redundancy as follows:
+    /* TODO: goal is to define redundancy as follows:
      * 1. define the redundancy of each segment alignment separately
      * 2. if a segment is shorter than L, expand it to L (L = 30)
      * 3. compute RMSD between these L residues. If it is above 1.5 A, then the
@@ -177,6 +175,9 @@ class FASST {
     void addTarget(const Structure& T);
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
+    void addResidueProperties(int ti, const string& propType, const vector<mstreal>& propVals);
+    bool isPropertyDefined(const string& propType);
+    bool isPropertyDefined(const string& propType, int ti);
     int numTargets() const { return targetStructs.size(); }
     Structure getTarget(int i) { return *(targetStructs[i]); }
     void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
@@ -209,6 +210,8 @@ class FASST {
     void getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
     vector<Sequence> getMatchSequences(fasstSolutionSet& sols, matchType type = matchType::REGION);
     Sequence getMatchSequence(const fasstSolution& sol, matchType type = matchType::REGION);
+    vector<vector<mstreal> > getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type = matchType::REGION);
+    vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
     void writeDatabase(const string& dbFile);
     void readDatabase(const string& dbFile);
 
@@ -240,12 +243,23 @@ class FASST {
     void addSequenceContext(fasstSolution& sol, int currentTarget, const vector<int>& segLengths, int contextLength); // decorate the solution with sequence context
 
   private:
+    /* targetStructs[i] and targets[i] store the original i-th target structure
+     * and just the part of it that will be searched over, respectively. NOTE:
+     * Atoms* in targets[i] point to Atoms of targetStructs[i]. So there is only
+     * one compy of the target structure and there is no amboguity in mapping
+     * targets[i] to targetStructs[i], even if when building tagrets[i] some of
+     * the residues in targetStructs[i] had to be ignored for whatever reason
+     * (e.g., missing backbone). */
     vector<Structure*> targetStructs;
-    vector<AtomPointerVector> targets;       // target structures (just the parts that will be searched over)
+    vector<AtomPointerVector> targets;
+
     vector<Sequence> targSeqs;               // target sequences (of just the parts that will be searched over)
     vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
     vector<int> targChainBeg, targChainEnd;  // targChainBeg[i] and targChainEnd[i] contain the chain start and end indices for the chain
-                                             // that contains the residue with index i (in the overal fused sequence)
+                                             // that contains the residue with index i (in the overal concatenated sequence). Residue indices
+                                             // are based on just the portion of the structure to be searched over.
+    map<string, map<int, vector<mstreal> > > resProperties;  // resProperties["env"][ti][ri] is the value of the "env" property for residue ri in target with index ti
+
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
     int currentTarget;                       // the index of the target currently being searched for
 
