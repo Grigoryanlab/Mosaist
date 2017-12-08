@@ -175,6 +175,7 @@ class FASST {
     void addTarget(const Structure& T);
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
+    void stripSidechains(Structure& S);
     void addResidueProperties(int ti, const string& propType, const vector<mstreal>& propVals);
     bool isPropertyDefined(const string& propType);
     bool isPropertyDefined(const string& propType, int ti);
@@ -205,9 +206,9 @@ class FASST {
     void resetGapConstraints();
     bool gapConstraintsExist() { return gapConstSet; }
     bool validateSearchRequest(); // make sure all user specified requirements are consistent
-    void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION);
-    Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION);
-    void getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION);
+    void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
+    Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
+    void getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
     vector<Sequence> getMatchSequences(fasstSolutionSet& sols, matchType type = matchType::REGION);
     Sequence getMatchSequence(const fasstSolution& sol, matchType type = matchType::REGION);
     vector<vector<mstreal> > getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type = matchType::REGION);
@@ -237,7 +238,6 @@ class FASST {
     mstreal segCentToPrevSegCentTol(int i);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
-    void stripSidechains(Structure& S);
     bool areNumMatchConstraintsConsistent();
     vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type); // figure out the range of residues to excise from target structure
     void addSequenceContext(fasstSolution& sol, int currentTarget, const vector<int>& segLengths, int contextLength); // decorate the solution with sequence context

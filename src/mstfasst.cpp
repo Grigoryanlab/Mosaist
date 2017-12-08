@@ -723,18 +723,18 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
   return currResidual;
 }
 
-void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed, matchType type) {
+void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed, matchType type, bool algn) {
   vector<Structure> matches;
   fasstSolutionSet solSet; solSet.insert(sol);
-  getMatchStructures(solSet, matches, detailed, type);
+  getMatchStructures(solSet, matches, detailed, type, algn);
   match = matches[0];
 }
 
-Structure FASST::getMatchStructure(const fasstSolution& sol, bool detailed, matchType type) {
-  Structure match; getMatchStructure(sol, match, detailed, type); return match;
+Structure FASST::getMatchStructure(const fasstSolution& sol, bool detailed, matchType type, bool algn) {
+  Structure match; getMatchStructure(sol, match, detailed, type, algn); return match;
 }
 
-void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed, matchType type) {
+void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed, matchType type, bool algn) {
   // hash solutions by the target they come from, to visit each target only once
   map<int, vector<int> > solsFromTarget;
   for (int i = 0; i < sols.size(); i++) {
@@ -761,6 +761,8 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
     Structure* targetStruct = targetStructs[idx];
     AtomPointerVector& target = targets[idx];
     bool reread = detailed && targetSource[idx].memSave; // should we re-read the target structure?
+    Transform& transf = tr[idx];
+    Transform transfInv = transf.inverse();
     if (reread) {
       dummy.reset();
       // re-read structure
@@ -776,7 +778,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
       } else {
         MstUtils::error("don't know how to re-read target of this type", "FASST::getMatchStructures");
       }
-      tr[idx].apply(dummy);
+      transf.apply(dummy);
       targetStruct = &dummy;
     }
 
@@ -817,7 +819,11 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
       }
 
       // align matching region onto query, transforming the match itself
-      rc.align(matchAtoms, queryAtoms, match);
+      if (algn) {
+        rc.align(matchAtoms, queryAtoms, match);
+      } else {
+        transfInv.apply(match);
+      }
     }
   }
 }
