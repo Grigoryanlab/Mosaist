@@ -270,7 +270,7 @@ contactList ConFind::getContacts(vector<Residue*>& residues, mstreal cdcut, cont
   for (int i = 0; i < residues.size(); i++) {
     Residue* resi = residues[i];
     collProbUpdateOn(resi);
-    vector<Residue*> neighborhood = getNeighbors(resi);
+    vector<Residue*> neighborhood = getNeighbors(resi); // TODO: a lot of efficiency is being lost due to the neighbors list being so permissive
     for (int j = 0; j < neighborhood.size(); j++) {
       Residue* resj = neighborhood[j];
       if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {

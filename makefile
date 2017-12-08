@@ -17,7 +17,6 @@ PYOPTS = $(shell python-config --includes) -O2 -fPIC -std=c++11 -I$(INCDIR)
 
 SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem mstfasst
 OBJECTS = $(patsubst %,$(ODIR)/%.o, $(SOURCE))
-PROGRAMS = master createPDS parsePDS
 
 all: setup $(OBJECTS) libs tests
 objs: $(OBJECTS)
@@ -42,6 +41,7 @@ tests: $(OBJECTS)
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testAutofuser.cpp -o bin/testAutofuser
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstsystem.o programs/renumber.cpp -o bin/renumber
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstfasst.o $(ODIR)/mstoptions.o $(ODIR)/msttransforms.o $(ODIR)/mstsequence.o programs/findTERMs.cpp -o bin/findTERMs
 
 libs: $(OBJECTS)
 	ar rs lib/libmst.a $(ODIR)/mstoptions.o $(ODIR)/msttypes.o $(ODIR)/mstsequence.o $(ODIR)/mstsystem.o

@@ -101,7 +101,11 @@ Structure fusionEvaluator::getAlignedStructure() {
 
 mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
   bool init = point.empty();
-  if (init) initPoint.resize(0);
+  if (init) {
+    initPoint.resize(0);
+    gradOfXYZ.clear();
+    grad.resize(numDF());
+  }
   mstreal bR = 0.01; mstreal aR = 1.0; mstreal dR = 1.0; mstreal xyzR = 0.01; // randomness scale factors
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
   int k = 0;
@@ -115,7 +119,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       Residue& res = F[i];
       for (int j = 0; j < res.atomSize(); j++) {
         bool skipDFs = ((i == 0) && !isAnchored());
-        for (int dim = 0; dim < 3; dim++) {
+        for (int dim = 0; dim < 3; dim++, k++) {
           /* If the fused structure is not anchored in space, skip all coordinates
            * of the first atom, the Y and the Z coordinates of the second atom,
            * and the Z coordinate of the third atom. In this case, the constructor
@@ -124,8 +128,9 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           if (skipDFs && (j < 3) && (dim >= j)) continue;
           if (init) {
             initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
+            gradOfXYZ.addPartial(res[j], dim, k, 1.0);
           } else {
-            res[j][dim] = point[k]; k++;
+            res[j][dim] = point[k];
           }
         }
       }
@@ -147,12 +152,20 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
             initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
             initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
           } else {
-            mstreal d0 = point[k]; k++;
-            mstreal d1 = point[k]; k++;
-            mstreal a0 = point[k]*M_PI/180; k++;
+            mstreal r2d = M_PI/180;
+            mstreal d0 = point[k];
+            mstreal d1 = point[k+1];
+            mstreal a0 = point[k+2]*r2d;
             N->setCoor(0.0, 0.0, 0.0);
             CA->setCoor(d0, 0.0, 0.0);
+            gradOfXYZ.addPartial(CA, 0, k, 1.0);
             C->setCoor(d0 - d1*cos(a0), d1*sin(a0), 0.0);
+            gradOfXYZ.addPartial(C, 0, k, 1.0);
+            gradOfXYZ.addPartial(C, 0, k+1, -cos(a0));
+            gradOfXYZ.addPartial(C, 0, k+2, sin(a0)*r2d);
+            gradOfXYZ.addPartial(C, 1, k+1, sin(a0));
+            gradOfXYZ.addPartial(C, 1, k+2, cos(a0)*r2d);
+            k += 3;
           }
         } else {
           // place N relative to pN, pCA, pC
@@ -161,7 +174,20 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
             initPoint.push_back(angleInitValue(i-1, i-1, i, "CA", "C", "N") + aR * MstUtils::randUnit() * noise);
             initPoint.push_back(dihedralInitValue(i-1, i-1, i-1, i, "N", "CA", "C", "N") + dR * MstUtils::randUnit() * noise);
           } else {
-            N->build(pC, pCA, pN, point[k], point[k+1], point[k+2]); k += 3;
+            N->build(pC, pCA, pN, point[k], point[k+1], point[k+2]);
+            // TODO: when we want to enable gradient calculation
+            // // partial derivatives of XYZ coordinates of the placed atom with
+            // // respect to bond, angle, and dihedral
+            // vector<mstreal> icPartials(9, 0.0);
+            // // partial derivatives of XYZ coordinates of the placed atom with
+            // // respect to XYZ coordinates of each of the anchoring atoms
+            // vector<vector<mstreal> > xyzPartials(3, vector<mstreal>(9, 0.0));
+            // N->build(pC, pCA, pN, point[k], point[k+1], point[k+2], partials, xyzPartials);
+            // gradOfXYZ.addPartials(N, {k, k+1, k+2}, icPartials);
+            // gradOfXYZ.addRecursivePartials(N, pC, xyzPartials[0]);
+            // gradOfXYZ.addRecursivePartials(N, pCA, xyzPartials[1]);
+            // gradOfXYZ.addRecursivePartials(N, pN, xyzPartials[2]);
+            k += 3;
           }
 
           // place CA relative to pCA, pC, N
@@ -256,87 +282,104 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     }
   }
 
-  // compute penalty for out-of-range parameters (based on the built struct)
-  mstreal bondPenalty = 0, anglPenalty = 0, dihePenalty = 0;
-  k = 0;
-  for (int i = 0; i < F.residueSize(); i++) {
-    Residue& res = F[i];
-    Atom* N = &(res[0]);
-    Atom* CA = &(res[1]);
-    Atom* C = &(res[2]);
-    Atom* O = &(res[3]);
-    // if residue not fixed, evaluate its internal coordinates
-    if (!fixed[i]) {
-      if (init) {
-        bondInstances(i, i, "N", "CA", true);
-        bondInstances(i, i, "CA", "C", true);
-        bondInstances(i, i, "C", "O", true);
-        angleInstances(i, i, i, "N", "CA", "C", true);
+  // built up a list of restraining ICs
+  if (init) {
+    for (int i = 0; i < F.residueSize(); i++) {
+      Residue& res = F[i];
+      Atom* N = &(res[0]);
+      Atom* CA = &(res[1]);
+      Atom* C = &(res[2]);
+      Atom* O = &(res[3]);
+      // if residue not fixed, evaluate its internal coordinates
+      if (!fixed[i]) {
+        bondInstances(i, N, CA);
+        bondInstances(i, CA, C);
+        bondInstances(i, C, O);
+        angleInstances(i, N, CA, C);
         // if last residue, constrain O relative to this residue (as opposed to the next one)
         if (i == F.residueSize() - 1) {
-          angleInstances(i, i, i, "CA", "C", "O", true);
-          dihedralInstances(i, i, i, i, "N", "CA", "C", "O", true);
-        }
-      } else {
-        bondPenalty += harmonicPenalty(N->distance(CA), bounds[k]); k++;
-        bondPenalty += harmonicPenalty(CA->distance(C), bounds[k]); k++;
-        bondPenalty += harmonicPenalty(C->distance(O), bounds[k]); k++;
-        anglPenalty += harmonicPenalty(N->angle(CA, C), bounds[k]); k++;
-        // if last residue, constrain O relative to this residue (as opposed to the next one)
-        if (i == F.residueSize() - 1) {
-          anglPenalty += harmonicPenalty(CA->angle(C, O), bounds[k]); k++;
-          dihePenalty += harmonicPenalty(N->dihedral(CA, C, O), bounds[k]); k++;
+          angleInstances(i, CA, C, O);
+          dihedralInstances(i, N, CA, C, O);
         }
       }
-    }
 
-    // if either the previous residue or the current one is not fixed, evaluate
-    // the internal coordinates connecting the two
-    if ((i > 0) && (!fixed[i-1] || !fixed[i])) {
-      if (init) {
-        bondInstances(i-1, i, "C", "N", true);
-        angleInstances(i-1, i-1, i, "CA", "C", "N", true);
-        dihedralInstances(i-1, i-1, i-1, i, "N", "CA", "C", "N", true);
-        angleInstances(i-1, i, i, "C", "N", "CA", true);
-        dihedralInstances(i-1, i-1, i, i, "CA", "C", "N", "CA", true);
-        dihedralInstances(i-1, i, i, i, "C", "N", "CA", "C", true);
+      // if either the previous residue or the current one is not fixed, evaluate
+      // the internal coordinates connecting the two
+      if ((i > 0) && (!fixed[i-1] || !fixed[i])) {
+        bondInstances(i, pC, N);
+        angleInstances(i, pCA, pC, N);
+        dihedralInstances(i, pN, pCA, pC, N);
+        angleInstances(i, pC, N, CA);
+        dihedralInstances(i, pCA, pC, N, CA);
+        dihedralInstances(i, pC, N, CA, C);
         // use this residue to constrain the previous O
         if (i < F.residueSize() - 1) {
-          angleInstances(i-1, i-1, i, "O", "C", "N", true);
-          dihedralInstances(i-1, i, i-1, i-1, "CA", "N", "C", "O", true);
-        }
-      } else {
-        bondPenalty += harmonicPenalty(pC->distance(N), bounds[k]); k++;
-        anglPenalty += harmonicPenalty(pCA->angle(pC, N), bounds[k]); k++;
-        dihePenalty += harmonicPenalty(pN->dihedral(pCA, pC, N), bounds[k]); k++;
-        anglPenalty += harmonicPenalty(pC->angle(N, CA), bounds[k]); k++;
-        dihePenalty += harmonicPenalty(pCA->dihedral(pC, N, CA), bounds[k]); k++;
-        dihePenalty += harmonicPenalty(pC->dihedral(N, CA, C), bounds[k]); k++;
-        // use this residue to constrain the previous O
-        if (i < F.residueSize() - 1) {
-          anglPenalty += harmonicPenalty(pO->angle(pC, N), bounds[k]); k++;
-          dihePenalty += harmonicPenalty(pCA->dihedral(N, pC, pO), bounds[k]); k++;
+          angleInstances(i, pO, pC, N);
+          dihedralInstances(i-1, pCA, N, pC, pO);
         }
       }
-    }
-    pN = N; pCA = CA; pC = C; pO = O;
-  }
-
-  // finally, compute best-fit RMSD of individual fragments onto the built structure
-  mstreal rmsdScore = 0, rmsdTot = 0;
-  if (!init) {
-    RMSDCalculator rms;
-    for (int i = 0; i < alignedFrags.size(); i++) {
-      mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
-      // rmsdScore += r;
-      rmsdScore += r * r * alignedFrags[i].first.size();
-      rmsdTot += r;
+      pN = N; pCA = CA; pC = C; pO = O;
     }
   }
-  if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (total RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
 
-  return rmsdScore + bondPenalty + anglPenalty + dihePenalty;
+  if (init) return 0.0;
+
+  // compute penalty score for out-of-range ICs and best-fit RMSDs
+  resetScore();
+  for (int k = 0; k < bounds.size(); k++) scoreIC(bounds[k]);
+  scoreRMSD();
+
+  return score;
 }
+
+void fusionEvaluator::resetScore() {
+  score = bondPenalty = anglPenalty = dihePenalty = rmsdScore = 0;
+  for (int k = 0; k < grad.size(); k++) grad[k] = 0;
+}
+
+void fusionEvaluator::scoreIC(const icBound& b) {
+  mstreal val = b.getCurrentValue();
+  switch (b.type) {
+    case icDihedral: {
+      if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return;
+      mstreal dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
+      dihePenalty += kh * dx2;
+      score += kh * dx2;
+      return;
+    }
+    case icAngle:
+    case icBond: {
+      mstreal pen = 0;
+      mstreal K = (b.type == icBond) ? kb : ka;
+      if (val < b.minVal) { pen = K * (val - b.minVal) * (val - b.minVal); }
+      else if (val > b.maxVal) { pen = K * (val - b.maxVal) * (val - b.maxVal); }
+      if (b.type == icBond) bondPenalty += pen;
+      else anglPenalty += pen;
+      score += pen;
+      return;
+    }
+    case icBrokenDihedral:
+    case icBrokenAngle:
+    case icBrokenBond:
+      return;
+    default:
+      MstUtils::error("uknown variable type", "fusionEvaluator::scoreIC");
+  }
+}
+
+void fusionEvaluator::scoreRMSD() {
+  mstreal rmsdTot = 0;
+  RMSDCalculator rms;
+  rmsdScore = 0;
+  for (int i = 0; i < alignedFrags.size(); i++) {
+    mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
+    rmsdScore += r * r * alignedFrags[i].first.size();
+    rmsdTot += r;
+  }
+  score += rmsdScore;
+  if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (total RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
+}
+
 
 AtomPointerVector fusionEvaluator::atomInstances(int ri, const string& ai) {
   AtomPointerVector atoms;
@@ -354,26 +397,31 @@ mstreal fusionEvaluator::bondInitValue(int ri, int rj, const string& ai, const s
   if ((params.getCoorInitType() == fusionParams::coorInitType::meanCoor) || doNotAverage) {
     return (fused.getResidue(ri).findAtom(ai))->distance(fused.getResidue(rj).findAtom(aj));
   }
-  return bondInstances(ri, rj, ai, aj).mean();
+  return bondInstances(rj, fused.getResidue(ri).findAtom(ai), fused.getResidue(rj).findAtom(aj), false).mean();
+  // return bondInstances(ri, rj, ai, aj, false).mean();
 }
 
 mstreal fusionEvaluator::angleInitValue(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak) {
   if (params.getCoorInitType() == fusionParams::coorInitType::meanCoor) {
     return (fused.getResidue(ri).findAtom(ai))->angle(fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak));
   }
-  return angleInstances(ri, rj, rk, ai, aj, ak).mean();
+  return angleInstances(rk, fused.getResidue(ri).findAtom(ai), fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak), false).mean();
+  // return angleInstances(ri, rj, rk, ai, aj, ak, false).mean();
 }
 
 mstreal fusionEvaluator::dihedralInitValue(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al) {
   if (params.getCoorInitType() == fusionParams::coorInitType::meanCoor) {
     return (fused.getResidue(ri).findAtom(ai))->dihedral(fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak), fused.getResidue(rl).findAtom(al));
   }
-  return CartesianGeometry::angleMean(dihedralInstances(ri, rj, rk, rl, ai, aj, ak, al));
+  return CartesianGeometry::angleMean(dihedralInstances(rl, fused.getResidue(ri).findAtom(ai), fused.getResidue(rj).findAtom(aj), fused.getResidue(rk).findAtom(ak), fused.getResidue(rl).findAtom(al), false));
+  // return CartesianGeometry::angleMean(dihedralInstances(ri, rj, rk, rl, ai, aj, ak, al, false));
 }
 
-CartesianPoint fusionEvaluator::bondInstances(int ri, int rj, const string& ai, const string& aj, bool addToCache) {
+CartesianPoint fusionEvaluator::bondInstances(int rj, Atom* atomI, Atom* atomJ, bool addToCache) {
   CartesianPoint p;
   bool chainBreak = false;
+  int ri = rj + atomI->getResidue()->getResidueIndex() - atomJ->getResidue()->getResidueIndex();
+  string ai = atomI->getName(); string aj = atomJ->getName();
 
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
@@ -401,15 +449,18 @@ CartesianPoint fusionEvaluator::bondInstances(int ri, int rj, const string& ai, 
     }
   }
   if (addToCache) {
-    bounds.push_back(icBound(chainBreak ? icBrokenBond : icBond, MstUtils::min(p), MstUtils::max(p), MstUtils::toString(ri) + "-" + ai + " : " + MstUtils::toString(rj) + "-" + aj));
+    bounds.push_back(icBound(chainBreak ? icBrokenBond : icBond, MstUtils::min(p), MstUtils::max(p), {atomI, atomJ}, MstUtils::toString(ri) + "-" + ai + " : " + MstUtils::toString(rj) + "-" + aj));
   }
 
   return p;
 }
 
-CartesianPoint fusionEvaluator::angleInstances(int ri, int rj, int rk, const string& ai, const string& aj, const string& ak, bool addToCache) {
+CartesianPoint fusionEvaluator::angleInstances(int rk, Atom* atomI, Atom* atomJ, Atom* atomK, bool addToCache) {
   CartesianPoint p;
   bool chainBreak = false;
+  int ri = rk + atomI->getResidue()->getResidueIndex() - atomK->getResidue()->getResidueIndex();
+  int rj = rk + atomJ->getResidue()->getResidueIndex() - atomK->getResidue()->getResidueIndex();
+  string ai = atomI->getName(); string aj = atomJ->getName(); string ak = atomK->getName();
 
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
@@ -443,15 +494,19 @@ CartesianPoint fusionEvaluator::angleInstances(int ri, int rj, int rk, const str
     }
   }
   if (addToCache) {
-    bounds.push_back(icBound(chainBreak ? icBrokenAngle : icAngle, MstUtils::min(p), MstUtils::max(p)));
+    bounds.push_back(icBound(chainBreak ? icBrokenAngle : icAngle, MstUtils::min(p), MstUtils::max(p), {atomI, atomJ, atomK}));
   }
 
   return p;
 }
 
-CartesianPoint fusionEvaluator::dihedralInstances(int ri, int rj, int rk, int rl, const string& ai, const string& aj, const string& ak, const string& al, bool addToCache) {
+CartesianPoint fusionEvaluator::dihedralInstances(int rl, Atom* atomI, Atom* atomJ, Atom* atomK, Atom* atomL, bool addToCache) {
   CartesianPoint p;
   bool chainBreak = false;
+  int ri = rl + atomI->getResidue()->getResidueIndex() - atomL->getResidue()->getResidueIndex();
+  int rj = rl + atomJ->getResidue()->getResidueIndex() - atomL->getResidue()->getResidueIndex();
+  int rk = rl + atomK->getResidue()->getResidueIndex() - atomL->getResidue()->getResidueIndex();
+  string ai = atomI->getName(); string aj = atomJ->getName(); string ak = atomK->getName(); string al = atomL->getName();
 
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
@@ -491,35 +546,35 @@ CartesianPoint fusionEvaluator::dihedralInstances(int ri, int rj, int rk, int rl
     }
   }
   if (addToCache) {
-    bounds.push_back(icBound(chainBreak ? icBrokenDihedral : icDihedral, CartesianGeometry::angleRange(p)));
+    bounds.push_back(icBound(chainBreak ? icBrokenDihedral : icDihedral, CartesianGeometry::angleRange(p), {atomI, atomJ, atomK, atomL}));
   }
 
   return p;
 }
 
-mstreal fusionEvaluator::harmonicPenalty(mstreal val, const icBound& b) {
-  switch (b.type) {
-    case icDihedral: {
-      if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return 0;
-      mstreal dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
-      return kh * dx2;
-    }
-    case icAngle:
-    case icBond: {
-      mstreal pen = 0;
-      mstreal K = (b.type == icBond) ? kb : ka;
-      if (val < b.minVal) { pen = K * (val - b.minVal) * (val - b.minVal); }
-      else if (val > b.maxVal) { pen = K * (val - b.maxVal) * (val - b.maxVal); }
-      return pen;
-    }
-    case icBrokenDihedral:
-    case icBrokenAngle:
-    case icBrokenBond:
-      return 0;
-    default:
-      MstUtils::error("uknown variable type", "fusionEvaluator::harmonicPenalty");
-  }
-}
+// mstreal fusionEvaluator::harmonicPenalty(mstreal val, const icBound& b) {
+//   switch (b.type) {
+//     case icDihedral: {
+//       if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return 0;
+//       mstreal dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
+//       return kh * dx2;
+//     }
+//     case icAngle:
+//     case icBond: {
+//       mstreal pen = 0;
+//       mstreal K = (b.type == icBond) ? kb : ka;
+//       if (val < b.minVal) { pen = K * (val - b.minVal) * (val - b.minVal); }
+//       else if (val > b.maxVal) { pen = K * (val - b.maxVal) * (val - b.maxVal); }
+//       return pen;
+//     }
+//     case icBrokenDihedral:
+//     case icBrokenAngle:
+//     case icBrokenBond:
+//       return 0;
+//     default:
+//       MstUtils::error("uknown variable type", "fusionEvaluator::harmonicPenalty");
+//   }
+// }
 
 
 /* --------- Fuser ----------- */

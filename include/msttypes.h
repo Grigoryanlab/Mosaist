@@ -778,6 +778,8 @@ class MstUtils {
     static vector<int> sortIndices(vector<T>& vec, bool descending = false);
     template <class T1, class T2>
     static vector<T1> keys(map<T1, T2>& _map);
+    template <class T1, class T2>
+    static vector<T2> values(map<T1, T2>& _map);
     template <class T>
     static string vecToString(const vector<T>& vec, string del = " ");
     template <class T>
@@ -833,6 +835,16 @@ vector<T1> MstUtils::keys(map<T1, T2>& _map) {
     K[k] = it->first;
   }
   return K;
+}
+
+template <class T1, class T2>
+vector<T2> MstUtils::values(map<T1, T2>& _map) {
+  vector<T2> V(_map.size());
+  int k = 0;
+  for (typename map<T1, T2>::iterator it = _map.begin(); it != _map.end(); ++it) {
+    V[k] = it->second;
+  }
+  return V;
 }
 
 template <class T>
