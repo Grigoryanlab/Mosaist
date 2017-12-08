@@ -21,8 +21,8 @@ int main(int argc, char** argv) {
   op.addOption("max", "RMSD cutoff plateau (default is 1.1).");
   op.addOption("L", "RMSD cutoff persistance length (default is 15).");
   op.setOptions(argc, argv);
-  MstUtils::assert(op.isReal("max") && (op.getReal("max") > 0), "--max must be a positive number");
-  MstUtils::assert(op.isInt("L") && (op.getInt("L") > 0), "--L must be a positive integer");
+  if (op.isReal("max") && (op.getReal("max") < 0)) MstUtils::error("--max must be a non-negative number");
+  if (op.isInt("L") && (op.getInt("L") <= 0)) MstUtils::error("--L must be a positive integer");
   mstreal max = op.getReal("max", 1.1);
   int L0 = op.getInt("L", 15);
 
@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
       Structure match = S.getMatchStructure(*it);
       match.writePDB(ofs);
     }
+    cout << termPaths[i] << ", " << matches.size() << " matches" << endl;
   }
   ofs.close();
 
