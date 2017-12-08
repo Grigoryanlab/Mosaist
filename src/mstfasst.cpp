@@ -231,13 +231,14 @@ void FASST::processQuery() {
 
   // the distance from the centroid of each segment and the centroid of the
   // previous segments considered together
-  centToCentDist.resize(query.size(), vector<mstreal>(query.size(), 0));
+  centToCentDist.resize(query.size());
   CartesianPoint C(0, 0, 0);
   int N = 0;
   for (int L = 0; L < query.size(); L++) {
     CartesianPoint ci = query[L].getGeometricCenter();
     int n = query[L].size();
     C = (C*N + ci*n)/(N + n);
+    centToCentDist[L].resize(n);
     for (int i = L + 1; i < query.size(); i++) {
       centToCentDist[L][i] = C.distance(query[i].getGeometricCenter());
     }
