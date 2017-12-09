@@ -764,7 +764,7 @@ void Residue::appendAtom(Atom* A) {
   }
 }
 
-void Residue::appendAtoms(vector<Atom*>& A) {
+void Residue::appendAtoms(const vector<Atom*>& A) {
   for (int i = 0; i < A.size(); i++) appendAtom(A[i]);
 }
 
@@ -839,6 +839,18 @@ void Residue::replaceAtoms(const vector<Atom*>& newAtoms, vector<int>* toRemove)
     atoms[k]->setParent(this);
     k++;
   }
+}
+
+void Residue::replaceAtoms(const vector<Atom*>& newAtoms, const vector<Atom*>& oldAtoms) {
+  vector<int> oldAtomIndices;
+  for (int i = 0; i < oldAtoms.size(); i++) {
+    for (int k = 0; k < atoms.size(); k++) {
+      if (atoms[k] == oldAtoms[i]) {
+        oldAtomIndices.push_back(k); break;
+      }
+    }
+  }
+  replaceAtoms(newAtoms, &oldAtomIndices);
 }
 
 Residue* Residue::iPlusDelta(int off) {

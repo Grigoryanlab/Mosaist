@@ -214,7 +214,7 @@ void FASST::processQuery() {
   query.resize(queryStruct.chainSize());
   for (int i = 0; i < queryStruct.chainSize(); i++) {
     query[i].resize(0);
-    if (!parseChain(queryStruct[i], query[i])) {
+    if (!parseChain(queryStruct[i], &(query[i]))) {
       MstUtils::error("could not set query, because some atoms for the specified search type were missing", "FASST::setQuery");
     }
     MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "FASST::setQuery");
@@ -281,7 +281,7 @@ void FASST::addTargetStructure(Structure* targetStruct) {
   Sequence& seq = targSeqs.back();
   // we don't care about the chain topology of the target, so append all residues
   for (int i = 0; i < targetStruct->chainSize(); i++) {
-    parseChain(targetStruct->getChain(i), target, &seq);
+    parseChain(targetStruct->getChain(i), &target, &seq);
   }
   MstUtils::assert(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
   seq.setName(targetStruct->getName());
@@ -307,30 +307,25 @@ void FASST::addTargets(const vector<string>& pdbFiles) {
   for (int i = 0; i < pdbFiles.size(); i++) addTarget(pdbFiles[i]);
 }
 
-bool FASST::parseChain(const Chain& C, AtomPointerVector& searchable, Sequence* seq) {
+bool FASST::parseChain(const Chain& C, AtomPointerVector* searchable, Sequence* seq) {
   bool foundAll = true;
   for (int i = 0; i < C.residueSize(); i++) {
     Residue& res = C.getResidue(i);
-    switch(type) {
-      case searchType::CA:
-      case searchType::FULLBB: {
-        AtomPointerVector bb;
-        for (int k = 0; k < searchableAtomTypes.size(); k++) {
-          Atom* a = NULL;
-          for (int kk = 0; kk < searchableAtomTypes[k].size(); kk++) {
-            if ((a = res.findAtom(searchableAtomTypes[k][kk], false)) != NULL) break;
-          }
-          if (a == NULL) { foundAll = false; break; }
-          bb.push_back(a);
-        }
-        if (bb.size() == searchableAtomTypes.size()) {
-          searchable.insert(searchable.end(), bb.begin(), bb.end());
-          if (seq != NULL) seq->appendResidue(res.getName());
-        }
-        break;
+    AtomPointerVector bb;
+    for (int k = 0; k < searchableAtomTypes.size(); k++) {
+      Atom* a = NULL;
+      for (int kk = 0; kk < searchableAtomTypes[k].size(); kk++) {
+        if ((a = res.findAtom(searchableAtomTypes[k][kk], false)) != NULL) break;
       }
-      default:
-        MstUtils::error("uknown search type '" + MstUtils::toString(type) + "' specified", "FASST::parseStructure");
+      if (a == NULL) { foundAll = false; break; }
+      bb.push_back(a);
+    }
+    if (bb.size() == searchableAtomTypes.size()) {
+      if (searchable != NULL) searchable->insert(searchable->end(), bb.begin(), bb.end());
+      else {
+        res.replaceAtoms(vector<Atom*>(), MstUtils::setdiff(res.getAtoms(), bb));
+      }
+      if (seq != NULL) seq->appendResidue(res.getName());
     }
   }
   return foundAll;
@@ -413,30 +408,31 @@ void FASST::setSearchType(searchType _searchType) {
 
 void FASST::stripSidechains(Structure& S) {
   for (int i = 0; i < S.chainSize(); i++) {
-    Chain& C = S[i];
-    for (int j = 0; j < C.residueSize(); j++) {
-      Residue& R = C[j];
-      int n = R.atomSize();
-      for (int k = 0; k < n; k++) {
-        char* name = R[k].getNameC();
-        if (strlen(name)) { // check that it's okay to index atom name string
-          switch (name[0]) {
-            case 'N':
-              if (!strcmp(name, "N") || !strcmp(name, "NT")) continue;
-              break;
-            case 'C':
-              if (!strcmp(name, "C") || !strcmp(name, "CA")) continue;
-              break;
-            case 'O':
-              if (!strcmp(name, "O") || !strcmp(name, "OT1") || !strcmp(name, "OT2") || !strcmp(name, "OXT")) continue;
-              break;
-          }
-        }
-        R.deleteAtom(k);
-        k--; n--;
-      }
-      R.compactify();
-    }
+    parseChain(S[i]);
+    // Chain& C = S[i];
+    // for (int j = 0; j < C.residueSize(); j++) {
+    //   Residue& R = C[j];
+    //   int n = R.atomSize();
+    //   for (int k = 0; k < n; k++) {
+    //     char* name = R[k].getNameC();
+    //     if (strlen(name)) { // check that it's okay to index atom name string
+    //       switch (name[0]) {
+    //         case 'N':
+    //           if (!strcmp(name, "N") || !strcmp(name, "NT")) continue;
+    //           break;
+    //         case 'C':
+    //           if (!strcmp(name, "C") || !strcmp(name, "CA")) continue;
+    //           break;
+    //         case 'O':
+    //           if (!strcmp(name, "O") || !strcmp(name, "OT1") || !strcmp(name, "OT2") || !strcmp(name, "OXT")) continue;
+    //           break;
+    //       }
+    //     }
+    //     R.deleteAtom(k);
+    //     k--; n--;
+    //   }
+    //   R.compactify();
+    // }
   }
 }
 

@@ -228,7 +228,7 @@ class FASST {
     void processQuery();
     void setCurrentRMSDCutoff(mstreal cut);
     void prepForSearch(int ti);
-    bool parseChain(const Chain& S, AtomPointerVector& searchable, Sequence* seq = NULL);
+    bool parseChain(const Chain& S, AtomPointerVector* searchable = NULL, Sequence* seq = NULL);
     mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
     // void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)

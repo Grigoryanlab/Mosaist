@@ -217,7 +217,7 @@ class Residue {
 
     /* ----- functions that grow/shrink structure ----- */
     void appendAtom(Atom* A);
-    void appendAtoms(vector<Atom*>& A);
+    void appendAtoms(const vector<Atom*>& A);
     void deleteAtoms();
     void deleteAtom(int ind);
 
@@ -232,6 +232,8 @@ class Residue {
      * will be: any old ones that survived, in their initial order, followed by any
      * newly added atoms, in the specified order. */
     void replaceAtoms(const vector<Atom*>& newAtoms, vector<int>* oldAtoms = NULL);
+    // same as above, but old Atoms are identified via Atom pointers
+    void replaceAtoms(const vector<Atom*>& newAtoms, const vector<Atom*>& oldAtoms);
     /* ----- end functions that grow/shrink structure -- */
 
     Residue* previousResidue();
@@ -794,6 +796,8 @@ class MstUtils {
     static bool closeEnough(const T& a, const T& b, const T& epsilon = std::numeric_limits<T>::epsilon());
     template <class T>
     static set<T> contents(const vector<T>& vec);
+    template <class T>
+    static vector<T> setdiff(const vector<T>& A, const vector<T>& B);
 
     // randomly shuffle the array in place using the Fisher-Yates shuffle
     template <class T>
@@ -935,6 +939,16 @@ void MstUtils::writeBin(fstream& ofs, const T& val) {
 template <class T>
 void MstUtils::readBin(fstream& ifs, T& val) {
   ifs.read((char*) (&val), sizeof(T));
+}
+
+template <class T>
+vector<T> MstUtils::setdiff(const vector<T>& A, const vector<T>& B) {
+  vector<T> diff;
+  set<T> setB = MstUtils::contents(B);
+  for (int i = 0; i < A.size(); i++) {
+    if (setB.find(A[i]) == setB.end()) diff.push_back(A[i]);
+  }
+  return diff;
 }
 
 #endif
