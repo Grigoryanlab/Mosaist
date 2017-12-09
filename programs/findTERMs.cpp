@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
       Structure match = S.getMatchStructure(*it, false, FASST::matchType::REGION, false);
       Structure termAligned(term);
       rc.align(termAligned.getAtoms(), match.getAtoms(), termAligned);
-      ofs << "REM TERM " << term.getName() << endl;
+      ofs << "REM TERM " << termPaths[i] << endl;
       termAligned.writePDB(ofs);
     }
     Nm += matches.size();
