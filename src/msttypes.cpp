@@ -134,8 +134,8 @@ void Structure::readPDB(const string& pdbFile, string options) {
     mstreal y = MstUtils::toReal(line.substr(38, 8));
     mstreal z = MstUtils::toReal(line.substr(46, 8));
     string segID = MstUtils::trim(line.substr(72, 4));
-    mstreal B = MstUtils::toReal(line.substr(60, 6));
-    mstreal occ = MstUtils::toReal(line.substr(54, 6));
+    mstreal B = MstUtils::toReal(line.substr(60, 6), false);
+    mstreal occ = MstUtils::toReal(line.substr(54, 6), false);
     bool het = (line.find("HETATM") == 0);
 
     // use segment ID's instead of chain ID's?
@@ -2749,7 +2749,7 @@ char* MstUtils::copyStringC(const char* str) {
 }
 
 int MstUtils::toInt(string num, bool strict) {
-  int ret;
+  int ret = 0;
   if ((sscanf(num.c_str(), "%d", &ret) == 0) && strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
   return ret;
 }
@@ -2765,7 +2765,7 @@ bool MstUtils::isReal(string num) {
 }
 
 MST::mstreal MstUtils::toReal(string num, bool strict) {
-  double ret;
+  double ret = 0.0;
   if ((sscanf(num.c_str(), "%lf", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to mstreal", "MstUtils::toReal");
   return (mstreal) ret;
 }
