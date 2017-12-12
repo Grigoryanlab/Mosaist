@@ -29,11 +29,21 @@ class MstGeometry {
     template <class T>
     static mstreal dihedral(const CartesianPoint& atom1, const CartesianPoint& atom2, const CartesianPoint& atom3, const CartesianPoint& atom4, T& grad);
 
+    template <class T>
+    static mstreal qcpRMSD(const T& A, const T& B);
+
     /* Tests implementation of analytical gradients of bond, angle, and dihedral
      * using finite difference for comparison. */
     static bool testPrimitiveGradients();
 
-    mstreal qcpRMSD(const vector<CartesianPoint> &A, const vector<CartesianPoint> &B);
+    /* Tests QCP implementation for RMSD and RMSD gradient calculation. */
+    static bool testQCP();
+
+  protected:
+    template <class T>
+    static T& ref(T& obj) { return obj; }
+    template <class T>
+    static T& ref(T* obj) { return *obj; }
 };
 
 // see derivation in http://grigoryanlab.org/docs/dynamics_derivatives.pdf
@@ -151,5 +161,90 @@ mstreal MstGeometry::dihedral(const CartesianPoint& atom1, const CartesianPoint&
 
   return th;
 }
+
+// QCP algorithm from: http://onlinelibrary.wiley.com/doi/10.1002/jcc.21439/epdf
+template <class T>
+mstreal MstGeometry::qcpRMSD(const T& A, const T& B) {
+  int i, j;
+  int N = A.size();
+  if (N != B.size()) MstUtils::error("structures are of different length", "MstGeometry::qcpRMSD");
+
+  //compute centers for vector sets x, y
+  vector<mstreal> cA(3, 0.0), cB(3, 0.0);
+  for (i = 0; i < N; i++){
+    for (j = 0; j < 3; j++) {
+      cA[j] += ref(A[i])[j];
+      cB[j] += ref(B[i])[j];
+    }
+  }
+  for (i = 0; i < 3; i++){
+    cA[i] = cA[i]/N;
+    cB[i] = cB[i]/N;
+  }
+
+  // compute the correlation matrix S and the inner products of the two structures
+  vector<vector<mstreal> > S(3, vector<mstreal>(3, 0.0));
+  mstreal ax, ay, az, bx, by, bz;
+  mstreal GA = 0, GB = 0;
+  for (i = 0; i < N; i++) {
+    ax = ref(A[i])[0] - cA[0];
+    ay = ref(A[i])[1] - cA[1];
+    az = ref(A[i])[2] - cA[2];
+    bx = ref(B[i])[0] - cB[0];
+    by = ref(B[i])[1] - cB[1];
+    bz = ref(B[i])[2] - cB[2];
+    GA += ax*ax + ay*ay + az*az;
+    GB += bx*bx + by*by + bz*bz;
+    S[0][0] += bx * ax;
+    S[0][1] += bx * ay;
+    S[0][2] += bx * az;
+    S[1][0] += by * ax;
+    S[1][1] += by * ay;
+    S[1][2] += by * az;
+    S[2][0] += bz * ax;
+    S[2][1] += bz * ay;
+    S[2][2] += bz * az;
+  }
+
+  // square of S
+  vector<vector<mstreal> > S2(3, vector<mstreal>(3, 0.0));
+  for (i = 0; i < 3; i++) {
+    for (j = 0; j < 3; j++) S2[i][j] = S[i][j]*S[i][j];
+  }
+
+  // calculate characteristic polynomial coefficients
+  // NOTE: F, G, H, I could be made more efficient!
+  mstreal C2 = -2*(S2[0][0] + S2[0][1] + S2[0][2] + S2[1][0] + S2[1][1] + S2[1][2] + S2[2][0] + S2[2][1] + S2[2][2]);
+  mstreal C1 = 8*(S[0][0]*S[1][2]*S[2][1] + S[1][1]*S[2][0]*S[0][2] + S[2][2]*S[0][1]*S[1][0] -
+                  S[0][0]*S[1][1]*S[2][2] - S[1][2]*S[2][0]*S[0][1] - S[2][1]*S[1][0]*S[0][2]);
+  mstreal D = (S2[0][1] + S2[0][2] - S2[1][0] - S2[2][0]); D = D*D;
+  mstreal E1 = -S2[0][0] + S2[1][1] + S2[2][2] + S2[1][2] + S2[2][1];
+  mstreal E2 = 2*(S[1][1]*S[2][2] - S[1][2]*S[2][1]);
+  mstreal E = (E1 - E2) * (E1 + E2);
+  mstreal F = (-(S[0][2] + S[2][0])*(S[1][2] - S[2][1]) + (S[0][1] - S[1][0])*(S[0][0] - S[1][1] - S[2][2])) *
+              (-(S[0][2] - S[2][0])*(S[1][2] + S[2][1]) + (S[0][1] - S[1][0])*(S[0][0] - S[1][1] + S[2][2]));
+  mstreal G = (-(S[0][2] + S[2][0])*(S[1][2] + S[2][1]) - (S[0][1] + S[1][0])*(S[0][0] + S[1][1] - S[2][2])) *
+              (-(S[0][2] - S[2][0])*(S[1][2] - S[2][1]) - (S[0][1] + S[1][0])*(S[0][0] + S[1][1] + S[2][2]));
+  mstreal H = ( (S[0][1] + S[1][0])*(S[1][2] + S[2][1]) + (S[0][2] + S[2][0])*(S[0][0] - S[1][1] + S[2][2])) *
+              (-(S[0][1] - S[1][0])*(S[1][2] - S[2][1]) + (S[0][2] + S[2][0])*(S[0][0] + S[1][1] + S[2][2]));
+  mstreal I = ( (S[0][1] + S[1][0])*(S[1][2] - S[2][1]) + (S[0][2] - S[2][0])*(S[0][0] - S[1][1] - S[2][2])) *
+              (-(S[0][1] - S[1][0])*(S[1][2] + S[2][1]) + (S[0][2] - S[2][0])*(S[0][0] + S[1][1] - S[2][2]));
+  mstreal C0 = D + E + F + G + H + I;
+
+  // now iterate Newton–Raphson method to find max eigenvalue
+  mstreal tol = 10E-11;
+  mstreal L = (GA + GB)/2; // this initial guess is key (see http://journals.iucr.org/a/issues/2005/04/00/sh5029/sh5029.pdf)
+  mstreal Lold, L2, L3, L4, C22 = 2*C2;
+  do {
+    Lold = L;
+    L2 = L*L;
+    L3 = L2*L;
+    L4 = L3*L;
+    L = L - (L4 + C2*L2 + C1*L + C0)/(4*L3 + C22*L + C1);
+  } while (fabs(L - Lold) > tol*L);
+
+  return sqrt((GA + GB - 2*L)/N);
+}
+
 
 #endif

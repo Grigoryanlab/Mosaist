@@ -9,7 +9,7 @@ bool MstGeometry::testPrimitiveGradients() {
   CartesianPoint bondGradFD(6, 0.0), angleGradFD(9, 0.0), diheGradFD(12, 0.0);
   for (int k = 0; k < 100; k++) {
     mstreal L = 1 + MstUtils::randUnit()*10; // length scale
-    mstreal del = 0.001; // finite-difference coordinate step
+    mstreal del = 0.0001; // finite-difference coordinate step
     mstreal tol = 0.01;   // tollerated norm difference between analytical and FD
 
     // make some random points
@@ -81,85 +81,46 @@ bool MstGeometry::testPrimitiveGradients() {
   return true;
 }
 
-// QCP algorithm from: http://onlinelibrary.wiley.com/doi/10.1002/jcc.21439/epdf
-mstreal MstGeometry::qcpRMSD(const vector<CartesianPoint> &A, const vector<CartesianPoint> &B) {
-  int i, j;
-  int N = A.size();
-  if (N != B.size()) MstUtils::error("structures are of different length", "MstGeometry::qcpRMSD");
+bool MstGeometry::testQCP() {
+  long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+  srand(x);
+  RMSDCalculator rc;
 
-  //compute centers for vector sets x, y
-  vector<mstreal> cA(3, 0.0), cB(3, 0.0);
-  for (i = 0; i < N; i++){
-    for (j = 0; j < 3; j++) {
-      cA[j] += A[i][j];
-      cB[j] += B[i][j];
+  // test a bunch of times
+  long int Tkabsch = 0, Tqcp = 0;
+  bool failed = false;
+  for (int k = 0; k < 100; k++) {
+    int N = MstUtils::randInt(100, 10); // number of atoms
+    mstreal L = MstUtils::randUnit()*50; // length scale
+
+    // create random atoms
+    AtomPointerVector A(N), B(N);
+    for (int i = 0; i < N; i++) {
+      A[i] = new Atom(0, "X", MstUtils::randUnit()*L, MstUtils::randUnit()*L, MstUtils::randUnit()*L, 0, 0, false);
+      B[i] = new Atom(0, "X", MstUtils::randUnit()*L, MstUtils::randUnit()*L, MstUtils::randUnit()*L, 0, 0, false);
     }
+
+    // superimpose different ways
+    Tkabsch -= std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+    mstreal rmsd = rc.bestRMSD(A, B);
+    Tkabsch += std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+    Tqcp -= std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+    mstreal rmsdQCP = MstGeometry::qcpRMSD(A, B);
+    Tqcp += std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+
+    // test
+    if (fabs(rmsd - rmsdQCP) > 10E-8) {
+      failed = true;
+      cout << "test FAILED for RMSD calculation, point sets:\n" << A << endl << B << endl;
+      cout << "Kabsch: " << rmsd << endl;
+      cout << "QCP: " << rmsdQCP << endl;
+      cout << "difference: " << (rmsd - rmsdQCP) << endl;
+    }
+    A.deletePointers();
+    B.deletePointers();
+    if (failed) return false;
   }
-  for (i = 0; i < 3; i++){
-    cA[i] = cA[i]/N;
-    cB[i] = cB[i]/N;
-  }
-
-  // compute the correlation matrix S and the inner products of the two structures
-  vector<vector<mstreal> > S(3, vector<mstreal>(3, 0.0));
-  mstreal ax, ay, az, bx, by, bz;
-  mstreal GA = 0, GB = 0;
-  for (i = 0; i < N; i++) {
-    ax = A[i][0] - cA[0];
-    ay = A[i][1] - cA[1];
-    az = A[i][2] - cA[2];
-    bx = B[i][0] - cB[0];
-    by = B[i][1] - cB[1];
-    bz = B[i][2] - cB[2];
-    GA += ax*ax + ay*ay + az*az;
-    GB += bx*bx + by*by + bz*bz;
-    S[0][0] += bx * ax;
-    S[0][1] += bx * ay;
-    S[0][2] += bx * az;
-    S[1][0] += by * ax;
-    S[1][1] += by * ay;
-    S[1][2] += by * az;
-    S[2][0] += bz * ax;
-    S[2][1] += bz * ay;
-    S[2][2] += bz * az;
-  }
-
-  // square of S
-  vector<vector<mstreal> > S2(3, vector<mstreal>(3, 0.0));
-  for (i = 0; i < N; i++) {
-    for (j = 0; j < N; j++) S2[i][j] = S[i][j]*S[i][j];
-  }
-
-  // calculate characteristic polynomial coefficients
-  // NOTE: F, G, H, I could be made more efficient!
-  mstreal C2 = -2*(S2[0][0] + S2[0][1] + S2[0][2] + S2[1][0] + S2[1][1] + S2[1][2] + S2[2][0] + S2[2][1] + S2[2][2]);
-  mstreal C1 = 8*(S[0][0]*S[1][2]*S[2][1] + S[1][1]*S[2][0]*S[0][2] + S[2][2]*S[0][1]*S[1][0] -
-                  S[0][0]*S[1][1]*S[2][2] - S[1][2]*S[2][0]*S[0][1] + S[2][0]*S[1][0]*S[0][2]);
-  mstreal D = (S2[0][1] + S2[0][2] - S2[1][0] - S2[2][0]); D = D*D;
-  mstreal E1 = -S2[0][0] + S2[1][1] + S2[2][2] + S2[1][2] + S2[2][1];
-  mstreal E2 = 2*(S[1][1]*S[2][2] - S[1][2]*S[2][1]);
-  mstreal E = (E1 - E2) * (E1 + E2);
-  mstreal F = (-(S[0][2] + S[2][0])*(S[1][2] - S[2][1]) + (S[0][1] - S[1][0])*(S[0][0] - S[1][1] - S[2][2])) *
-              (-(S[0][2] - S[2][0])*(S[1][2] + S[2][1]) + (S[0][1] - S[1][0])*(S[0][0] - S[1][1] + S[2][2]));
-  mstreal G = (-(S[0][2] + S[2][0])*(S[1][2] + S[2][1]) - (S[0][1] + S[1][0])*(S[0][0] + S[1][1] - S[2][2])) *
-              (-(S[0][2] - S[2][0])*(S[1][2] - S[2][1]) - (S[0][1] + S[1][0])*(S[0][0] + S[1][1] + S[2][2]));
-  mstreal H = ( (S[0][1] + S[1][0])*(S[1][2] + S[2][1]) + (S[0][2] + S[2][0])*(S[0][0] - S[1][1] + S[2][2])) *
-              (-(S[0][1] - S[1][0])*(S[1][2] - S[2][1]) + (S[0][2] + S[2][0])*(S[0][0] + S[1][1] + S[2][2]));
-  mstreal I = ( (S[0][1] + S[1][0])*(S[1][2] - S[2][1]) + (S[0][2] - S[2][0])*(S[0][0] - S[1][1] - S[2][2])) *
-              (-(S[0][1] - S[1][0])*(S[1][2] + S[2][1]) + (S[0][2] - S[2][0])*(S[0][0] + S[1][1] - S[2][2]));
-  mstreal C0 = D + E + F + G + H + I;
-
-  // now iterate Newton–Raphson method to find max eigenvalue
-  mstreal tol = 10E-8;
-  mstreal L = (GA + GB)/2; // this initial guess is key (see http://journals.iucr.org/a/issues/2005/04/00/sh5029/sh5029.pdf)
-  mstreal Lold, L2, L3, L4, C22 = C2*2;
-  do {
-    Lold = L;
-    L2 = L*L;
-    L3 = L2*L;
-    L4 = L3*L;
-    L = L - (L4 + C2*L2 + C1*L + C0)/(4*L3 + C22*L + C1);
-  } while (fabs(L - Lold) > tol);
-
-  return sqrt((GA + GB - 2*L)/N);
+  cout << "Kabsch: " << (10E9/Tkabsch) << " per second" << endl;
+  cout << "KQcp:   " << (10E9/Tqcp) << " per second" << endl;
+  return true;
 }

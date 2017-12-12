@@ -474,7 +474,7 @@ class AtomPointerVector : public vector<Atom*> {
   public:
     // inherit a bunch of useful constructors from vector
     AtomPointerVector() : vector<Atom*>() { }
-    AtomPointerVector(size_t sz, Atom* val) : vector<Atom*>(sz, val) { }
+    AtomPointerVector(size_t sz, Atom* val = NULL) : vector<Atom*>(sz, val) { }
     AtomPointerVector(const AtomPointerVector& other) : vector<Atom*>(other) { }
     AtomPointerVector(const vector<Atom*>& other) : vector<Atom*>(other) { }
 
