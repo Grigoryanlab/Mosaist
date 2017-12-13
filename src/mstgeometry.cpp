@@ -88,8 +88,8 @@ bool MstGeometry::testQCP() {
 
   // test a bunch of times
   long int Tkabsch = 0, Tqcp = 0;
-  bool failed = false;
-  for (int k = 0; k < 100; k++) {
+  bool failed = false; int N = 10000;
+  for (int k = 0; k < N; k++) {
     int N = MstUtils::randInt(100, 10); // number of atoms
     mstreal L = MstUtils::randUnit()*50; // length scale
 
@@ -120,7 +120,8 @@ bool MstGeometry::testQCP() {
     B.deletePointers();
     if (failed) return false;
   }
-  cout << "Kabsch: " << (10E9/Tkabsch) << " per second" << endl;
-  cout << "KQcp:   " << (10E9/Tqcp) << " per second" << endl;
+  cout << "Kabsch: " << (10E9/(Tkabsch/N)) << " per second" << endl;
+  cout << "Qcp:    " << (10E9/(Tqcp/N)) << " per second" << endl;
+  cout << "Kabsch/Qcp = " << Tqcp*1.0/Tkabsch << endl;
   return true;
 }

@@ -170,12 +170,15 @@ mstreal MstGeometry::qcpRMSD(const T& A, const T& B) {
   if (N != B.size()) MstUtils::error("structures are of different length", "MstGeometry::qcpRMSD");
 
   //compute centers for vector sets x, y
-  vector<mstreal> cA(3, 0.0), cB(3, 0.0);
-  for (i = 0; i < N; i++){
-    for (j = 0; j < 3; j++) {
-      cA[j] += ref(A[i])[j];
-      cB[j] += ref(B[i])[j];
-    }
+  mstreal cA[3], cB[3];
+  for (i = 0; i < 3; i++) { cA[i] = 0.0; cB[i] = 0.0; }
+  for (i = 0; i < N; i++) {
+    cA[0] += A[i]->getX();
+    cA[1] += A[i]->getY();
+    cA[2] += A[i]->getZ();
+    cB[0] += B[i]->getX();
+    cB[1] += B[i]->getY();
+    cB[2] += B[i]->getZ();
   }
   for (i = 0; i < 3; i++){
     cA[i] = cA[i]/N;
@@ -183,16 +186,19 @@ mstreal MstGeometry::qcpRMSD(const T& A, const T& B) {
   }
 
   // compute the correlation matrix S and the inner products of the two structures
-  vector<vector<mstreal> > S(3, vector<mstreal>(3, 0.0));
+  mstreal S[3][3];
+  for (i = 0; i < 3; i++) {
+    for (j = 0; j < 3; j++) S[i][j] = 0.0;
+  }
   mstreal ax, ay, az, bx, by, bz;
   mstreal GA = 0, GB = 0;
   for (i = 0; i < N; i++) {
-    ax = ref(A[i])[0] - cA[0];
-    ay = ref(A[i])[1] - cA[1];
-    az = ref(A[i])[2] - cA[2];
-    bx = ref(B[i])[0] - cB[0];
-    by = ref(B[i])[1] - cB[1];
-    bz = ref(B[i])[2] - cB[2];
+    ax = A[i]->getX() - cA[0];
+    ay = A[i]->getY() - cA[1];
+    az = A[i]->getZ() - cA[2];
+    bx = B[i]->getX() - cB[0];
+    by = B[i]->getY() - cB[1];
+    bz = B[i]->getZ() - cB[2];
     GA += ax*ax + ay*ay + az*az;
     GB += bx*bx + by*by + bz*bz;
     S[0][0] += bx * ax;
@@ -207,13 +213,14 @@ mstreal MstGeometry::qcpRMSD(const T& A, const T& B) {
   }
 
   // square of S
-  vector<vector<mstreal> > S2(3, vector<mstreal>(3, 0.0));
+  mstreal S2[3][3];
   for (i = 0; i < 3; i++) {
     for (j = 0; j < 3; j++) S2[i][j] = S[i][j]*S[i][j];
   }
 
   // calculate characteristic polynomial coefficients
-  // NOTE: F, G, H, I could be made more efficient!
+  // NOTE: though there are repeated terms in F, G, H, and I, it actually turns
+  // out to be better to let the compiler optimize this rathre than declare temp variables
   mstreal C2 = -2*(S2[0][0] + S2[0][1] + S2[0][2] + S2[1][0] + S2[1][1] + S2[1][2] + S2[2][0] + S2[2][1] + S2[2][2]);
   mstreal C1 = 8*(S[0][0]*S[1][2]*S[2][1] + S[1][1]*S[2][0]*S[0][2] + S[2][2]*S[0][1]*S[1][0] -
                   S[0][0]*S[1][1]*S[2][2] - S[1][2]*S[2][0]*S[0][1] - S[2][1]*S[1][0]*S[0][2]);
