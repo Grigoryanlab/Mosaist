@@ -1,5 +1,14 @@
 #include "mstgeometry.h"
 
+MstGeometry::MstGeometry() {
+  for (int i = 0; i < 3; i++) {
+    trans[i] = 0;
+    for (int j = 0; j < 3; j++) {
+      rot[i][j] = 0;
+    }
+  }
+}
+
 bool MstGeometry::testPrimitiveGradients() {
   long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
   srand(x);
@@ -85,10 +94,11 @@ bool MstGeometry::testQCP() {
   long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
   srand(x);
   RMSDCalculator rc;
+  MstGeometry mg;
 
   // test a bunch of times
   long int Tkabsch = 0, Tqcp = 0;
-  bool failed = false; int N = 10000;
+  bool failed = false; int N = 100000;
   for (int k = 0; k < N; k++) {
     int N = MstUtils::randInt(100, 10); // number of atoms
     mstreal L = MstUtils::randUnit()*50; // length scale
@@ -101,12 +111,19 @@ bool MstGeometry::testQCP() {
     }
 
     // superimpose different ways
-    Tkabsch -= std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-    mstreal rmsd = rc.bestRMSD(A, B);
-    Tkabsch += std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-    Tqcp -= std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-    mstreal rmsdQCP = MstGeometry::qcpRMSD(A, B);
-    Tqcp += std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+    bool ord = (MstUtils::randUnit() > 0.5);
+    mstreal rmsd, rmsdQCP;
+    for (int i = 0; i < 2; i++) {
+      if (ord == (bool) i) {
+        Tkabsch -= std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+        rmsd = rc.bestRMSD(A, B);
+        Tkabsch += std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+      } else {
+        Tqcp -= std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+        rmsdQCP = mg.qcpRMSD(A, B, true);
+        Tqcp += std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+      }
+    }
 
     // test
     if (fabs(rmsd - rmsdQCP) > 10E-8) {

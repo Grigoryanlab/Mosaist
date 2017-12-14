@@ -11,6 +11,7 @@ using namespace MST;
 
 class MstGeometry {
   public:
+    MstGeometry();
     /* gradient vector must be of length 6, and will be filled with partial
      * derivatives d(distance)/dc, where c runs over x, y, and z of the first
      * atom, then second atom. */
@@ -30,7 +31,7 @@ class MstGeometry {
     static mstreal dihedral(const CartesianPoint& atom1, const CartesianPoint& atom2, const CartesianPoint& atom3, const CartesianPoint& atom4, T& grad);
 
     template <class T>
-    static mstreal qcpRMSD(const T& A, const T& B);
+    mstreal qcpRMSD(const T& A, const T& B, bool setTransform = false);
 
     /* Tests implementation of analytical gradients of bond, angle, and dihedral
      * using finite difference for comparison. */
@@ -44,6 +45,10 @@ class MstGeometry {
     static T& ref(T& obj) { return obj; }
     template <class T>
     static T& ref(T* obj) { return *obj; }
+
+  private:
+    mstreal rot[3][3];
+    mstreal trans[3];
 };
 
 // see derivation in http://grigoryanlab.org/docs/dynamics_derivatives.pdf
@@ -164,7 +169,7 @@ mstreal MstGeometry::dihedral(const CartesianPoint& atom1, const CartesianPoint&
 
 // QCP algorithm from: http://onlinelibrary.wiley.com/doi/10.1002/jcc.21439/epdf
 template <class T>
-mstreal MstGeometry::qcpRMSD(const T& A, const T& B) {
+mstreal MstGeometry::qcpRMSD(const T& A, const T& B, bool setTransform) {
   int i, j;
   int N = A.size();
   if (N != B.size()) MstUtils::error("structures are of different length", "MstGeometry::qcpRMSD");
@@ -249,6 +254,67 @@ mstreal MstGeometry::qcpRMSD(const T& A, const T& B) {
     L4 = L3*L;
     L = L - (L4 + C2*L2 + C1*L + C0)/(4*L3 + C22*L + C1);
   } while (fabs(L - Lold) > tol*L);
+
+  // compute optimal rotation matrix
+  if (setTransform) {
+    mstreal K[4][4];
+    K[0][0] =  S[0][0] + S[1][1] + S[2][2] - L;
+    K[1][1] =  S[0][0] - S[1][1] - S[2][2] - L;
+    K[2][2] = -S[0][0] + S[1][1] - S[2][2] - L;
+    K[3][3] = -S[0][0] - S[1][1] + S[2][2] - L;
+    K[0][1] = K[1][0] = S[1][2] - S[2][1];
+    K[0][2] = K[2][0] = S[2][0] - S[0][2];
+    K[0][3] = K[3][0] = S[0][1] - S[1][0];
+    K[1][2] = K[2][1] = S[0][1] + S[1][0];
+    K[1][3] = K[3][1] = S[0][2] + S[2][0];
+    K[2][3] = K[3][2] = S[1][2] + S[2][1];
+
+    mstreal evectol = 10E-11;
+    mstreal q0, q1, q2, q3; // a column from the adjoint matrix
+    q0 = K[1][1]*K[2][2]*K[3][3] - K[1][1]*K[2][3]*K[3][2] - K[1][2]*K[2][1]*K[3][3] + K[1][2]*K[2][3]*K[3][1] + K[1][3]*K[2][1]*K[3][2] - K[1][3]*K[2][2]*K[3][1];
+    q1 = K[1][0]*K[2][3]*K[3][2] - K[1][0]*K[2][2]*K[3][3] + K[1][2]*K[2][0]*K[3][3] - K[1][2]*K[2][3]*K[3][0] - K[1][3]*K[2][0]*K[3][2] + K[1][3]*K[2][2]*K[3][0];
+    q2 = K[1][0]*K[2][1]*K[3][3] - K[1][0]*K[2][3]*K[3][1] - K[1][1]*K[2][0]*K[3][3] + K[1][1]*K[2][3]*K[3][0] + K[1][3]*K[2][0]*K[3][1] - K[1][3]*K[2][1]*K[3][0];
+    q3 = K[1][0]*K[2][2]*K[3][1] - K[1][0]*K[2][1]*K[3][2] + K[1][1]*K[2][0]*K[3][2] - K[1][1]*K[2][2]*K[3][0] - K[1][2]*K[2][0]*K[3][1] + K[1][2]*K[2][1]*K[3][0];
+    mstreal qsqr = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
+    if (qsqr < evectol) {
+      q0 = K[0][1]*K[2][3]*K[3][2] - K[0][1]*K[2][2]*K[3][3] + K[0][2]*K[2][1]*K[3][3] - K[0][2]*K[2][3]*K[3][1] - K[0][3]*K[2][1]*K[3][2] + K[0][3]*K[2][2]*K[3][1];
+      q1 = K[0][0]*K[2][2]*K[3][3] - K[0][0]*K[2][3]*K[3][2] - K[0][2]*K[2][0]*K[3][3] + K[0][2]*K[2][3]*K[3][0] + K[0][3]*K[2][0]*K[3][2] - K[0][3]*K[2][2]*K[3][0];
+      q2 = K[0][0]*K[2][3]*K[3][1] - K[0][0]*K[2][1]*K[3][3] + K[0][1]*K[2][0]*K[3][3] - K[0][1]*K[2][3]*K[3][0] - K[0][3]*K[2][0]*K[3][1] + K[0][3]*K[2][1]*K[3][0];
+      q3 = K[0][0]*K[2][1]*K[3][2] - K[0][0]*K[2][2]*K[3][1] - K[0][1]*K[2][0]*K[3][2] + K[0][1]*K[2][2]*K[3][0] + K[0][2]*K[2][0]*K[3][1] - K[0][2]*K[2][1]*K[3][0];
+      qsqr = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
+      if (qsqr < evectol) {
+        q0 = K[0][1]*K[1][2]*K[3][3] - K[0][1]*K[1][3]*K[3][2] - K[0][2]*K[1][1]*K[3][3] + K[0][2]*K[1][3]*K[3][1] + K[0][3]*K[1][1]*K[3][2] - K[0][3]*K[1][2]*K[3][1];
+        q1 = K[0][0]*K[1][3]*K[3][2] - K[0][0]*K[1][2]*K[3][3] + K[0][2]*K[1][0]*K[3][3] - K[0][2]*K[1][3]*K[3][0] - K[0][3]*K[1][0]*K[3][2] + K[0][3]*K[1][2]*K[3][0];
+        q2 = K[0][0]*K[1][1]*K[3][3] - K[0][0]*K[1][3]*K[3][1] - K[0][1]*K[1][0]*K[3][3] + K[0][1]*K[1][3]*K[3][0] + K[0][3]*K[1][0]*K[3][1] - K[0][3]*K[1][1]*K[3][0];
+        q3 = K[0][0]*K[1][2]*K[3][1] - K[0][0]*K[1][1]*K[3][2] + K[0][1]*K[1][0]*K[3][2] - K[0][1]*K[1][2]*K[3][0] - K[0][2]*K[1][0]*K[3][1] + K[0][2]*K[1][1]*K[3][0];
+        qsqr = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
+        if (qsqr < evectol) {
+          q0 = K[0][1]*K[1][3]*K[2][2] - K[0][1]*K[1][2]*K[2][3] + K[0][2]*K[1][1]*K[2][3] - K[0][2]*K[1][3]*K[2][1] - K[0][3]*K[1][1]*K[2][2] + K[0][3]*K[1][2]*K[2][1];
+          q1 = K[0][0]*K[1][2]*K[2][3] - K[0][0]*K[1][3]*K[2][2] - K[0][2]*K[1][0]*K[2][3] + K[0][2]*K[1][3]*K[2][0] + K[0][3]*K[1][0]*K[2][2] - K[0][3]*K[1][2]*K[2][0];
+          q2 = K[0][0]*K[1][3]*K[2][1] - K[0][0]*K[1][1]*K[2][3] + K[0][1]*K[1][0]*K[2][3] - K[0][1]*K[1][3]*K[2][0] - K[0][3]*K[1][0]*K[2][1] + K[0][3]*K[1][1]*K[2][0];
+          q3 = K[0][0]*K[1][1]*K[2][2] - K[0][0]*K[1][2]*K[2][1] - K[0][1]*K[1][0]*K[2][2] + K[0][1]*K[1][2]*K[2][0] + K[0][2]*K[1][0]*K[2][1] - K[0][2]*K[1][1]*K[2][0];
+          qsqr = q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3;
+        }
+      }
+    }
+
+    if (qsqr < evectol) {
+      // if eigenvector still too small, then the optimal rotation is likely just the identity matrix
+      rot[0][0] = 1; rot[0][1] = 0; rot[0][2] = 0;
+      rot[1][0] = 0; rot[1][1] = 1; rot[1][2] = 0;
+      rot[2][0] = 0; rot[2][1] = 0; rot[2][2] = 1;
+    } else {
+      mstreal normq = sqrt(qsqr);
+      q0 /= normq; q1 /= normq; q2 /= normq; q3 /= normq;
+      rot[0][0] = q0*q0 + q1*q1 - q2*q2 - q3*q3;
+      rot[1][1] = q0*q0 - q1*q1 + q2*q2 - q3*q3;
+      rot[2][2] = q0*q0 - q1*q1 - q2*q2 + q3*q3;
+      rot[0][1] = 2*(q1*q2 - q0*q3); rot[0][2] = 2*(q1*q3 + q0*q2);
+      rot[1][0] = 2*(q1*q2 + q0*q3); rot[2][0] = 2*(q1*q3 - q0*q2);
+      rot[1][2] = 2*(q2*q3 - q0*q1);
+      rot[2][1] = 2*(q2*q3 + q0*q1);
+    }
+  }
 
   return sqrt((GA + GB - 2*L)/N);
 }
