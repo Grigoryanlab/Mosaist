@@ -5,5 +5,5 @@ using namespace MST;
 
 int main(int argc, char** argv) {
   MstGeometry::testPrimitiveGradients();
-  MstGeometry::testQCP();
+  MstGeometry::testQCP(true);
 }

@@ -31,14 +31,17 @@ class MstGeometry {
     static mstreal dihedral(const CartesianPoint& atom1, const CartesianPoint& atom2, const CartesianPoint& atom3, const CartesianPoint& atom4, T& grad);
 
     template <class T>
-    mstreal qcpRMSD(const T& A, const T& B, bool setTransform = false);
+    mstreal qcpRMSD(const T& A, const T& B, bool setTransform = false, bool setResiduals = false);
+
+    template <class T>
+    mstreal qcpRMSDGrad(const T& A, const T& B, vector<mstreal>& grad);
 
     /* Tests implementation of analytical gradients of bond, angle, and dihedral
      * using finite difference for comparison. */
     static bool testPrimitiveGradients();
 
     /* Tests QCP implementation for RMSD and RMSD gradient calculation. */
-    static bool testQCP();
+    static bool testQCP(bool testGrad = false);
 
   protected:
     template <class T>
@@ -49,6 +52,7 @@ class MstGeometry {
   private:
     mstreal rot[3][3];
     mstreal trans[3];
+    vector<vector<mstreal> > residuals;
 };
 
 // see derivation in http://grigoryanlab.org/docs/dynamics_derivatives.pdf
@@ -169,7 +173,7 @@ mstreal MstGeometry::dihedral(const CartesianPoint& atom1, const CartesianPoint&
 
 // QCP algorithm from: http://onlinelibrary.wiley.com/doi/10.1002/jcc.21439/epdf
 template <class T>
-mstreal MstGeometry::qcpRMSD(const T& A, const T& B, bool setTransform) {
+mstreal MstGeometry::qcpRMSD(const T& A, const T& B, bool setTransform, bool setResiduals) {
   int i, j;
   int N = A.size();
   if (N != B.size()) MstUtils::error("structures are of different length", "MstGeometry::qcpRMSD");
@@ -298,6 +302,7 @@ mstreal MstGeometry::qcpRMSD(const T& A, const T& B, bool setTransform) {
       }
     }
 
+    // this is from http://onlinelibrary.wiley.com/doi/10.1002/jcc.20110/abstract (eq. 33)
     if (qsqr < evectol) {
       // if eigenvector still too small, then the optimal rotation is likely just the identity matrix
       rot[0][0] = 1; rot[0][1] = 0; rot[0][2] = 0;
@@ -314,10 +319,48 @@ mstreal MstGeometry::qcpRMSD(const T& A, const T& B, bool setTransform) {
       rot[1][2] = 2*(q2*q3 - q0*q1);
       rot[2][1] = 2*(q2*q3 + q0*q1);
     }
+
+    /* To superimpose A onto B, we would:
+     * 1. translate A by -cA to bring it to the origin
+     * 2. apply the optimal rotatoin matrix
+     * 3. translate the resulting coordinates by +cB to superimpose with B
+     * So, if the original 3xN coordinate matrix is MA, then the operqtion is:
+     * rot*(MA - cA) + cB = rot*MA + (cB - rot*cA) = rot*MA + trans
+     * where trans = cB - rot*cA */
+    for (i = 0; i < 3; i++) {
+      trans[i] = cB[i] - (rot[i][0]*cA[0] + rot[i][1]*cA[1] + rot[i][2]*cA[2]);
+    }
+
+    // compute residuals after superposition
+    if (setResiduals) {
+      residuals.resize(N, vector<mstreal>(3, 0.0));
+      mstreal xB, yB, zB;
+      for (i = 0; i < N; i++) {
+        xB = B[i]->getX() - cB[0];
+        yB = B[i]->getY() - cB[1];
+        zB = B[i]->getZ() - cB[2];
+        residuals[i][0] = (A[i]->getX() - cA[0]) - (rot[0][0]*xB + rot[0][1]*yB + rot[0][2]*zB);
+        residuals[i][1] = (A[i]->getY() - cA[1]) - (rot[1][0]*xB + rot[1][1]*yB + rot[1][2]*zB);
+        residuals[i][2] = (A[i]->getZ() - cA[2]) - (rot[2][0]*xB + rot[2][1]*yB + rot[2][2]*zB);
+      }
+    }
   }
 
   return sqrt((GA + GB - 2*L)/N);
 }
 
+template <class T>
+mstreal MstGeometry::qcpRMSDGrad(const T& A, const T& B, vector<mstreal>& grad) {
+  mstreal rmsd = qcpRMSD(A, B, true, true); // set optimal residuals
+  mstreal f = 1.0/(A.size() * rmsd);
+  int k = 0;
+  for (int i = 0; i < residuals.size(); i++) {
+    for (int j = 0; j < 3; j++) {
+      grad[k] = f * residuals[i][j];
+      k++;
+    }
+  }
+  return rmsd;
+}
 
 #endif

@@ -90,7 +90,7 @@ bool MstGeometry::testPrimitiveGradients() {
   return true;
 }
 
-bool MstGeometry::testQCP() {
+bool MstGeometry::testQCP(bool testGrad) {
   long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
   srand(x);
   RMSDCalculator rc;
@@ -101,7 +101,7 @@ bool MstGeometry::testQCP() {
   bool failed = false; int N = 100000;
   for (int k = 0; k < N; k++) {
     int N = MstUtils::randInt(100, 10); // number of atoms
-    mstreal L = MstUtils::randUnit()*50; // length scale
+    mstreal L = (1 + MstUtils::randUnit())*50; // length scale
 
     // create random atoms
     AtomPointerVector A(N), B(N);
@@ -133,6 +133,34 @@ bool MstGeometry::testQCP() {
       cout << "QCP: " << rmsdQCP << endl;
       cout << "difference: " << (rmsd - rmsdQCP) << endl;
     }
+
+    // test gradient calculation
+    if (testGrad) {
+      CartesianPoint rmsdGrad(3*A.size(), 0), rmsdGradNum(3*A.size(), 0);
+      mstreal del = 0.0001*L;
+      mg.qcpRMSDGrad(A, B, rmsdGrad);
+      int k = 0;
+      for (int i = 0; i < A.size(); i++) {
+        for (int j = 0; j < 3; j++) {
+          mstreal old = (*A[i])[j];
+          (*A[i])[j] = old + del; mstreal p = rc.bestRMSD(A, B);
+          (*A[i])[j] = old - del; mstreal m = rc.bestRMSD(A, B);
+          rmsdGradNum[k] = (p - m)/(2*del);
+          (*A[i])[j] = old;
+// cout << rmsdGrad[k] << "\t" << rmsdGradNum[k] << "\t" << rmsdGrad[k] - rmsdGradNum[k] << endl;
+          k++;
+        }
+      }
+      if ((rmsdGrad - rmsdGradNum).norm() > 10E-3) {
+        failed = true;
+        cout << "test FAILED for RMSD gradient calculation, point sets:\n" << A << endl << B << endl;
+        cout << "QCP\tnumeric\tdifference" << endl;
+        for (int i = 0; i < rmsdGrad.size(); i++) cout << rmsdGrad[i] << "\t" << rmsdGradNum[i] << "\t" << rmsdGrad[i] - rmsdGradNum[i] << endl;
+        cout << "difference norm: " << (rmsdGrad - rmsdGradNum).norm() << endl;
+exit(-1);
+      }
+    }
+
     A.deletePointers();
     B.deletePointers();
     if (failed) return false;
