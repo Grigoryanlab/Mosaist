@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
   cout << "Will fix residues: " << MstUtils::vecToString(fixed) << endl;
   cout << "Leaving " << L - fixed.size() << " mobile" << endl;
 
-  fusionParams opts; opts.setNumIters(1000); opts.setVerbose(true);
+  fusionParams opts; opts.setNumIters(1000); opts.setVerbose(false);
   Structure fused = Fuser::fuse(resTopo, fixed, opts);
   fused.writePDB(outBase + ".fused.pdb");
 

@@ -4,6 +4,6 @@
 using namespace MST;
 
 int main(int argc, char** argv) {
-  MstGeometry::testPrimitiveGradients();
-  MstGeometry::testQCP(true);
+  CartesianGeometry::testPrimitiveGradients();
+  RMSDCalculator::testQCP(true);
 }

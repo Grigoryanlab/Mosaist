@@ -81,10 +81,11 @@ class Matrix {
 // dimensions required to be unity.
 class Vector : public Matrix {
   public:
-    Vector(int numel, mstreal val = 0.0, bool col = false) : Matrix(vector<mstreal>(numel, val), col) {}
+    Vector(int numel = 0, mstreal val = 0.0, bool col = false) : Matrix(vector<mstreal>(numel, val), col) {}
     Vector(const vector<mstreal>& p, bool col = false) : Matrix(p, col) {}
     Vector(const Vector& V) : Matrix(V) {}
     Vector(const Matrix& _M) : Matrix(_M) { MstUtils::assert((_M.numRows() == 1) || (_M.numCols() == 1), "cannot construct a vector from a matrix with non-unitary dimensions", "Vector::Vector(const Matrix& _M)"); }
+    int size() { return length(); }
 };
 
 }

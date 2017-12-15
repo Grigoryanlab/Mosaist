@@ -13,7 +13,7 @@ class optimizerEvaluator {
   public:
     virtual vector<mstreal> guessPoint() { return vector<mstreal>(1, 0); }
     virtual mstreal eval(const vector<mstreal>& point) { return 0.0; }
-    virtual mstreal eval(const vector<mstreal>& point, Vector& grad, vector<mstreal> eps = vector<mstreal>(0)) { grad = finiteDifferenceGradient(point, eps); return eval(point); }
+    virtual mstreal eval(const vector<mstreal>& point, Vector& grad) { grad = finiteDifferenceGradient(point); return eval(point); }
     virtual Vector finiteDifferenceGradient(const vector<mstreal>& point, vector<mstreal> eps = vector<mstreal>(0));
 };
 

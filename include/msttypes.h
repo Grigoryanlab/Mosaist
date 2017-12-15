@@ -468,6 +468,28 @@ class CartesianGeometry {
      * with respect to that range (i.e., via the average deviation from the
      * minimal value). */
     static mstreal angleMean(const vector<mstreal>& angles, bool radians = false);
+
+    /* gradient vector must be of length 6, and will be filled with partial
+     * derivatives d(distance)/dc, where c runs over x, y, and z of the first
+     * atom, then second atom. */
+    template <class T>
+    static mstreal distance(const CartesianPoint& atom1, const CartesianPoint& atom2, T& grad);
+
+    /* gradient vector must be of length 9, and will be filled with partial
+     * derivatives d(distance)/dc, where c runs over x, y, and z of the first
+     * atom, then second atom, then third atom. */
+    template <class T>
+    static mstreal angle(const CartesianPoint& atom1, const CartesianPoint& atom2, const CartesianPoint& atom3, T& grad, bool radians = false);
+
+    /* gradient vector must be of length 12, and will be filled with partial
+     * derivatives d(distance)/dc, where c runs over x, y, and z of the first
+     * atom, then second atom, then third atom, then fourth atom. */
+    template <class T>
+    static mstreal dihedral(const CartesianPoint& atom1, const CartesianPoint& atom2, const CartesianPoint& atom3, const CartesianPoint& atom4, T& grad, bool radians = false);
+
+    /* Tests implementation of analytical gradients of bond, angle, and dihedral
+     * using finite difference for comparison. */
+    static bool testPrimitiveGradients();
 };
 
 class AtomPointerVector : public vector<Atom*> {
@@ -586,6 +608,15 @@ class RMSDCalculator {
     static mstreal rmsdCutoff(const vector<int>& L, mstreal rmsdMax = 1.1, mstreal L0 = 15);
     static mstreal rmsdCutoff(const Structure& S, mstreal rmsdMax = 1.1, mstreal L0 = 15);
 
+    template <class T>
+    mstreal qcpRMSD(const T& A, const T& B, bool setTransform = false, bool setResiduals = false);
+
+    template <class T>
+    mstreal qcpRMSDGrad(const T& A, const T& B, vector<mstreal>& grad);
+
+    /* Tests QCP implementation for RMSD and RMSD gradient calculation. */
+    static bool testQCP(bool testGrad = false);
+
  protected:
     // implemetation of Kabsch algoritm for optimal superposition
     bool Kabsch(const vector<Atom*> &_align, const vector<Atom*> &_ref, int mode);
@@ -593,6 +624,7 @@ class RMSDCalculator {
  private:
     mstreal _res;
     int _n;
+    vector<vector<mstreal> > residuals;
     mstreal t[3];    // translation vector
     mstreal u[3][3]; // rotation matrix
 

@@ -62,8 +62,8 @@ class fusionEvaluator: public optimizerEvaluator {
     fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> fixedResidues = vector<int>(), const fusionParams& _params = fusionParams());
 
     mstreal eval(const vector<mstreal>& point);
-
-    vector<mstreal> guessPoint() { if (initPoint.empty()) eval(vector<mstreal>()); return initPoint; }
+    mstreal eval(const vector<mstreal>& point, Vector& grad);
+    vector<mstreal> guessPoint();
     void setGuessPoint(const vector<mstreal>& _initPoint) { initPoint = _initPoint; }
     void noisifyGuessPoint(mstreal _noise = 1.0) { params.setNoise(_noise); initPoint.resize(0); }
     int numResidues() { return overlappingResidues.size(); }
@@ -110,6 +110,30 @@ class fusionEvaluator: public optimizerEvaluator {
           default:
             MstUtils::error("uknown variable type", "icBound::getCurrentValue");
         }
+      }
+
+      vector<mstreal> getCurrentGradient() const {
+        vector<mstreal> grad;
+        switch (type) {
+          case icBrokenDihedral:
+          case icDihedral:
+            grad.resize(12);
+            CartesianGeometry::dihedral(atoms[0], atoms[1], atoms[2], atoms[3], grad);
+            break;
+          case icBrokenAngle:
+          case icAngle:
+            grad.resize(9);
+            CartesianGeometry::angle(atoms[0], atoms[1], atoms[2], grad);
+            break;
+          case icBrokenBond:
+          case icBond:
+            grad.resize(6);
+            CartesianGeometry::distance(atoms[0], atoms[1], grad);
+            break;
+          default:
+            MstUtils::error("uknown variable type", "icBound::getCurrentGradient");
+        }
+        return grad;
       }
 
       icType type;
@@ -240,7 +264,7 @@ class fusionEvaluator: public optimizerEvaluator {
     // with respect to the search coordinate vector (either also Cartesian or BAT)
     coordinateGradient gradOfXYZ;
     mstreal bondPenalty, anglPenalty, dihePenalty, rmsdScore, score; // current scores
-    vector<mstreal> grad; // current search gradient
+    vector<mstreal> gradient; // current search gradient
 };
 
 class Fuser {

@@ -104,7 +104,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
   if (init) {
     initPoint.resize(0);
     gradOfXYZ.clear();
-    grad.resize(numDF());
+    gradient.resize(numDF());
   }
   mstreal bR = 0.01; mstreal aR = 1.0; mstreal dR = 1.0; mstreal xyzR = 0.01; // randomness scale factors
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
@@ -332,31 +332,57 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
   return score;
 }
 
+mstreal fusionEvaluator::eval(const vector<mstreal>& point, Vector& grad) {
+  eval(point);
+  grad = gradient;
+  // numerical test of the gradient
+  if (0) {
+    Vector fdGrad = finiteDifferenceGradient(point, vector<mstreal>(point.size(), 10E-4));
+    mstreal diff = (grad - fdGrad).norm();
+    if (diff > grad.norm()*10E-5) {
+      cout << "comparison FAILED:\n";
+      for (int i = 0; i < grad.length(); i++) {
+        cout << grad[i] << " " << fdGrad[i] << endl;
+      }
+      cout << "norm difference: " << diff << endl;
+    }
+  }
+  return score;
+}
+
+vector<mstreal> fusionEvaluator::guessPoint() {
+  if (initPoint.empty()) {
+    eval(vector<mstreal>());
+  }
+  return initPoint;
+}
+
+
 void fusionEvaluator::resetScore() {
   score = bondPenalty = anglPenalty = dihePenalty = rmsdScore = 0;
-  for (int k = 0; k < grad.size(); k++) grad[k] = 0;
+  for (int k = 0; k < gradient.size(); k++) gradient[k] = 0;
 }
 
 void fusionEvaluator::scoreIC(const icBound& b) {
   mstreal val = b.getCurrentValue();
+  mstreal del = 0.0, f, *comp;
   switch (b.type) {
     case icDihedral: {
       if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return;
-      mstreal dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
-      dihePenalty += kh * dx2;
-      score += kh * dx2;
-      return;
+      mstreal del = MstUtils::min(fabs(CartesianGeometry::angleDiff(b.minVal, val)), fabs(CartesianGeometry::angleDiff(b.maxVal, val)));
+      f = kh; comp = &dihePenalty;
+      break;
     }
     case icAngle:
+      if (val < b.minVal) { del = val - b.minVal; }
+      else if (val > b.maxVal) { del = val - b.maxVal; }
+      f = ka; comp = &anglPenalty;
+      break;
     case icBond: {
-      mstreal pen = 0;
-      mstreal K = (b.type == icBond) ? kb : ka;
-      if (val < b.minVal) { pen = K * (val - b.minVal) * (val - b.minVal); }
-      else if (val > b.maxVal) { pen = K * (val - b.maxVal) * (val - b.maxVal); }
-      if (b.type == icBond) bondPenalty += pen;
-      else anglPenalty += pen;
-      score += pen;
-      return;
+      if (val < b.minVal) { del = val - b.minVal; }
+      else if (val > b.maxVal) { del = val - b.maxVal; }
+      f = kb; comp = &bondPenalty;
+      break;
     }
     case icBrokenDihedral:
     case icBrokenAngle:
@@ -365,16 +391,50 @@ void fusionEvaluator::scoreIC(const icBound& b) {
     default:
       MstUtils::error("uknown variable type", "fusionEvaluator::scoreIC");
   }
+  if (del != 0) {
+    mstreal pen = f * del * del;
+    score += pen;
+    *comp += pen;
+
+    // update the gradient
+    vector<mstreal> innerGradient = b.getCurrentGradient();
+    int j = 0;
+    for (int i = 0; i < b.atoms.size(); i++) {
+      Atom* a = b.atoms[i];
+      for (int d = 0; d < 3; d++) {
+        map<int, mstreal> parts = gradOfXYZ.getPartials(a, d);
+        for (auto it = parts.begin(); it != parts.end(); ++it) {
+          gradient[it->first] += 2 * f * del * innerGradient[j] * it->second;
+        }
+        j++;
+      }
+    }
+  }
 }
 
 void fusionEvaluator::scoreRMSD() {
   mstreal rmsdTot = 0;
   RMSDCalculator rms;
   rmsdScore = 0;
+  vector<mstreal> innerGradient;
   for (int i = 0; i < alignedFrags.size(); i++) {
-    mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
+    innerGradient.resize(alignedFrags[i].first.size()*3, 0.0);
+    mstreal r = rms.qcpRMSDGrad(alignedFrags[i].first, alignedFrags[i].second, innerGradient);
+    // mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
     rmsdScore += r * r * alignedFrags[i].first.size();
     rmsdTot += r;
+
+    // gradient of RMSD
+    int j = 0;
+    for (int ai = 0; ai < alignedFrags[i].first.size(); ai++) {
+      for (int d = 0; d < 3; d++) {
+        map<int, mstreal> parts = gradOfXYZ.getPartials(alignedFrags[i].first[ai], d);
+        for (auto it = parts.begin(); it != parts.end(); ++it) {
+          gradient[it->first] += 2 * r * innerGradient[j] * it->second;
+        }
+        j++;
+      }
+    }
   }
   score += rmsdScore;
   if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (total RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
