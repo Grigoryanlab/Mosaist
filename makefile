@@ -15,7 +15,7 @@ endif
 PYLIB = -L$(PYLIBPATH) -L$(LDIR) $(shell python-config --libs) -lboost_python -Wl,-whole-archive -lmst -Wl,-no-whole-archive
 PYOPTS = $(shell python-config --includes) -O2 -fPIC -std=c++11 -I$(INCDIR)
 
-SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem mstfasst mstgeometry
+SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem mstfasst
 OBJECTS = $(patsubst %,$(ODIR)/%.o, $(SOURCE))
 
 all: setup $(OBJECTS) libs tests
@@ -30,7 +30,7 @@ $(OBJECTS): $(ODIR)/%.o : $(SDIR)/%.cpp $(INCDIR)/%.h
 	$(CC) $(CPPFLAGS) -I$(INCDIR) -c -o $@ $<
 
 tests: $(OBJECTS)
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstgeometry.o tests/testGrads.cpp -o bin/testGrads
+	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o tests/testGrads.cpp -o bin/testGrads
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o $(ODIR)/msttransforms.o $(ODIR)/mstfasst.o $(ODIR)/mstsequence.o tests/testFASST.cpp -o bin/testFASST
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o tests/test.cpp -o bin/test
 	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstlinalg.o tests/testTransforms.cpp -o bin/testTransforms

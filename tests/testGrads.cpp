@@ -1,5 +1,4 @@
 #include "msttypes.h"
-#include "mstgeometry.h"
 
 using namespace MST;
 

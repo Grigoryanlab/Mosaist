@@ -47,6 +47,27 @@ class fusionParams {
     mstreal tol;   // error tolerance stopping criterion for optimization
 };
 
+struct fusionScores {
+  fusionScores() { reset(); }
+  fusionScores(mstreal _bondPenalty, mstreal _anglPenalty, mstreal _dihePenalty, mstreal _rmsdScore, mstreal _rmsdTot, mstreal _score) {
+    bondPenalty = _bondPenalty; anglPenalty = _anglPenalty; dihePenalty = _dihePenalty;
+    rmsdScore = _rmsdScore; rmsdTot = _rmsdTot; score = _score;
+  }
+  fusionScores(const fusionScores& sc) {
+    bondPenalty = sc.bondPenalty; anglPenalty = sc.anglPenalty; dihePenalty = sc.dihePenalty;
+    rmsdScore = sc.rmsdScore; rmsdTot = sc.rmsdTot; score = sc.score;
+  }
+  void reset() { rmsdScore = rmsdTot = bondPenalty = anglPenalty = dihePenalty = 0; }
+  mstreal getBondScore() { return bondPenalty; }
+  mstreal getAngleScore() { return anglPenalty; }
+  mstreal getDihedralScore() { return dihePenalty; }
+  mstreal getRMSDScore() { return rmsdScore; }
+  mstreal getTotRMSDScore() { return rmsdTot; }
+  mstreal getScore() { return score; }
+  private:
+    double rmsdScore, rmsdTot, bondPenalty, anglPenalty, dihePenalty, score;
+};
+
 class fusionEvaluator: public optimizerEvaluator {
   public:
     // broken means across a chain break
@@ -82,6 +103,7 @@ class fusionEvaluator: public optimizerEvaluator {
       buildOriginRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : MstUtils::randInt(0, numResidues() - 1);
       return buildOriginRes;
     }
+    fusionScores getScores();
 
   class icBound {
     public:
@@ -263,7 +285,7 @@ class fusionEvaluator: public optimizerEvaluator {
     // stores information on the gradient of Cartesian coordinates of fused atoms
     // with respect to the search coordinate vector (either also Cartesian or BAT)
     coordinateGradient gradOfXYZ;
-    mstreal bondPenalty, anglPenalty, dihePenalty, rmsdScore, score; // current scores
+    mstreal bondPenalty, anglPenalty, dihePenalty, rmsdScore, rmsdTot, score; // current scores
     vector<mstreal> gradient; // current search gradient
 };
 
@@ -275,6 +297,7 @@ class Fuser {
      * that overlap with the i-th residue in the chain, in the N-to-C order,
      * starting with 0. Returns the the fused chain as a Structure object. */
     static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
+    static Structure fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
 
     /* This function is a simplified version of Fuser::fuse(), in that it guesses
      * the topology automatically. Argument residues is a flat vector of all the

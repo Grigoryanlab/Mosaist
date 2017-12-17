@@ -105,6 +105,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     initPoint.resize(0);
     gradOfXYZ.clear();
     gradient.resize(numDF());
+    bounds.clear();
   }
   mstreal bR = 0.01; mstreal aR = 1.0; mstreal dR = 1.0; mstreal xyzR = 0.01; // randomness scale factors
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
@@ -359,7 +360,7 @@ vector<mstreal> fusionEvaluator::guessPoint() {
 
 
 void fusionEvaluator::resetScore() {
-  score = bondPenalty = anglPenalty = dihePenalty = rmsdScore = 0;
+  score = bondPenalty = anglPenalty = dihePenalty = rmsdScore = rmsdTot = 0;
   for (int k = 0; k < gradient.size(); k++) gradient[k] = 0;
 }
 
@@ -413,16 +414,15 @@ void fusionEvaluator::scoreIC(const icBound& b) {
 }
 
 void fusionEvaluator::scoreRMSD() {
-  mstreal rmsdTot = 0;
   RMSDCalculator rms;
-  rmsdScore = 0;
+  rmsdScore = 0; int N = 0;
   vector<mstreal> innerGradient;
   for (int i = 0; i < alignedFrags.size(); i++) {
     innerGradient.resize(alignedFrags[i].first.size()*3, 0.0);
     mstreal r = rms.qcpRMSDGrad(alignedFrags[i].first, alignedFrags[i].second, innerGradient);
     // mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
     rmsdScore += r * r * alignedFrags[i].first.size();
-    rmsdTot += r;
+    N += alignedFrags[i].first.size();
 
     // gradient of RMSD
     int j = 0;
@@ -437,9 +437,14 @@ void fusionEvaluator::scoreRMSD() {
     }
   }
   score += rmsdScore;
+  rmsdTot = sqrt(rmsdScore/N);
   if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (total RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
 }
 
+fusionScores fusionEvaluator::getScores() {
+  fusionScores scores(bondPenalty, anglPenalty, dihePenalty, rmsdScore, rmsdTot, score);
+  return scores;
+}
 
 AtomPointerVector fusionEvaluator::atomInstances(int ri, const string& ai) {
   AtomPointerVector atoms;
@@ -639,7 +644,7 @@ CartesianPoint fusionEvaluator::dihedralInstances(int rl, Atom* atomI, Atom* ato
 
 /* --------- Fuser ----------- */
 
-Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, const fusionParams& params) {
+Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed, const fusionParams& params) {
   bool useGradDescent = true;
   fusionEvaluator E(resTopo, fixed, params); E.setVerbose(false);
   vector<mstreal> bestSolution; mstreal score, bestScore;
@@ -668,7 +673,13 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int
     E.setVerbose(true);
   }
   E.eval(bestSolution);
+  scores = E.getScores();
   return E.getAlignedStructure();
+}
+
+Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, const fusionParams& params) {
+  fusionScores scores;
+  return fuse(resTopo, scores, fixed, params);
 }
 
 Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOverlaps, const fusionParams& params) {
