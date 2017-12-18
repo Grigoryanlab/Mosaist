@@ -2608,7 +2608,8 @@ mstreal RMSDCalculator::qcpRMSD(const T& A, const T& B, bool setTransform, bool 
 template <class T>
 mstreal RMSDCalculator::qcpRMSDGrad(const T& A, const T& B, vector<mstreal>& grad) {
   mstreal rmsd = qcpRMSD(A, B, true, true); // set optimal residuals
-  mstreal f = 1.0/(A.size() * rmsd);
+  // if RMSD is zero, the gradient should be zero also (RMSD = 0 is the global minimum)
+  mstreal f = (MstUtils::closeEnough(rmsd, 0.0) ? 0.0 : 1.0/(A.size() * rmsd));
   int k = 0;
   for (int i = 0; i < residuals.size(); i++) {
     for (int j = 0; j < 3; j++) {
