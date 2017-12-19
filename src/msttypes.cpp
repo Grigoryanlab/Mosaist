@@ -2602,7 +2602,9 @@ mstreal RMSDCalculator::qcpRMSD(const T& A, const T& B, bool setTransform, bool 
     }
   }
 
-  return sqrt((GA + GB - 2*L)/N);
+   // when RMSD is almost exactly zero, the argument of the sqrt can end up very
+   // small, but negative; so apply fabs to avoid nan answers
+  return sqrt(fabs(GA + GB - 2*L)/N);
 }
 
 template <class T>
