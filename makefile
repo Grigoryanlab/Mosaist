@@ -1,71 +1,189 @@
-CC = g++
-CPPFLAGS=-O3 -std=c++11 -fPIC
-ODIR = objs
-SDIR = src
-LDIR = lib
-INCDIR = include
+# this makefile uses snippets / patterns from:
+#	https://stackoverflow.com/questions/2908057/can-i-compile-all-cpp-files-in-src-to-os-in-obj-then-link-to-binary-in
+#	https://stackoverflow.com/questions/3261737/makefile-change-variable-value-depending-on-a-target
+#	https://stackoverflow.com/questions/2205603/conditional-dependency-with-make-gmake
+#	https://www.cmcrossroads.com/article/trouble-wildcard
 
-# python.boost stuff
+# how to use this makefile:
+#	1) run `make` or `make all` to compile and create everything
+#	2) run `make clean` to delete all output files (objects, libraries, binaries), leaving just the output directories (objs, lib, bin)
+#	3) run `make setup` to create the output directories (objs, lib, bin) and nothing else
+#	4) run `make libs` to create all MST libraries
+#	5) run `make python` to create the boost.python shared object for using MST in python
+#	6) if $target is a target name (i.e. a recognized binary), run `make $target` to compile the target
+#	7) if $library is a library name (i.e. a recognized MST library), run `make $library` to create the library
+#	8) targets, libraries, and helper source files can be compiled directly via their pathnames if needed, e.g. `make bin/$target`, `make objs/$helper.o`, etc.
+
+# how to maintain this makefile:
+#	to add a target binary named $target
+#		1) add its name to TESTS, PROGRAMS, or your own variable that gets added to TARGETS
+#		2) specify its dependencies in the variable $target_DEPS (e.g. see test_DEPS below)
+#	to add a helper source, i.e. a .cpp that does not have its own `main`, add its name to HELPERS
+#	to add a library named $lib,
+#		1) add its name to LIBRARIES
+#		2) specify its dependencies in the variable $lib_DEPS (e.g. see libmst_DEPS below)
+#	if any external headers or libraries become needed, add their directories to INC_DIRS and LIB_DIRS, respectively
+#	note that it's assumed that target and library names are unique - if two targets, two libraries, or a target and a library have the same name, compilation will not work as expected
+#	also note that it's assumed that no file in this directory has the same name as a phony target (all, clean, libs, python, setup)
+#		if a file is created with one of these names, compilation will not work as expected
+#	on a pedantic note, I have alphabetized the lists of targets, libraries, and dependencies to make it easier to find things
+#		consider maintaining this so it's easier to determine whether a target, library, or dependency already exists!
+
+# stuff meant to be regularly updated:
+
+# flags
+CC := g++
+CPP_FLAGS := -O3 -std=c++11 -fPIC
+DEBUG_FLAGS := -g
+
+# essential directories
+INCD := include
+OBJD := objs
+LIBD := lib
+BIND := bin
+
+# source directories
+SRCD		:= src
+TESTD		:= tests
+PROGRAMD	:= programs
+
+# header and external library directories
+INC_DIRS := $(INCD)
+LIB_DIRS := 
+
+# targets and MST libraries
+TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testFASST testFuser testGrads testRotlib testTERMUtils testTransforms
+PROGRAMS	:= findTERMs renumber
+TARGETS		:= $(TESTS) $(PROGRAMS)
+HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes
+LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans
+
+# target dependencies
+findBestFreedom_DEPS	:= mstcondeg mstrotlib mstsystem msttransforms msttypes
+test_DEPS				:= msttypes
+testAutofuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
+testConFind_DEPS		:= mstcondeg mstoptions mstrotlib mstsystem msttransforms msttypes
+testClusterer_DEPS		:= mstoptions msttypes
+testFASST_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
+testFuser_DEPS			:= mstfuser mstlinalg mstoptim msttransforms msttypes
+testGrads_DEPS			:= msttypes
+testRotlib_DEPS			:= mstrotlib msttransforms msttypes
+testTERMUtils_DEPS		:= mstmagic msttypes
+testTransforms_DEPS		:= mstlinalg msttransforms msttypes
+findTERMs_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
+renumber_DEPS			:= mstsystem msttypes
+
+# MST library dependencies
+libmst_DEPS				:= mstoptions mstsequence mstsystem msttypes
+libmstcondeg_DEPS		:= mstcondeg mstrotlib msttransforms
+libmstfasst_DEPS		:= mstfasst mstsequence msttransforms msttypes
+libmstfuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
+libmstlinalg_DEPS		:= mstlinalg
+libmstmagic_DEPS		:= msttypes mstmagic
+libmstoptim_DEPS		:= mstoptim mstlinalg
+libmsttrans_DEPS		:= msttransforms
+
+# stuff not meant to be regularly updated (that is, makefile magic that shouldn't have to be updated until a major change to the project structure is made):
+
+# collect targets, helpers, dependencies, and associated files
+TARGET_FILES := $(patsubst %, $(TARGETD)/%.cpp, $(TARGETS))
+TARGET_OBJ_FILES := $(patsubst $(TARGETD)/%.cpp, $(OBJD)/%.o, $(TARGET_FILES))
+HELPER_OBJ_FILES := $(patsubst %, $(OBJD)/%.o, $(HELPERS))
+
+OBJ_FILES := $(TARGET_OBJ_FILES) $(HELPER_OBJ_FILES)
+LIB_FILES := $(patsubst %, $(LIBD)/%.a, $(LIBRARIES))
+BIN_FILES := $(patsubst %, $(BIND)/%, $(TARGETS))
+
+TARGET_DEPS := $(foreach target, $(TARGETS), $($(target)_DEPS))
+LIB_DEPS := $(foreach lib, $(LIBRARIES), $($(lib)_DEPS))
+DEPS := $(TARGET_DEPS) $(LIB_DEPS)
+
+# construct 'include' and 'library' flags from already-specified directories
+INC := $(patsubst %, -I%, $(INC_DIRS))
+LIB := $(patsubst %, -L%, $(LIB_DIRS))
+
+# construct the flags that will be included
+FLAGS := $(CPP_FLAGS)
+ifdef DEBUG
+	FLAGS += $(DEBUG_FLAGS)
+endif
+
+# variables to compile the boost.python shared object
 uname := $(shell uname -s)
 ifeq ($(uname),Linux)
-    PYLIBPATH = $(shell python-config --exec-prefix)/lib64
+	PYLIB_PATH = $(shell python-config --exec-prefix)/lib64
 else
-    PYLIBPATH = $(shell python-config --exec-prefix)/lib
+	PYLIB_PATH = $(shell python-config --exec-prefix)/lib
 endif
-PYLIB = -L$(PYLIBPATH) -L$(LDIR) $(shell python-config --libs) -lboost_python -Wl,-whole-archive -lmst -Wl,-no-whole-archive
-PYOPTS = $(shell python-config --includes) -O2 -fPIC -std=c++11 -I$(INCDIR)
+PYLIB = -L$(PYLIB_PATH) -L$(LIBD) $(shell python-config --libs) -lboost_python -Wl,-whole-archive -lmst -Wl,-no-whole-archive
+PYFLAGS = $(shell python-config --includes) -O2 -fPIC -std=c++11 $(INC) $(LIB)
 
-SOURCE  = mstfuser mstoptim mstlinalg mstoptions msttypes msttransforms mstrotlib mstmagic mstcondeg mstsequence mstsystem mstfasst
-OBJECTS = $(patsubst %,$(ODIR)/%.o, $(SOURCE))
+# phony targets (targets that aren't files should be specified as phony so that they aren't remade each time `make` is run)
+.PHONY: all clean libs python setup
 
-all: setup $(OBJECTS) libs tests
-objs: $(OBJECTS)
+# make everything that can be made
+# note that the 'all' target should go first so that `make` is equivalent to `make all`
+all: $(TARGETS) $(LIBRARIES)
 
-setup:
-	mkdir -p $(ODIR)
-	mkdir -p bin
-	mkdir -p lib
-
-$(OBJECTS): $(ODIR)/%.o : $(SDIR)/%.cpp $(INCDIR)/%.h
-	$(CC) $(CPPFLAGS) -I$(INCDIR) -c -o $@ $<
-
-tests: $(OBJECTS)
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o tests/testGrads.cpp -o bin/testGrads
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o $(ODIR)/msttransforms.o $(ODIR)/mstfasst.o $(ODIR)/mstsequence.o tests/testFASST.cpp -o bin/testFASST
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o tests/test.cpp -o bin/test
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstlinalg.o tests/testTransforms.cpp -o bin/testTransforms
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstrotlib.o tests/testRotlib.cpp -o bin/testRotlib
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstmagic.o tests/testTERMUtils.cpp -o bin/testTERMUtils
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstrotlib.o $(ODIR)/msttransforms.o $(ODIR)/mstcondeg.o $(ODIR)/mstoptions.o $(ODIR)/mstsystem.o tests/testConFind.cpp -o bin/testConFind
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstrotlib.o $(ODIR)/msttransforms.o $(ODIR)/mstcondeg.o $(ODIR)/mstsystem.o tests/findBestFreedom.cpp -o bin/findBestFreedom
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testFuser.cpp -o bin/testFuser
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/msttransforms.o $(ODIR)/mstoptim.o $(ODIR)/mstfuser.o $(ODIR)/mstlinalg.o tests/testAutofuser.cpp -o bin/testAutofuser
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstoptions.o tests/testClusterer.cpp -o bin/testClusterer
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstsystem.o programs/renumber.cpp -o bin/renumber
-	$(CC) $(CPPFLAGS) -I./$(INCDIR) $(ODIR)/msttypes.o $(ODIR)/mstfasst.o $(ODIR)/mstoptions.o $(ODIR)/msttransforms.o $(ODIR)/mstsequence.o programs/findTERMs.cpp -o bin/findTERMs
-
-libs: $(OBJECTS)
-	ar rs lib/libmst.a $(ODIR)/mstoptions.o $(ODIR)/msttypes.o $(ODIR)/mstsequence.o $(ODIR)/mstsystem.o
-	ar rs lib/libmsttrans.a $(ODIR)/msttransforms.o
-	ar rs lib/libmstmagic.a $(ODIR)/msttypes.o $(ODIR)/mstmagic.o
-	ar rs lib/libmstcondeg.a $(ODIR)/mstcondeg.o $(ODIR)/mstrotlib.o $(ODIR)/msttransforms.o
-	ar rs lib/libmstlinalg.a $(ODIR)/mstlinalg.o
-	ar rs lib/libmstoptim.a $(ODIR)/mstoptim.o $(ODIR)/mstlinalg.o
-	ar rs lib/libmstfuser.a $(ODIR)/mstfuser.o $(ODIR)/msttypes.o $(ODIR)/mstoptim.o $(ODIR)/msttransforms.o $(ODIR)/mstlinalg.o
-	ar rs lib/libmstfasst.a $(ODIR)/mstfasst.o $(ODIR)/msttypes.o $(ODIR)/mstsequence.o $(ODIR)/msttransforms.o
-
-
-python: $(LDIR)/mstpython.so
-
-$(LDIR)/mstpython.so: $(ODIR)/mstpython.o
-	$(CC) $(PYLIB) -Wl,-rpath,$(PYLIBPATH) -shared $< -o $@
-
-$(ODIR)/mstpython.o: $(SDIR)/mstpython.cpp makefile
-	$(CC) $(PYOPTS) -c $< -o $@
-
-
-
-.PHONY: clean
-
+# delete every output file
 clean:
-	rm -f $(ODIR)/*.o $(ODIR)/*.so lib/*.a
+	rm -rf $(OBJD)/* $(LIBD)/* $(BIND)/*
+
+# make every library that can be made
+libs: $(patsubst %, $(LIBD)/%.a, $(LIBRARIES))
+
+# make the boost.python shared object
+python: $(LIBD)/mstpython.so
+
+# create the output directories that will be needed to make anything
+setup: $(OBJD) $(LIBD) $(BIND)
+
+# recipes to ensure each output directory exists when making anything that needs it even if `make setup` hasn't been run
+MAKE_DIR = mkdir -p $@
+
+$(OBJD):
+	$(MAKE_DIR)
+$(LIBD):
+	$(MAKE_DIR)
+$(BIND):
+	$(MAKE_DIR)
+
+$(OBJ_FILES): | $(OBJD)
+$(LIB_FILES): | $(LIBD)
+$(BIN_FILES): | $(BIND)
+
+# recipes to compile object files (targets, helpers, and boost.python)
+COMPILE_OBJ = $(CC) $(FLAGS) -c -o $@ $(INC) $(LIB) $<
+
+$(OBJD)/%.o: $(SRCD)/%.cpp $(INCD)/%.h
+	$(COMPILE_OBJ)
+$(OBJD)/%.o: $(TESTD)/%.cpp
+	$(COMPILE_OBJ)
+$(OBJD)/%.o: $(PROGRAMD)/%.cpp
+	$(COMPILE_OBJ)
+$(OBJD)/mstpython.o: $(SRCD)/mstpython.cpp
+	$(CC) $(PYFLAGS) -c -o $@ $<
+
+# secondary expansion is used to specify each target/library's dependencies
+#	specifically, "$(LIBD)/%.a: $$($$*_DEPS)" specifies that the library named $lib depends on what's stored in a variable named $lib_DEPS
+#	each $lib_DEPS contains the names of the dependencies of $lib
+#	to get the files, the function DEP_FILE_MAP (defined below) maps each name to its corresponding file
+#	this kind of variable substitution requires two passes (since $* is not defined yet on the first pass through)
+.SECONDEXPANSION:
+
+DEP_FILE_MAP = $(patsubst %, $(OBJD)/%.o, $1)
+
+# recipes to compile libraries
+$(LIBD)/%.a: $$(foreach dep, $$($$*_DEPS), $$(call DEP_FILE_MAP, $$(dep))) | $(LIBD)
+	ar rs $(LIBD)/$*.a $^
+$(LIBD)/mstpython.so: $(OBJD)/mstpython.o
+	$(CC) $(PYLIB) -Wl,-rpath,$(PYLIB_PATH) -shared -o $@ $<
+
+# recipe to compile targets
+$(BIND)/%: $(OBJD)/%.o $$(foreach dep, $$($$*_DEPS), $$(call DEP_FILE_MAP, $$(dep))) | $(BIND)
+	$(CC) $(FLAGS) -o $@ $(INC) $(LIB) $^
+
+# recipes that map names to literal files
+$(DEPS): $(OBJD)/$$@.o
+$(LIBRARIES): $(LIBD)/$$@.a
+$(TARGETS): $(BIND)/$$@
