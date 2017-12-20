@@ -20,6 +20,7 @@ class contactList {
       degrees = other.degrees;
       infos = other.infos;
       inContact = other.inContact;
+      orderedContacts = other.orderedContacts;
     }
     void addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info = "", bool directional = false) {
       if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {

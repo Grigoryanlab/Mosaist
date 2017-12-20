@@ -144,10 +144,6 @@ class fusionEvaluator: public optimizerEvaluator {
         switch (type) {
           case icBrokenDihedral:
           case icDihedral:
-if ((CartesianPoint(atoms[2]) - CartesianPoint(atoms[3])).norm() < 0.01) {
-  cout << *(atoms[2]) << endl;
-  cout << *(atoms[3]) << endl;
-}
             return atoms[0]->dihedral(atoms[1], atoms[2], atoms[3]);
           case icBrokenAngle:
           case icAngle:

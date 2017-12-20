@@ -518,7 +518,7 @@ void FASST::prepForSearch(int ti) {
   currCents.resize(query.size(), CartesianPoint(0, 0, 0));
 
   // mark chain beginning and end indices (if gap constraints are present)
-  if (gapConstraintsExist()) {
+  if (gapConstraintsExist() || (redundancyCut < 1)) {
     targChainBeg.resize(atomToResIdx(target.size()), 0);
     for (int i = 1; i < targChainBeg.size(); i++) {
       if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i-1)]->getChain()) targChainBeg[i] = targChainBeg[i-1];
