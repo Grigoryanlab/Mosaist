@@ -20,6 +20,11 @@ class fusionParams {
       Ni = 100;
       Nc = 1;
       tol = 0.0;
+      kb = 10;
+      ka =  0.02;
+      kh = 0.001;
+      krep = kcomp = 0;
+      Rcomp = 1000;
     }
     mstreal getNoise() const { return noise; }
     fusionParams::coorInitType getCoorInitType() const { return startType; }
@@ -28,6 +33,14 @@ class fusionParams {
     int numCycles() const { return Nc; }
     int numIters() const { return Ni; }
     mstreal errTol() const { return tol; }
+    mstreal getBondFC() { return kb; }
+    mstreal getAngleFC() { return ka; }
+    mstreal getDihedralFC() { return kh; }
+    mstreal getRepFC() { return krep; }
+    mstreal getCompFC() { return kcomp; }
+    mstreal getCompRad() { return Rcomp; }
+    bool isRepOn() { return (krep != 0); }
+    bool isCompOn() { return (kcomp != 0); }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }
@@ -36,6 +49,12 @@ class fusionParams {
     void setNumCycles(int nc) { Nc = nc; }
     void setNumIters(int ni) { Ni = ni; }
     void setErrTol(mstreal _tol) { tol = _tol; }
+    void setBondFC(mstreal _k) { kb = _k; }
+    void setAngleFC(mstreal _k) { ka = _k; }
+    void setDihedralFC(mstreal _k) { kh = _k; }
+    void setRepFC(mstreal _k) { krep = _k; }
+    void setCompFC(mstreal _k) { kcomp = _k; }
+    void setCompRad(mstreal _r) { Rcomp = _r; }
 
   private:
     // start optimization from the averaged Cartesian structure or the structure
@@ -45,6 +64,9 @@ class fusionParams {
     mstreal noise; // noise level for initalizing the starting point
     int Ni, Nc;    // number of iterations per cycle and number of cycles
     mstreal tol;   // error tolerance stopping criterion for optimization
+    mstreal kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
+    mstreal krep, kcomp; // force constants for repulsive and attractive "compactness" interactions
+    mstreal Rcomp;       // desired compactness radius
 };
 
 struct fusionScores {
@@ -71,7 +93,7 @@ struct fusionScores {
 class fusionEvaluator: public optimizerEvaluator {
   public:
     // broken means across a chain break
-    enum icType { icBond = 1, icAngle, icDihedral, icBrokenBond, icBrokenAngle, icBrokenDihedral };
+    enum icType { icBond = 1, icAngle, icDihedral, icBrokenBond, icBrokenAngle, icBrokenDihedral, icDistRep, icDistComp };
 
     /* vector<vector<Residue*> >& resTopo simultaneously represents the various
      * aligned segments as well as which residues overlap in the alignment. It is
@@ -128,6 +150,8 @@ class fusionEvaluator: public optimizerEvaluator {
             return atoms[0]->angle(atoms[1], atoms[2]);
           case icBrokenBond:
           case icBond:
+          case icDistRep:
+          case icDistComp:
             return atoms[0]->distance(atoms[1]);
           default:
             MstUtils::error("uknown variable type", "icBound::getCurrentValue");
@@ -149,6 +173,8 @@ class fusionEvaluator: public optimizerEvaluator {
             break;
           case icBrokenBond:
           case icBond:
+          case icDistRep:
+          case icDistComp:
             grad.resize(6);
             CartesianGeometry::distance(atoms[0], atoms[1], grad);
             break;
@@ -173,6 +199,7 @@ class fusionEvaluator: public optimizerEvaluator {
     CartesianPoint bondInstances(int rj, Atom* atomI, Atom* atomJ, bool addToCache = true);
     CartesianPoint angleInstances(int rk, Atom* atomI, Atom* atomJ, Atom* atomK, bool addToCache = true);
     CartesianPoint dihedralInstances(int rl, Atom* atomI, Atom* atomJ, Atom* atomK, Atom* atomL, bool addToCache = true);
+    mstreal atomRadius(const Atom& a);
 
     // if the last flag is specified as true, will compute angular differences
     mstreal harmonicPenalty(mstreal val, const icBound& b);
@@ -212,7 +239,6 @@ class fusionEvaluator: public optimizerEvaluator {
      * fragment, respectively. */
     vector<pair<AtomPointerVector, AtomPointerVector> > alignedFrags;
 
-    mstreal kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     vector<mstreal> initPoint;
     fusionParams params;
 

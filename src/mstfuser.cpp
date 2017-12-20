@@ -4,10 +4,6 @@
 
 fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> _fixedResidues, const fusionParams& _params) {
   params = _params;
-  kb = 10;            // internal coordinate force constants
-  ka =  0.02;
-  kh = 0.001;
-
   vector<string> bba = {"N", "CA", "C", "O"};
   // copy overlapping residues
   overlappingResidues = resTopo;
@@ -321,6 +317,34 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       }
       pN = N; pCA = CA; pC = C; pO = O;
     }
+
+    if (params.isCompOn() || params.isRepOn()) {
+      for (int i = 0; i < F.residueSize(); i++) {
+        Residue& resi = F[i];
+        for (int j = i+2; j < F.residueSize(); j++) { // no interactions between atoms of adjacent residues
+          if (fixed[i] && fixed[j]) continue;
+          Residue& resj = F[j];
+          for (int ai = 0; ai < resi.atomSize(); ai++) {
+            for (int aj = 0; aj < resj.atomSize(); aj++) {
+              // to save time, make a distance IC for this pair of atoms only if
+              // they are somewhat close to prohibited distance ranges
+              if (params.isRepOn()) {
+                mstreal rmin = 0.9*(atomRadius(resi[ai]) + atomRadius(resj[aj]));
+                if (resi[ai].distance(resj[aj]) < 2*rmin) {
+                  bounds.push_back(icBound(icType::icDistRep, rmin, 0, {&(resi[ai]), &(resj[aj])}));
+                }
+              }
+              if (params.isCompOn()) {
+                mstreal rmax = params.getCompRad();
+                if (resi[ai].distance(resj[aj]) > rmax/2) {
+                  bounds.push_back(icBound(icType::icDistComp, 0, rmax, {&(resi[ai]), &(resj[aj])}));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   if (init) return 0.0;
@@ -370,21 +394,28 @@ void fusionEvaluator::scoreIC(const icBound& b) {
   switch (b.type) {
     case icDihedral: {
       if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return;
-      mstreal del = MstUtils::min(fabs(CartesianGeometry::angleDiff(b.minVal, val)), fabs(CartesianGeometry::angleDiff(b.maxVal, val)));
-      f = kh; comp = &dihePenalty;
+      del = MstUtils::min(fabs(CartesianGeometry::angleDiff(b.minVal, val)), fabs(CartesianGeometry::angleDiff(b.maxVal, val)));
+      f = params.getDihedralFC(); comp = &dihePenalty;
       break;
     }
     case icAngle:
       if (val < b.minVal) { del = val - b.minVal; }
       else if (val > b.maxVal) { del = val - b.maxVal; }
-      f = ka; comp = &anglPenalty;
+      f = params.getAngleFC(); comp = &anglPenalty;
       break;
-    case icBond: {
+    case icBond:
       if (val < b.minVal) { del = val - b.minVal; }
       else if (val > b.maxVal) { del = val - b.maxVal; }
-      f = kb; comp = &bondPenalty;
+      f = params.getBondFC(); comp = &bondPenalty;
       break;
-    }
+    case icDistRep:
+      if (val < b.minVal) { del = val - b.minVal; }
+      f = params.getRepFC(); comp = &bondPenalty;
+      break;
+    case icDistComp:
+      if (val > b.maxVal) { del = val - b.maxVal; }
+      f = params.getCompFC(); comp = &bondPenalty;
+      break;
     case icBrokenDihedral:
     case icBrokenAngle:
     case icBrokenBond:
@@ -617,30 +648,20 @@ CartesianPoint fusionEvaluator::dihedralInstances(int rl, Atom* atomI, Atom* ato
   return p;
 }
 
-// mstreal fusionEvaluator::harmonicPenalty(mstreal val, const icBound& b) {
-//   switch (b.type) {
-//     case icDihedral: {
-//       if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return 0;
-//       mstreal dx2 = MstUtils::min(pow(CartesianGeometry::angleDiff(b.minVal, val), 2), pow(CartesianGeometry::angleDiff(b.maxVal, val), 2));
-//       return kh * dx2;
-//     }
-//     case icAngle:
-//     case icBond: {
-//       mstreal pen = 0;
-//       mstreal K = (b.type == icBond) ? kb : ka;
-//       if (val < b.minVal) { pen = K * (val - b.minVal) * (val - b.minVal); }
-//       else if (val > b.maxVal) { pen = K * (val - b.maxVal) * (val - b.maxVal); }
-//       return pen;
-//     }
-//     case icBrokenDihedral:
-//     case icBrokenAngle:
-//     case icBrokenBond:
-//       return 0;
-//     default:
-//       MstUtils::error("uknown variable type", "fusionEvaluator::harmonicPenalty");
-//   }
-// }
-
+mstreal fusionEvaluator::atomRadius(const Atom& a) {
+  if (a.isNamed("N")) {
+    return 1.6;
+  } else if (a.isNamed("CA")) {
+    return 2.3; // between CH1E and CH2E in param 19
+  } else if (a.isNamed("C")) {
+    return 2.1;
+  } else if (a.isNamed("O")) {
+    return 1.6;
+  } else {
+    MstUtils::error("do not know radius for atom name " + a.getName(), "fusionEvaluator::atomRadius(const Atom&)");
+  }
+  return 0;
+}
 
 /* --------- Fuser ----------- */
 
