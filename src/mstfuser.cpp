@@ -116,7 +116,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       Residue& res = F[i];
       for (int j = 0; j < res.atomSize(); j++) {
         bool skipDFs = ((i == 0) && !isAnchored());
-        for (int dim = 0; dim < 3; dim++, k++) {
+        for (int dim = 0; dim < 3; dim++) {
           /* If the fused structure is not anchored in space, skip all coordinates
            * of the first atom, the Y and the Z coordinates of the second atom,
            * and the Z coordinate of the third atom. In this case, the constructor
@@ -129,6 +129,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           } else {
             res[j][dim] = point[k];
           }
+          k++;
         }
       }
     }
@@ -335,7 +336,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
                 }
               }
               if (params.isCompOn()) {
-                mstreal rmax = params.getCompRad();
+                mstreal rmax = 2*params.getCompRad();
                 if (resi[ai].distance(resj[aj]) > rmax/2) {
                   bounds.push_back(icBound(icType::icDistComp, 0, rmax, {&(resi[ai]), &(resj[aj])}));
                 }
