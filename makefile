@@ -127,7 +127,7 @@ all: $(TARGETS) $(LIBRARIES)
 
 # delete every output file
 clean:
-	rm -rf $(OBJD)/* $(LIBD)/* $(BIND)/*
+	rm -f $(OBJD)/* $(LIBD)/* $(BIND)/*
 
 # make every library that can be made
 libs: $(patsubst %, $(LIBD)/%.a, $(LIBRARIES))
