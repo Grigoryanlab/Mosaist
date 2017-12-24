@@ -441,6 +441,7 @@ void FASST::rebuildProximityGrids() {
   if (ylo == yhi) { ylo -= gridSpacing/2; yhi += gridSpacing/2; }
   if (zlo == zhi) { zlo -= gridSpacing/2; zhi += gridSpacing/2; }
   int N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/gridSpacing));
+  for (int i = 0; i < ps.size(); i++) delete(ps[i]);
   ps.clear(); ps.resize(query.size(), NULL);
   for (int i = 0; i < query.size(); i++) {
     ps[i] = new ProximitySearch(xlo, ylo, zlo, xhi, yhi, zhi, N);

@@ -33,7 +33,7 @@
 
 # flags
 CC := g++
-CPP_FLAGS := -g -std=c++11 -fPIC
+CPP_FLAGS := -O3 -std=c++11 -fPIC
 DEBUG_FLAGS := -g
 
 # essential directories

@@ -51,7 +51,6 @@ void addMatches(FASST& F, vector<Residue*>& fragRes, vector<Structure*>& allMatc
       resTopo[fragRes[k]->getResidueIndex()].push_back(&(match.getResidue(k)));
     }
   }
-
 }
 
 int main(int argc, char** argv) {
@@ -111,8 +110,8 @@ int main(int argc, char** argv) {
 
     // then pair TERMs
     cout << "Searching for pair TERMs..." << endl;
-    ConFind C(&RL, S);
-    contactList L = C.getContacts(S, 0.01);
+    ConFind cfd(&RL, S);
+    contactList L = cfd.getContacts(S, 0.01);
     vector<pair<Residue*, Residue*> > list = L.getOrderedContacts();
     for (int k = 0; k < list.size(); k++) {
       Residue* resA = list[k].first;
