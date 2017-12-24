@@ -15,13 +15,23 @@
 using namespace std;
 using namespace MST;
 
-void selectAround(Residue& res, int pm, vector<Residue*>& fragRes, vector<int>& fragResIdx) {
-  Chain& C = *(res.getChain());
-  int ri = res.getResidueIndex();
-  for (int k = ri - pm; k <= ri + pm; k++) {
-    if ((k < 0) || (k >= C.residueSize())) continue;
-    fragRes.push_back(&(C[k]));
-    fragResIdx.push_back(C[k].getResidueIndex());
+void selectAround(const vector<Residue*>& cenRes, int pm, vector<Residue*>& fragRes, vector<int>& fragResIdx) {
+  Structure* S = cenRes[0]->getChain()->getParent();
+  vector<bool> selected(S->residueSize(), false);
+  for (int i = 0; i < cenRes.size(); i++) {
+    Residue& res = *(cenRes[i]);
+    Chain& C = *(res.getChain());
+    int ri = res.getResidueIndex();
+    for (int k = ri - pm; k <= ri + pm; k++) {
+      if ((k < 0) || (k >= C.residueSize())) continue;
+      selected[k] = true;
+    }
+  }
+  for (int k = 0; k < selected.size(); k++) {
+    if (selected[k]) {
+      fragRes.push_back(&(S->getResidue(k)));
+      fragResIdx.push_back(k);
+    }
   }
 }
 
@@ -51,7 +61,9 @@ int main(int argc, char** argv) {
   op.addOption("rLib", "a path to an MST-formatter rotamer library.", true);
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
-  op.addOption("o", "output PDB file name.", true);
+  op.addOption("o", "output base name.", true);
+  op.addOption("rad", "compactness radius. Default will be based on protein length.");
+  op.addOption("cyc", "number of iteration cycles (10 by default).");
   op.setOptions(argc, argv);
   RMSDCalculator rc;
   Structure I(op.getString("p"));
@@ -70,11 +82,14 @@ int main(int argc, char** argv) {
   F.pruneRedundancy(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
+  int Ni = 1000;
+  fusionScores scores;
 
   // TERMify loop
   Structure S = I;
-  fstream out; MstUtils::openFile(out, op.getString("o"), ios_base::out);
-  for (int c = 0; c < 10; c++) {
+  fstream out; MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios_base::out);
+  out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
+  for (int c = 0; c < op.getInt("cyc", 10); c++) {
     out << "MODEL " << c+1 << endl;
     cout << "Cycle " << c+1 << "..." << endl;
     /* --- Decorate the current conformation with TERMs --- */
@@ -87,7 +102,7 @@ int main(int argc, char** argv) {
       Chain& C = S[ci];
       for (int ri = 0; ri < C.residueSize(); ri++) {
         vector<Residue*> fragRes; vector<int> fragResIdx;
-        selectAround(C[ri], pmSelf, fragRes, fragResIdx);
+        selectAround({&C[ri]}, pmSelf, fragRes, fragResIdx);
         Structure frag(fragRes);
         cout << "TERM around " << C[ri] << " ";
         addMatches(F, fragRes, allMatches, resTopo);
@@ -97,15 +112,14 @@ int main(int argc, char** argv) {
     // then pair TERMs
     cout << "Searching for pair TERMs..." << endl;
     ConFind C(&RL, S);
-    contactList L = C.getContacts(S, 0);
+    contactList L = C.getContacts(S, 0.01);
     vector<pair<Residue*, Residue*> > list = L.getOrderedContacts();
     for (int k = 0; k < list.size(); k++) {
-      Residue& resA = *(list[k].first);
-      Residue& resB = *(list[k].second);
+      Residue* resA = list[k].first;
+      Residue* resB = list[k].second;
       vector<Residue*> fragRes; vector<int> fragResIdx;
-      selectAround(resA, pmPair, fragRes, fragResIdx);
-      selectAround(resB, pmPair, fragRes, fragResIdx);
-      cout << "TERM around " << resA << " x " << resB << " ";
+      selectAround({resA, resB}, pmPair, fragRes, fragResIdx);
+      cout << "TERM around " << *resA << " x " << *resB << " ";
       addMatches(F, fragRes, allMatches, resTopo);
     }
 
@@ -116,11 +130,19 @@ int main(int argc, char** argv) {
 // ofs.close();
 
     /* --- Fuse --- */
-    fusionParams opts; opts.setNumIters(1000); opts.setVerbose(true);
-    // opts.setRepFC(1);
-    // opts.setCompFC(0.1);
-    // opts.setCompRad(pow(I.residueSize() * 1.0, 1/3)*10);
-    Structure fused = Fuser::fuse(resTopo, vector<int>(), opts);
+    fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
+    opts.setGradientDescentFlag(true);
+    opts.setRepFC(1);
+    opts.setCompFC(0.1);
+    mstreal compactnessRadius = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
+    opts.setCompRad(compactnessRadius);
+    cout << "will be trying to combine structure to a radius of " << compactnessRadius << endl;
+    Structure fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);
+    cout << "\t" << scores << endl;
+    // opts.setStartingStructure(fused);
+    // opts.setGradientDescentFlag(false);
+    // fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);
+    // cout << "\t" << scores << endl;
 
     /* --- write intermediate result and clean up--- */
     fused.writePDB(out); out << "ENDMDL" << endl;
@@ -128,4 +150,5 @@ int main(int argc, char** argv) {
     for (int mi = 0; mi < allMatches.size(); mi++) delete(allMatches[mi]);
   }
   out.close();
+  S.writePDB(op.getString("o") + ".fin.pdb");
 }

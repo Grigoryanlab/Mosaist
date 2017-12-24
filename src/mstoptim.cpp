@@ -50,10 +50,7 @@ mstreal Optim::fminsearch(optimizerEvaluator& E, int numIters, vector<mstreal>& 
     int o = order[n];   // the very worst simplex (will be replaced)
 
     if (verbose) {
-      cout << "iteration " << k+1 << ", the current " << order.size() << " simplex points:" << endl;
-      for (int i = 0; i < order.size(); i++) {
-        cout << simplex.row(order[i]) << " -> " << values(order[i]) << endl;
-      }
+      cout << "iteration " << k+1 << ", the best simplex has value " << values(b) << " ";
     }
 
     // center of the current simplex

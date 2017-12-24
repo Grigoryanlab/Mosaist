@@ -22,18 +22,22 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
   buildOriginRes = (fixedResidues.size() > 0) ? MstUtils::min(fixedResidues) : 0;
 
   // create room for fused structure (initialize with average coordinates)
-  fused.appendChain(new Chain());
-  for (int i = 0; i < resTopo.size(); i++) {
-    if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("position index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
-    if (resTopo[i].size() == 0) MstUtils::error("position index " + MstUtils::toString(i) + " has not overlapping residues in the specified topology", "fusionEvaluator::fusionEvaluator");
-    Residue* res = new Residue(resTopo[i][0]->getName(), 1);
-    fused[0].appendResidue(res);
-    for (int j = 0; j < bba.size(); j++) {
-      CartesianPoint m = atomInstances(i, bba[j]).getGeometricCenter();
-      res->appendAtom(new Atom(1, bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
+  if (!params.isStartingStructureGiven()) {
+    fused.appendChain(new Chain());
+    for (int i = 0; i < resTopo.size(); i++) {
+      if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("position index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
+      if (resTopo[i].size() == 0) MstUtils::error("position index " + MstUtils::toString(i) + " has not overlapping residues in the specified topology", "fusionEvaluator::fusionEvaluator");
+      Residue* res = new Residue(resTopo[i][0]->getName(), 1);
+      fused[0].appendResidue(res);
+      for (int j = 0; j < bba.size(); j++) {
+        CartesianPoint m = atomInstances(i, bba[j]).getGeometricCenter();
+        res->appendAtom(new Atom(1, bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
+      }
     }
+    fused.renumber();
+  } else {
+    fused = params.getStartingStructure();
   }
-  fused.renumber();
   guess = fused; // save initial "averaged" guess for later alignment (easier to visualize output)
 
   /* Initialize alignedFrags. frags[C] designates a segment that moves
@@ -667,13 +671,12 @@ mstreal fusionEvaluator::atomRadius(const Atom& a) {
 /* --------- Fuser ----------- */
 
 Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed, const fusionParams& params) {
-  bool useGradDescent = true;
   fusionEvaluator E(resTopo, fixed, params); E.setVerbose(false);
   vector<mstreal> bestSolution; mstreal score, bestScore;
-  if (useGradDescent) {
+  if (params.useGradientDescent()) {
     bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
   } else {
-    mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution);
+    mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution, params.isVerbose());
   }
   int bestAnchor = E.getBuildOrigin();
   if (params.isVerbose()) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
@@ -681,10 +684,10 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& sc
     E.noisifyGuessPoint(0.2);
     vector<mstreal> solution;
     int anchor = E.randomizeBuildOrigin();
-    if (useGradDescent) {
+    if (params.useGradientDescent()) {
       score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
     } else {
-      score = Optim::fminsearch(E, params.numIters(), solution);
+      score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
     }
     if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = anchor; }
     if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }

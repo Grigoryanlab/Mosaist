@@ -16,6 +16,7 @@ class fusionParams {
       startType = fusionParams::coorInitType::meanCoor;
       verbose = false;
       optimCartesian = true;
+      gradDescent = true;
       noise = 0;
       Ni = 100;
       Nc = 1;
@@ -41,6 +42,9 @@ class fusionParams {
     mstreal getCompRad() { return Rcomp; }
     bool isRepOn() { return (krep != 0); }
     bool isCompOn() { return (kcomp != 0); }
+    bool useGradientDescent() const { return gradDescent; }
+    Structure getStartingStructure() const { return startStruct; }
+    bool isStartingStructureGiven() const { return (startStruct.chainSize() != 0); }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }
@@ -55,37 +59,47 @@ class fusionParams {
     void setRepFC(mstreal _k) { krep = _k; }
     void setCompFC(mstreal _k) { kcomp = _k; }
     void setCompRad(mstreal _r) { Rcomp = _r; }
+    void setGradientDescentFlag(bool _f) { gradDescent = _f; }
+    void setStartingStructure(const Structure& _S) { startStruct = _S; }
 
   private:
     // start optimization from the averaged Cartesian structure or the structure
     // that results from average internal coordinates?
     fusionParams::coorInitType startType;
-    bool verbose, optimCartesian;
+    bool verbose, optimCartesian, gradDescent;
     mstreal noise; // noise level for initalizing the starting point
     int Ni, Nc;    // number of iterations per cycle and number of cycles
     mstreal tol;   // error tolerance stopping criterion for optimization
     mstreal kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     mstreal krep, kcomp; // force constants for repulsive and attractive "compactness" interactions
     mstreal Rcomp;       // desired compactness radius
+    Structure startStruct;
 };
 
 struct fusionScores {
-  fusionScores() { reset(); }
-  fusionScores(mstreal _bondPenalty, mstreal _anglPenalty, mstreal _dihePenalty, mstreal _rmsdScore, mstreal _rmsdTot, mstreal _score) {
-    bondPenalty = _bondPenalty; anglPenalty = _anglPenalty; dihePenalty = _dihePenalty;
-    rmsdScore = _rmsdScore; rmsdTot = _rmsdTot; score = _score;
-  }
-  fusionScores(const fusionScores& sc) {
-    bondPenalty = sc.bondPenalty; anglPenalty = sc.anglPenalty; dihePenalty = sc.dihePenalty;
-    rmsdScore = sc.rmsdScore; rmsdTot = sc.rmsdTot; score = sc.score;
-  }
-  void reset() { rmsdScore = rmsdTot = bondPenalty = anglPenalty = dihePenalty = 0; }
-  mstreal getBondScore() { return bondPenalty; }
-  mstreal getAngleScore() { return anglPenalty; }
-  mstreal getDihedralScore() { return dihePenalty; }
-  mstreal getRMSDScore() { return rmsdScore; }
-  mstreal getTotRMSDScore() { return rmsdTot; }
-  mstreal getScore() { return score; }
+  public:
+    fusionScores() { reset(); }
+    fusionScores(mstreal _bondPenalty, mstreal _anglPenalty, mstreal _dihePenalty, mstreal _rmsdScore, mstreal _rmsdTot, mstreal _score) {
+      bondPenalty = _bondPenalty; anglPenalty = _anglPenalty; dihePenalty = _dihePenalty;
+      rmsdScore = _rmsdScore; rmsdTot = _rmsdTot; score = _score;
+    }
+    fusionScores(const fusionScores& sc) {
+      bondPenalty = sc.bondPenalty; anglPenalty = sc.anglPenalty; dihePenalty = sc.dihePenalty;
+      rmsdScore = sc.rmsdScore; rmsdTot = sc.rmsdTot; score = sc.score;
+    }
+    void reset() { rmsdScore = rmsdTot = bondPenalty = anglPenalty = dihePenalty = 0; }
+    mstreal getBondScore() { return bondPenalty; }
+    mstreal getAngleScore() { return anglPenalty; }
+    mstreal getDihedralScore() { return dihePenalty; }
+    mstreal getRMSDScore() { return rmsdScore; }
+    mstreal getTotRMSDScore() { return rmsdTot; }
+    mstreal getScore() { return score; }
+    friend ostream & operator<<(ostream &_os, const fusionScores& _s) {
+      _os << _s.score << ": rmsdScore = " << _s.rmsdScore << " (RMSDtot = " << _s.rmsdTot << "), bond penalty = ";
+      _os << _s.bondPenalty << ", angle penalty = " << _s.anglPenalty << ", dihedral penalty = " << _s.dihePenalty;
+      return _os;
+    }
+
   private:
     double rmsdScore, rmsdTot, bondPenalty, anglPenalty, dihePenalty, score;
 };
