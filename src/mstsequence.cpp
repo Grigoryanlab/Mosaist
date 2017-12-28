@@ -190,6 +190,18 @@ string Sequence::toString(bool triple, const string& delim) {
 	return s;
 }
 
+vector<string> Sequence::toStringVector(bool triple) {
+	vector<string> s(size());
+	for (int i = 0; i < seq.size(); i++) {
+		if (triple) {
+			s[i] = SeqTools::idxToTriple(seq[i]);
+		} else {
+			s[i] = SeqTools::idxToSingle(seq[i]);
+		}
+	}
+	return s;
+}
+
 string Sequence::getResidue(int i, bool triple) {
   if (triple) return SeqTools::idxToTriple(seq[i]);
   return SeqTools::idxToSingle(seq[i]);

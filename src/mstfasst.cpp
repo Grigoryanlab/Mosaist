@@ -196,21 +196,22 @@ bool FASST::validateSearchRequest() {
  * stored in flat arrays for efficiency. But these could presumably be
  * interpreted differently. E.g., only some residue matches (parents of atoms)
  * may be accepted or some of the atoms can be dummy/empty ones. */
-void FASST::setQuery(const string& pdbFile) {
+void FASST::setQuery(const string& pdbFile, bool autoSplitChains) {
   queryStruct.reset();
   queryStruct.readPDB(pdbFile);
+  if (autoSplitChains) queryStruct = queryStruct.reassignChainsByConnectivity();
   processQuery();
 }
 
-void FASST::setQuery(const Structure& Q) {
+void FASST::setQuery(const Structure& Q, bool autoSplitChains) {
   queryStruct = Q;
+  if (autoSplitChains) queryStruct = queryStruct.reassignChainsByConnectivity();
   processQuery();
 }
 
 void FASST::processQuery() {
   querySize = 0;
   // auto-splitting segments by connectivity, but can do diffeerntly
-  queryStruct = queryStruct.reassignChainsByConnectivity();
   query.resize(queryStruct.chainSize());
   for (int i = 0; i < queryStruct.chainSize(); i++) {
     query[i].resize(0);
@@ -549,7 +550,7 @@ mstreal FASST::centToCentTol(int i) {
   return sqrt((remRes * (queryMasks[recLevel].size() + query[i].size())) / (queryMasks[recLevel].size() * query[i].size()));
 }
 
-void FASST::search() {
+fasstSolutionSet FASST::search() {
   // auto begin = chrono::high_resolution_clock::now();
   // int prepTime = 0;
   validateSearchRequest();
@@ -670,17 +671,16 @@ void FASST::search() {
         recLevel = nextLevel;
       } else {
         // if at the lowest recursion level already, then record the solution
-        // if at the lowest recursion level already, then record the solution
-        fasstSolution sol(currAlignment, sqrt(currResidual/querySize), currentTarget, solutions.size(), qSegOrd);
-        if (redundancyCut < 1) addSequenceContext(sol, currentTarget, segLen, contextLength);
+        fasstSolution sol(currAlignment, sqrt(currResidual/querySize), currentTarget, currentTransform(), segLen, qSegOrd);
+        if (redundancyCut < 1) addSequenceContext(sol, currentTarget, contextLength);
         solutions.insert(sol, redundancyCut);
-        if (isSufficientNumMatchesSet() && solutions.size() == suffNumMatches) return;
+        if (isSufficientNumMatchesSet() && solutions.size() == suffNumMatches) return solutions;
         if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
           solutions.erase(--solutions.end());
-          setCurrentRMSDCutoff(solutions.rbegin()->getRMSD());
+          setCurrentRMSDCutoff(solutions.worstRMSD());
         } else if (isMinNumMatchesSet() && (solutions.size() > minNumMatches) && (rmsdCut > rmsdCutRequested)) {
-          if (solutions.rbegin()->getRMSD() > rmsdCutRequested) solutions.erase(--solutions.end());
-          setCurrentRMSDCutoff(solutions.rbegin()->getRMSD());
+          if (solutions.worstRMSD() > rmsdCutRequested) solutions.erase(--solutions.end());
+          setCurrentRMSDCutoff(solutions.worstRMSD());
         }
       }
     }
@@ -691,11 +691,12 @@ void FASST::search() {
   // cout << "prep time " << prepTime << " ms" << std::endl;
   // cout << "total time " << searchTime << " ms" << std::endl;
   // cout << "prep time was " << (100.0*prepTime/searchTime) << " % of the total" << std::endl;
+  return solutions;
 }
 
-mstreal FASST::currentAlignmentResidual(bool compute) {
+mstreal FASST::currentAlignmentResidual(bool compute, bool setTransform) {
   if (compute) {
-    if (query.size() == 1) {
+    if ((query.size() == 1) && !setTransform) {
       // this is a special case, because will not need to calculate centroid
       // locations for subsequent sub-queries
       currResidual = segmentResiduals[0][currAlignment[0]];
@@ -708,21 +709,28 @@ mstreal FASST::currentAlignmentResidual(bool compute) {
       for (int i = 0; i < n; i++) {
         targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
       }
-      currResidual = RC.bestResidual(queryMasks[recLevel], targetMasks[recLevel]);
+      currResidual = RC.bestResidual(targetMasks[recLevel], queryMasks[recLevel], setTransform);
       currResiduals[recLevel] = currResidual;
-      if (recLevel == 0) {
-        currCents[recLevel] = ps[recLevel]->getPoint(currAlignment[recLevel]);
-      } else {
-        currCents[recLevel] = (currCents[recLevel - 1] * (N - n) +  ps[recLevel]->getPoint(currAlignment[recLevel]) * n) / N;
+      if (query.size() > 1) {
+        if (recLevel == 0) {
+          currCents[recLevel] = ps[recLevel]->getPoint(currAlignment[recLevel]);
+        } else {
+          currCents[recLevel] = (currCents[recLevel - 1] * (N - n) +  ps[recLevel]->getPoint(currAlignment[recLevel]) * n) / N;
+        }
       }
     }
   }
   return currResidual;
 }
 
+Transform FASST::currentTransform() {
+  currentAlignmentResidual(true, true);
+  return Transform(RC.lastRotation(), RC.lastTranslation());
+}
+
 void FASST::getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed, matchType type, bool algn) {
   vector<Structure> matches;
-  fasstSolutionSet solSet; solSet.insert(sol);
+  fasstSolutionSet solSet(sol);
   getMatchStructures(solSet, matches, detailed, type, algn);
   match = matches[0];
 }
@@ -735,7 +743,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
   // hash solutions by the target they come from, to visit each target only once
   map<int, vector<int> > solsFromTarget;
   for (int i = 0; i < sols.size(); i++) {
-    fasstSolution& sol = sols[i];
+    const fasstSolution& sol = sols[i];
     int idx = sol.getTargetIndex();
     if ((idx < 0) || (idx >= targets.size())) {
       MstUtils::error("supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchStructures");
@@ -743,15 +751,9 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
     solsFromTarget[idx].push_back(i);
   }
 
-  // flatten query into a single array of atoms
-  AtomPointerVector queryAtoms;
-  for (int k = 0; k < queryOrig.size(); k++) {
-    for (int ai = 0; ai < queryOrig[k].size(); ai++) queryAtoms.push_back(queryOrig[k][ai]);
-  }
-  AtomPointerVector matchAtoms; matchAtoms.reserve(queryAtoms.size());
-
   // visit each target
   Structure dummy; RMSDCalculator rc;
+  AtomPointerVector matchAtoms;
   matches.resize(sols.size(), Structure());
   for (auto it = solsFromTarget.begin(); it != solsFromTarget.end(); ++it) {
     int idx = it->first;
@@ -786,22 +788,6 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
       const fasstSolution& sol = sols[solIndex];
       Structure& match = matches[solIndex];
       match.setName(targetStruct->getName());
-      vector<int> alignment = sol.getAlignment();
-      if (alignment.size() != queryOrig.size()) {
-        MstUtils::error("solution alignment size inconsistent with number of query segments", "FASST::getMatchStructures");
-      }
-
-      // excise match atoms that superimpose onto the query, in the right order
-      matchAtoms.resize(0);
-      for (int k = 0; k < alignment.size(); k++) {
-        // copy matching residues from the original target structure
-        int si = resToAtomIdx(alignment[k]);
-        int L = queryOrig[k].size();
-        if (si + L > target.size()) {
-          MstUtils::error("solution points to atom outside of target range", "FASST::getMatchStructures");
-        }
-        for (int ai = si; ai < si + L; ai++) matchAtoms.push_back(target[ai]);
-      }
 
       // cut out the part of the target Structure that will constitute the returned match
       if (type == matchType::FULL) {
@@ -817,7 +803,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
 
       // align matching region onto query, transforming the match itself
       if (algn) {
-        rc.align(matchAtoms, queryAtoms, match);
+        sol.getTransform().apply(match);
       } else {
         transfInv.apply(match);
       }
@@ -828,7 +814,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
 vector<Sequence> FASST::getMatchSequences(fasstSolutionSet& sols, matchType type) {
   vector<Sequence> seqs(sols.size());
   for (int i = 0; i < sols.size(); i++) {
-    fasstSolution& sol = sols[i];
+    const fasstSolution& sol = sols[i];
     int idx = sol.getTargetIndex();
     MstUtils::assert((idx >= 0) && (idx < targSeqs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
     vector<int> alignment = sol.getAlignment();
@@ -842,7 +828,7 @@ vector<Sequence> FASST::getMatchSequences(fasstSolutionSet& sols, matchType type
 }
 
 Sequence FASST::getMatchSequence(const fasstSolution& sol, matchType type) {
-  fasstSolutionSet solSet; solSet.insert(sol);
+  fasstSolutionSet solSet(sol);
   vector<Sequence> seqs = getMatchSequences(solSet, type);
   return seqs[0];
 }
@@ -856,7 +842,7 @@ vector<mstreal> FASST::getResidueProperties(const fasstSolution& sol, const stri
 vector<vector<mstreal> > FASST::getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type) {
   vector<vector<mstreal> > props(sols.size());
   for (int i = 0; i < sols.size(); i++) {
-    fasstSolution& sol = sols[i];
+    const fasstSolution& sol = sols[i];
     int idx = sol.getTargetIndex();
     MstUtils::assert((idx >= 0) && (idx < targets.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
     AtomPointerVector& target = targets[idx];
@@ -890,23 +876,23 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
     case matchType::REGION: {
       for (int k = 0; k < alignment.size(); k++) {
         int si = alignment[k];
-        int L = atomToResIdx(queryOrig[k].size());
+        int L = sol.segLength(k);
         for (int ri = si; ri < si + L; ri++) residueIndices.push_back(ri);
       }
       break;
     }
     case matchType::WITHGAPS: {
       set<int> toInclude;
-      for (int i = 0; i < queryOrig.size(); i++) {
+      for (int i = 0; i < sol.numSegments(); i++) {
         // each individual segments should be included
-        for (int k = alignment[i]; k < alignment[i] + atomToResIdx(queryOrig[i].size()); k++) toInclude.insert(k);
+        for (int k = alignment[i]; k < alignment[i] + sol.segLength(i); k++) toInclude.insert(k);
         // then some gaps also
-        for (int j = 0; j < queryOrig.size(); j++) {
+        for (int j = 0; j < sol.numSegments(); j++) {
           if (i == j) continue;
           // if gap constrained, fill in between these two segments
           if (gapConstrained(i, j)) {
             if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchResidueIndices");
-            for (int k = alignment[i] + atomToResIdx(queryOrig[i].size()); k < alignment[j]; k++) {
+            for (int k = alignment[i] + sol.segLength(i); k < alignment[j]; k++) {
               toInclude.insert(k);
             }
           }
@@ -936,13 +922,14 @@ string FASST::toString(const fasstSolution& sol) {
   return ss.str();
 }
 
-void FASST::addSequenceContext(fasstSolution& sol, int currentTarget, const vector<int>& segLengths, int contextLength) {
+void FASST::addSequenceContext(fasstSolution& sol, int currentTarget, int contextLength) {
   Sequence& targSeq = targSeqs[currentTarget];
   vector<int> alignment = sol.getAlignment();
   vector<Sequence> segs(sol.numSegments()), ntPad(sol.numSegments()), ctPad(sol.numSegments());
   for (int i = 0; i < sol.numSegments(); i++) {
-    segs[i].resize(segLengths[i]);
-    for (int ri = sol[i]; ri < sol[i] + segLengths[i]; ri++) {
+    int Li = sol.segLength(i);
+    segs[i].resize(Li);
+    for (int ri = sol[i]; ri < sol[i] + Li; ri++) {
       segs[i][ri - alignment[i]] = targSeq[ri];
     }
     if (contextLength > segs[i].size()) {
@@ -950,8 +937,8 @@ void FASST::addSequenceContext(fasstSolution& sol, int currentTarget, const vect
       int pad = contextLength - segs[i].size();
       ntPad[i].resize(pad, SeqTools::gapIdx()); ctPad[i].resize(pad, SeqTools::gapIdx());
       for (int ri = 0; ri < pad; ri++) {
-        if (sol[i] + segLengths[i] + ri > targChainEnd[sol[i]]) break; // stop if reach chain C-terminus
-        ctPad[i][ri] = targSeq[sol[i] + segLengths[i] + ri];
+        if (sol[i] + Li + ri > targChainEnd[sol[i]]) break; // stop if reach chain C-terminus
+        ctPad[i][ri] = targSeq[sol[i] + Li + ri];
       }
       for (int ri = 0; ri < pad; ri++) {
         if (sol[i] - ri - 1 < targChainBeg[sol[i]]) break; // stop if reach chain N-terminus
@@ -964,17 +951,20 @@ void FASST::addSequenceContext(fasstSolution& sol, int currentTarget, const vect
 
 
 /* --------- fasstSolution --------- */
-fasstSolution::fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, int _foundOrder, vector<int> segOrder) {
-  alignment = _alignment; rmsd = _rmsd; targetIndex = _target; foundOrder = _foundOrder;
+fasstSolution::fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, const Transform& _tr, const vector<int>& _segLengths, vector<int> segOrder) {
+  alignment = _alignment; rmsd = _rmsd; targetIndex = _target; segLengths = _segLengths; tr = _tr;
   if (!segOrder.empty()) {
-    for (int i = 0; i < _alignment.size(); i++) alignment[segOrder[i]] = _alignment[i];
+    for (int i = 0; i < _alignment.size(); i++) {
+      alignment[segOrder[i]] = _alignment[i];
+      segLengths[segOrder[i]] = _segLengths[i];
+    }
   }
   context = NULL;
 }
 
 fasstSolution::fasstSolution(const fasstSolution& _sol) {
   alignment = _sol.alignment; rmsd = _sol.rmsd; targetIndex = _sol.targetIndex;
-  foundOrder = _sol.foundOrder;
+  segLengths = _sol.segLengths; tr = _sol.tr;
   if (_sol.context != NULL) context = new solContext(*(_sol.context));
   else context = NULL;
 }
@@ -990,6 +980,21 @@ void fasstSolution::setStructContext(const vector<AtomPointerVector>& _segStr, c
 }
 
 /* --------- fasstSolutionSet --------- */
+fasstSolutionSet::fasstSolutionSet(const fasstSolutionSet& sols) {
+  updated = false;
+  for (auto it = sols.solsSet.begin(); it != sols.solsSet.end(); ++it) insert(*it);
+}
+
+fasstSolutionSet::fasstSolutionSet(const fasstSolution& sol) {
+  updated = false;
+  insert(sol);
+}
+
+fasstSolutionSet& fasstSolutionSet::operator=(const fasstSolutionSet& sols) {
+  *this = fasstSolutionSet(sols);
+  return *this;
+}
+
 bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
   // apply a redudancy filter, if needed
   if ((redundancyCut < 1) && sol.seqContextDefined()) {
@@ -1053,11 +1058,11 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
   return true;
 }
 
-fasstSolution& fasstSolutionSet::operator[] (int i) {
+const fasstSolution& fasstSolutionSet::operator[] (int i) {
   // if solutions changed since last time, first copy to vector
   if (updated) {
-    solsVec.resize(solsSet.size(), NULL); int i = 0;
-    for (auto it = solsSet.begin(); it != solsSet.end(); ++it, ++i) solsVec[i] = (fasstSolution*) &(*it);
+    solsVec.resize(solsSet.size(), NULL); int k = 0;
+    for (auto it = solsSet.begin(); it != solsSet.end(); ++it, ++k) solsVec[k] = (fasstSolution*) &(*it);
     updated = false;
   }
   return *(solsVec[i]);

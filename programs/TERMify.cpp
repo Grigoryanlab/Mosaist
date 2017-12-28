@@ -15,29 +15,46 @@
 using namespace std;
 using namespace MST;
 
-void selectAround(const vector<Residue*>& cenRes, int pm, vector<Residue*>& fragRes, vector<int>& fragResIdx) {
+mstreal getRadius(const Structure& S) {
+  selector sel(S);
+  AtomPointerVector atoms = sel.select("name N or name CA or name C or name O");
+  mstreal rad = 0;
+  for (int i = 0; i < atoms.size(); i++) {
+    for (int j = i+1; j < atoms.size(); j++) {
+      mstreal d = atoms[i]->distance(atoms[j]);
+      if (d > rad) rad = d;
+    }
+  }
+  return rad;
+}
+
+void selectAround(const vector<Residue*>& cenRes, int pm, Structure& frag, vector<int>& fragResIdx) {
   Structure* S = cenRes[0]->getChain()->getParent();
   vector<bool> selected(S->residueSize(), false);
   for (int i = 0; i < cenRes.size(); i++) {
     Residue& res = *(cenRes[i]);
-    Chain& C = *(res.getChain());
+    Chain* C = res.getChain();
     int ri = res.getResidueIndex();
     for (int k = ri - pm; k <= ri + pm; k++) {
-      if ((k < 0) || (k >= C.residueSize())) continue;
+      if ((k < 0) || (k >= C->residueSize())) continue;
       selected[k] = true;
     }
   }
+  Chain* newChain = frag.appendChain("A", true);
   for (int k = 0; k < selected.size(); k++) {
     if (selected[k]) {
-      fragRes.push_back(&(S->getResidue(k)));
+      // where there is a break in the selection, start a new chain
+      if ((newChain->residueSize() > 0) && ((!selected[k-1]) || (S->getResidue(k-1).getChain() != S->getResidue(k).getChain()))) {
+        newChain = frag.appendChain("A", true);
+      }
+      newChain->appendResidue(new Residue(S->getResidue(k)));
       fragResIdx.push_back(k);
     }
   }
 }
 
-void addMatches(FASST& F, vector<Residue*>& fragRes, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo) {
-  Structure frag(fragRes);
-  F.setQuery(frag);
+void addMatches(FASST& F, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo) {
+  F.setQuery(frag, false);
   F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
   F.setMaxNumMatches(10);
   F.setMinNumMatches(2);
@@ -47,13 +64,17 @@ void addMatches(FASST& F, vector<Residue*>& fragRes, vector<Structure*>& allMatc
   for (auto it = matches.begin(); it != matches.end(); ++it) {
     allMatches.push_back(new Structure(F.getMatchStructure(*it, false, FASST::matchType::REGION)));
     Structure& match = *(allMatches.back());
-    for (int k = 0; k < fragRes.size(); k++) {
-      resTopo[fragRes[k]->getResidueIndex()].push_back(&(match.getResidue(k)));
+    for (int k = 0; k < fragResIdx.size(); k++) {
+      resTopo[fragResIdx[k]].push_back(&(match.getResidue(k)));
     }
   }
 }
 
 int main(int argc, char** argv) {
+  // TODO: debug Neilder-Meid optimization by comparing a simple case with Matlab
+  // TODO: enable a setting in Fuser, whereby fully overlapping segments are scored
+  //       (in terms of RMSD) via a weighted average, such that the lowest-RMSD
+  //       segment makes a dominant contribution to the score
   MstOptions op;
   op.setTitle("Starting from some arbitrary conformation of a chain, iteratively build a TERM-based compact structure. Options:");
   op.addOption("p", "starting conformation PDB file.", true);
@@ -86,9 +107,12 @@ int main(int argc, char** argv) {
 
   // TERMify loop
   Structure S = I;
+  mstreal R0 = getRadius(I);
+  mstreal Rf = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
+  int Ncyc = op.getInt("cyc", 10);
   fstream out; MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios_base::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
-  for (int c = 0; c < op.getInt("cyc", 10); c++) {
+  for (int c = 0; c < Ncyc; c++) {
     out << "MODEL " << c+1 << endl;
     cout << "Cycle " << c+1 << "..." << endl;
     /* --- Decorate the current conformation with TERMs --- */
@@ -100,11 +124,11 @@ int main(int argc, char** argv) {
     for (int ci = 0; ci < S.chainSize(); ci++) {
       Chain& C = S[ci];
       for (int ri = 0; ri < C.residueSize(); ri++) {
-        vector<Residue*> fragRes; vector<int> fragResIdx;
-        selectAround({&C[ri]}, pmSelf, fragRes, fragResIdx);
-        Structure frag(fragRes);
+        Structure frag; vector<int> fragResIdx;
+        selectAround({&C[ri]}, pmSelf, frag, fragResIdx);
+// frag.writePDB("/tmp/self." + MstUtils::toString(ri) + ".pdb");
         cout << "TERM around " << C[ri] << " ";
-        addMatches(F, fragRes, allMatches, resTopo);
+        addMatches(F, frag, fragResIdx, allMatches, resTopo);
       }
     }
 
@@ -116,10 +140,11 @@ int main(int argc, char** argv) {
     for (int k = 0; k < list.size(); k++) {
       Residue* resA = list[k].first;
       Residue* resB = list[k].second;
-      vector<Residue*> fragRes; vector<int> fragResIdx;
-      selectAround({resA, resB}, pmPair, fragRes, fragResIdx);
+      Structure frag; vector<int> fragResIdx;
+      selectAround({resA, resB}, pmPair, frag, fragResIdx);
+// frag.writePDB("/tmp/pair." + MstUtils::toString(k) + ".pdb");
       cout << "TERM around " << *resA << " x " << *resB << " ";
-      addMatches(F, fragRes, allMatches, resTopo);
+      addMatches(F, frag, fragResIdx, allMatches, resTopo);
     }
 
 // fstream ofs;
@@ -133,7 +158,10 @@ int main(int argc, char** argv) {
     opts.setGradientDescentFlag(true);
     opts.setRepFC(1);
     opts.setCompFC(0.1);
-    mstreal compactnessRadius = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
+    mstreal compactnessRadius = Rf;
+    // (R0 - Rf)*exp(-c/10.0) + Rf; // exponential scaling
+    // (Rf*(c + 1) + R0*(Ncyc - c - 1))/Ncyc; // linear scaling
+
     opts.setCompRad(compactnessRadius);
     cout << "will be trying to combine structure to a radius of " << compactnessRadius << endl;
     Structure fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);

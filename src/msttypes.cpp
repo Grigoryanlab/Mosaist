@@ -1253,7 +1253,7 @@ AtomPointerVector AtomPointerVector::subvector(int beg, int end) {
   return AtomPointerVector(vector<Atom*>(begin() + beg, begin() + end));
 }
 
-void AtomPointerVector::clone(AtomPointerVector& into) {
+void AtomPointerVector::clone(AtomPointerVector& into) const {
   int L = into.size();
   into.resize(L + size());
   for (int i = 0; i < size(); i++) {
@@ -1715,7 +1715,7 @@ template mstreal CartesianGeometry::dihedral<vector<mstreal> >(const CartesianPo
 
 /* --------- selector --------------- */
 
-selector::selector(Structure& S) {
+selector::selector(const Structure& S) {
   atoms = S.getAtoms();
   residues.resize(atoms.size());
   chains.resize(atoms.size());

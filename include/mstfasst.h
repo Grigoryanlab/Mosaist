@@ -9,26 +9,36 @@
 
 using namespace MST;
 
+class fasstSolutionSet;
 class fasstSolution {
   friend class fasstSolutionSet;
   public:
     fasstSolution() { rmsd = 0.0; context = NULL; }
-    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, int _foundOrder, vector<int> segOrder = vector<int>());
+    fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, const Transform& _tr, const vector<int>& _segLengths, vector<int> segOrder = vector<int>());
     fasstSolution(const fasstSolution& _sol);
     ~fasstSolution() { if (context != NULL) delete context; }
 
     mstreal getRMSD() const { return rmsd; }
     int getTargetIndex() const { return targetIndex; }
     vector<int> getAlignment() const { return alignment; }
+    vector<int> getSegLengths() const { return segLengths; }
+    int segLength(int i) const { return segLengths[i]; }
     int numSegments() const { return alignment.size(); }
     int operator[](int i) const { return alignment[i]; }
+    Transform getTransform() const { return tr; }
     bool seqContextDefined() const { return ((context != NULL) && (!context->segSeq.empty())); }
     void setSeqContext(const vector<Sequence>& _segSeq, const vector<Sequence>& _nSeq, const vector<Sequence>& _cSeq);
     void setStructContext(const vector<AtomPointerVector>& _segStr, const vector<AtomPointerVector>& _nStr, const vector<AtomPointerVector>& _cStr);
 
     friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
       if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
-      return si.foundOrder < sj.foundOrder;
+      if (si.targetIndex != sj.targetIndex) return (si.targetIndex < sj.targetIndex);
+      for (int k = 0; k < si.alignment.size(); k++) {
+        if (si.alignment[k] != sj.alignment[k]) return (si.alignment[k] < sj.alignment[k]);
+      }
+      // this will only happen if the two solutioins are identical: have the same
+      // RMSD, come from the same target, and signify exactly the same alignment
+      return true;
     }
 
     friend ostream& operator<<(ostream &_os, const fasstSolution& _sol) {
@@ -42,9 +52,11 @@ class fasstSolution {
     vector<Sequence> cTermContext() const { return context->cSeq; }
 
   private:
-    vector<int> alignment;
+    vector<int> alignment, segLengths;
     mstreal rmsd;
-    int targetIndex, foundOrder; // TODO: don't need foundOrder, can use targetIndex, then indices of the alignment for comparison
+    int targetIndex;
+    Transform tr; // how the target needs to be transformed for this match to optimally fit onto the query
+
     class solContext {
       public:
         vector<Sequence> segSeq, nSeq, cSeq; // sequence of each segment and N- and C-terminal contexts
@@ -56,15 +68,27 @@ class fasstSolution {
 class fasstSolutionSet {
   public:
     fasstSolutionSet() { updated = false; }
+    fasstSolutionSet(const fasstSolution& sol);
+    fasstSolutionSet(const fasstSolutionSet& sols);
+    fasstSolutionSet& operator=(const fasstSolutionSet& sols);
     bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
     set<fasstSolution>::iterator begin() { return solsSet.begin(); }
     set<fasstSolution>::reverse_iterator rbegin() { return solsSet.rbegin(); }
     set<fasstSolution>::iterator end() { return solsSet.end(); }
     set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it) { return solsSet.erase(it); updated = true; }
     // const fasstSolution& operator[] (int i) const;
-    fasstSolution& operator[] (int i);
+    const fasstSolution& operator[] (int i);
     int size() const { return solsSet.size(); }
     void clear() { solsSet.clear(); updated = true; }
+    mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
+    mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
+
+    friend ostream& operator<<(ostream &_os, const fasstSolutionSet& _sols) {
+      for (auto it = _sols.solsSet.begin(); it != _sols.solsSet.end(); ++it) {
+        _os << *it << endl;
+      }
+      return _os;
+    }
 
   protected:
     // decides whether numID identities within an alignment of length numTot
@@ -72,6 +96,8 @@ class fasstSolutionSet {
     bool isWithinSeqID(int L0, mstreal cut, int numTot, int numID);
 
   private:
+    // An important point about std::set is that it never invalidates pointers
+    // to its elements (i.e., it does not copy them upon resizing like vector).
     set<fasstSolution> solsSet;
     vector<fasstSolution*> solsVec;
     bool updated;
@@ -169,8 +195,8 @@ class FASST {
 
     ~FASST();
     FASST();
-    void setQuery(const string& pdbFile);
-    void setQuery(const Structure& Q);
+    void setQuery(const string& pdbFile, bool autoSplitChains = true);
+    void setQuery(const Structure& Q, bool autoSplitChains = true);
     Structure getQuery() { return queryStruct; }
     void addTarget(const Structure& T);
     void addTarget(const string& pdbFile);
@@ -185,7 +211,7 @@ class FASST {
     void setSearchType(searchType _searchType);
     void setMemorySaveMode(bool _memSave) { memSave = _memSave; }
     void setGridSpacing(mstreal _spacing) { gridSpacing = _spacing; updateGrids = true; }
-    void search();
+    fasstSolutionSet search();
     int numMatches() { return solutions.size(); }
     void setMaxNumMatches(int _max);
     void setMinNumMatches(int _min);
@@ -206,6 +232,11 @@ class FASST {
     void resetGapConstraints();
     bool gapConstraintsExist() { return gapConstSet; }
     bool validateSearchRequest(); // make sure all user specified requirements are consistent
+    void writeDatabase(const string& dbFile);
+    void readDatabase(const string& dbFile);
+
+    // get various match properties
+    // TODO: change where query is taken from
     void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
     Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
     void getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
@@ -213,24 +244,17 @@ class FASST {
     Sequence getMatchSequence(const fasstSolution& sol, matchType type = matchType::REGION);
     vector<vector<mstreal> > getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type = matchType::REGION);
     vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
-    void writeDatabase(const string& dbFile);
-    void readDatabase(const string& dbFile);
 
     void pruneRedundancy(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
-
-    // TODO:
-    // results caching
-    int cacheSearch();            // save current search results (needs to also save the query)
-    void recallFromCache(int i);  // overwrite the current results with those from the cache (solutions, query, ...)
-    // TODO: name match structures; match.setName(targetStruct->getName()) on line 768
 
   protected:
     void processQuery();
     void setCurrentRMSDCutoff(mstreal cut);
     void prepForSearch(int ti);
     bool parseChain(const Chain& S, AtomPointerVector* searchable = NULL, Sequence* seq = NULL);
-    mstreal currentAlignmentResidual(bool compute);   // computes the accumulated residual up to and including segment recLevel
+    mstreal currentAlignmentResidual(bool compute, bool setTransform = false);   // computes the accumulated residual up to and including segment recLevel
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
+    Transform currentTransform();                     // tansform for the alignment corresponding to the current residual
     // void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
     int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
     int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
@@ -240,7 +264,7 @@ class FASST {
     void addTargetStructure(Structure* targetStruct);
     bool areNumMatchConstraintsConsistent();
     vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type); // figure out the range of residues to excise from target structure
-    void addSequenceContext(fasstSolution& sol, int currentTarget, const vector<int>& segLengths, int contextLength); // decorate the solution with sequence context
+    void addSequenceContext(fasstSolution& sol, int currentTarget, int contextLength); // decorate the solution with sequence context
 
   private:
     /* targetStructs[i] and targets[i] store the original i-th target structure

@@ -14,6 +14,7 @@ class Sequence {
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }
     string toString(bool triple = false, const string& delim = "");
+    vector<string> toStringVector(bool triple = false);
     string getResidue(int i, bool triple = false);
     int& operator[] (int i) { return seq[i]; }
     int operator[] (int i) const { return seq[i]; }

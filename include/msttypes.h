@@ -515,7 +515,7 @@ class AtomPointerVector : public vector<Atom*> {
     void deletePointers();
 
     AtomPointerVector clone();
-    void clone(AtomPointerVector& into);
+    void clone(AtomPointerVector& into) const;
     AtomPointerVector subvector(int beg, int end); // returns the range [beg, end)
 
     friend ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms) {
@@ -561,7 +561,7 @@ class expressionTree {
 
 class selector {
   public:
-    selector(Structure& S);
+    selector(const Structure& S);
     AtomPointerVector select(string selStr);
     vector<Residue*> selectRes(string selStr);
     void select(expressionTree* tree, AtomPointerVector& sel);
