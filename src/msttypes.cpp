@@ -3112,8 +3112,8 @@ void MstUtils::fileToArray(string _filename, vector<string>& lines) {
     getline(inp, line);
     // if eof set upon trying to read the line, and the line is empty, then it
     // was not really a valid line (but just the last eof that was not yet read)
-    if (inp.eof() && line.empty()) break;
-    lines.push_back(line);
+      if (!inp.eof() || !line.empty()) lines.push_back(line);
+    if (inp.eof()) break;
   }
 }
 

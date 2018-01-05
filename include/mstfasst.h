@@ -244,6 +244,7 @@ class FASST {
     Sequence getMatchSequence(const fasstSolution& sol, matchType type = matchType::REGION);
     vector<vector<mstreal> > getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type = matchType::REGION);
     vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
+    vector<int> getResidueIndices(const fasstSolution& sol, matchType type); // figure out the range of residues to excise from target structure
 
     void pruneRedundancy(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
 
@@ -263,7 +264,6 @@ class FASST {
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     bool areNumMatchConstraintsConsistent();
-    vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type); // figure out the range of residues to excise from target structure
     void addSequenceContext(fasstSolution& sol, int currentTarget, int contextLength); // decorate the solution with sequence context
 
   private:

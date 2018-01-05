@@ -793,7 +793,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
       if (type == matchType::FULL) {
         match = *targetStruct;
       } else {
-        vector<int> resIndices = getMatchResidueIndices(sol, type);
+        vector<int> resIndices = getResidueIndices(sol, type);
         for (auto ri = resIndices.begin(); ri != resIndices.end(); ri++) {
           Residue* res = target[resToAtomIdx(*ri)]->getResidue();
           if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
@@ -821,7 +821,7 @@ vector<Sequence> FASST::getMatchSequences(fasstSolutionSet& sols, matchType type
     seqs[i].setName(targSeqs[idx].getName());
 
     // isolate out the part of the target Sequence that will constitute the returned match
-    vector<int> resIndices = getMatchResidueIndices(sol, type);
+    vector<int> resIndices = getResidueIndices(sol, type);
     for (auto ri = resIndices.begin(); ri != resIndices.end(); ri++) seqs[i].appendResidue(targSeqs[idx][*ri]);
   }
   return seqs;
@@ -850,7 +850,7 @@ vector<vector<mstreal> > FASST::getResidueProperties(fasstSolutionSet& sols, con
       MstUtils::error("target with index " + MstUtils::toString(idx) + " does not have property type " + propType, "FASST::getResidueProperties(fasstSolutionSet&, const string&, matchType)");
     }
     vector<mstreal>& propVals = resProperties[propType][idx];
-    vector<int> resIndices = getMatchResidueIndices(sol, type);
+    vector<int> resIndices = getResidueIndices(sol, type);
     props[i].resize(resIndices.size()); int ii = 0;
     for (auto ri = resIndices.begin(); ri != resIndices.end(); ri++, ii++) {
       // properties are defined for each residue in the original target structure
@@ -869,7 +869,7 @@ bool FASST::isPropertyDefined(const string& propType) {
   return (resProperties.find(propType) != resProperties.end());
 }
 
-vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType type) {
+vector<int> FASST::getResidueIndices(const fasstSolution& sol, matchType type) {
   vector<int> residueIndices;
   vector<int> alignment = sol.getAlignment();
   switch(type) {
@@ -891,7 +891,7 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
           if (i == j) continue;
           // if gap constrained, fill in between these two segments
           if (gapConstrained(i, j)) {
-            if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchResidueIndices");
+            if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getResidueIndices");
             for (int k = alignment[i] + sol.segLength(i); k < alignment[j]; k++) {
               toInclude.insert(k);
             }
@@ -905,12 +905,12 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
     }
     case matchType::FULL: {
       int idx = sol.getTargetIndex();
-      MstUtils::assert((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchResidueIndices");
+      MstUtils::assert((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getResidueIndices");
       for (int i = 0; i < targetStructs[idx]->residueSize(); i++) residueIndices.push_back(i);
       break;
     }
     default:
-      MstUtils::error("unknown match output type", "FASST::getMatchResidueIndices");
+      MstUtils::error("unknown match output type", "FASST::getResidueIndices");
   }
 
   return residueIndices;
