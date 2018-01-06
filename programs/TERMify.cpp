@@ -35,8 +35,9 @@ void selectAround(const vector<Residue*>& cenRes, int pm, Structure& frag, vecto
     Residue& res = *(cenRes[i]);
     Chain* C = res.getChain();
     int ri = res.getResidueIndex();
+    int Li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
     for (int k = ri - pm; k <= ri + pm; k++) {
-      if ((k < 0) || (k >= C->residueSize())) continue;
+      if ((k < 0) || (k > Li)) continue;
       selected[k] = true;
     }
   }

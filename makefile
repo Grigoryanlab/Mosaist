@@ -53,7 +53,7 @@ LIB_DIRS :=
 
 # targets and MST libraries
 TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testFASST testFuser testGrads testRotlib testTERMUtils testTransforms
-PROGRAMS	:= findTERMs renumber TERMify
+PROGRAMS	:= findTERMs renumber TERMify subMatrix
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans
@@ -72,7 +72,8 @@ testTERMUtils_DEPS		:= mstmagic msttypes
 testTransforms_DEPS		:= mstlinalg msttransforms msttypes
 findTERMs_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 renumber_DEPS			:= mstsystem msttypes
-TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstcondeg mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions
+TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions
+subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 
 # MST library dependencies
 libmst_DEPS				:= mstoptions mstsequence mstsystem msttypes

@@ -198,7 +198,7 @@ class Residue {
     string getName() const { return resname; }
     int getNum() const { return resnum; }
     char getIcode() const { return icode; }
-    bool isNamed(string& _name) const { return (resname.compare(_name) == 0); }
+    bool isNamed(const string& _name) const { return (resname.compare(_name) == 0); }
     bool isNamed(const char* _name) const { return (strcmp(resname.c_str(), _name) == 0); }
     Atom* findAtom(string _name, bool strict = true) const; // returns NULL if not found and if strict is false
     bool atomExists(string _name) { return (findAtom(_name, false) != NULL); } // mostly for interchangeability with MSL, better to use findAtom and check for NULL
@@ -300,7 +300,7 @@ class Atom {
     int getIndex() const { return index; }
     char getAlt() const { return alt; }
     bool isNamed(const char* _name) const { return (strcmp(name, _name) == 0); }
-    bool isNamed(string _name) const { return isNamed(_name.c_str()); }
+    bool isNamed(const string& _name) const { return isNamed(_name.c_str()); }
     int numAlternatives() { return (alternatives == NULL) ? 0 : alternatives->size(); }
     Residue* getParent() { return parent; }
     Residue* getResidue() { return parent; }

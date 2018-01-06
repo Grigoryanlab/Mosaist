@@ -108,7 +108,7 @@ bool SeqTools::initConstants() {
   idxToAA1.resize(aa1.size());
   for (int i = 0; i < aa3.size(); i++) {
     aa3ToIdx[aa3[i]] = i;
-    // single single-letter code is ambiguous, take the first amino acid
+    // single-letter code is ambiguous, take the first amino acid
     // when going from single-letter code to index
     if (aa1ToIdx.find(aa1[i]) == aa1ToIdx.end()) aa1ToIdx[aa1[i]] = i;
     idxToAA3[i] = aa3[i];

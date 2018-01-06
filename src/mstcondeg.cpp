@@ -67,9 +67,10 @@ void ConFind::init(Structure& S) {
   AtomPointerVector atoms = S.getAtoms();
   for (int i = 0; i < atoms.size(); i++) {
     Atom* a = atoms[i];
-    if (a->isNamed("H")) continue;
-    if (RotamerLibrary::isBackboneAtom(a)) backbone.push_back(a);
-    if (a->isNamed("CA")) ca.push_back(a);
+    if (RotamerLibrary::isHydrogen(a)) continue;
+    int idx = RotamerLibrary::isBackboneAtom(a);
+    if (idx) backbone.push_back(a);
+    if (idx == RotamerLibrary::bbCA) ca.push_back(a);
   }
   bbNN = new ProximitySearch(backbone, clashDist/2);
   caNN = new ProximitySearch(ca, dcut/2);
@@ -84,7 +85,8 @@ void ConFind::cache(Residue* res) {
   bool writeLog = rotOut.is_open();
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
-  if (!res->atomExists("N") || !res->atomExists("CA") || !res->atomExists("C")) {
+  vector<Atom*> bb = RotamerLibrary::getBackbone(res);
+  if ((bb[RotamerLibrary::bbN] == NULL) || (bb[RotamerLibrary::bbCA] == NULL) || (bb[RotamerLibrary::bbC] == NULL)) {
     MstUtils::error("cannot build rotamers at position " + MstUtils::toString(*res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
   }
   mstreal phi = res->getPhi(false); mstreal psi = res->getPsi(false);

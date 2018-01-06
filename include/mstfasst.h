@@ -236,7 +236,6 @@ class FASST {
     void readDatabase(const string& dbFile);
 
     // get various match properties
-    // TODO: change where query is taken from
     void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
     Structure getMatchStructure(const fasstSolution& sol, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
     void getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matches, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
@@ -244,7 +243,7 @@ class FASST {
     Sequence getMatchSequence(const fasstSolution& sol, matchType type = matchType::REGION);
     vector<vector<mstreal> > getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type = matchType::REGION);
     vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
-    vector<int> getResidueIndices(const fasstSolution& sol, matchType type); // figure out the range of residues to excise from target structure
+    vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type = matchType::REGION); // figure out the range of residues to excise from target structure
 
     void pruneRedundancy(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
 

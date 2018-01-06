@@ -22,17 +22,30 @@ class contactList {
       inContact = other.inContact;
       orderedContacts = other.orderedContacts;
     }
+    // void addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info = "", bool directional = false) {
+    //   if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
+    //     Residue* tmp = _resi; _resi = _resj; _resj = tmp;
+    //   }
+    //   resi.push_back(_resi);
+    //   resj.push_back(_resj);
+    //   degrees.push_back(_degree);
+    //   infos.push_back(_info);
+    //   inContact[_resi][_resj] = resi.size() - 1;
+    //   inContact[_resj][_resi] = resi.size() - 1;
+    //   orderedContacts.insert(pair<Residue*, Residue*>(_resi, _resj));
+    // }
     void addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info = "", bool directional = false) {
-      if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
-        Residue* tmp = _resi; _resi = _resj; _resj = tmp;
-      }
       resi.push_back(_resi);
       resj.push_back(_resj);
       degrees.push_back(_degree);
       infos.push_back(_info);
       inContact[_resi][_resj] = resi.size() - 1;
       inContact[_resj][_resi] = resi.size() - 1;
-      orderedContacts.insert(pair<Residue*, Residue*>(_resi, _resj));
+      if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
+        orderedContacts.insert(pair<Residue*, Residue*>(_resj, _resi));
+      } else {
+        orderedContacts.insert(pair<Residue*, Residue*>(_resi, _resj));
+      }
     }
     int size() { return resi.size(); }
     Residue* residueA(int i) { return resi[i]; }

@@ -1,3 +1,6 @@
+#ifndef _MSTSEQUENCE_H
+#define _MSTSEQUENCE_H
+
 #include "msttypes.h"
 
 namespace MST {
@@ -59,3 +62,5 @@ class SeqTools {
 
 
 }
+
+#endif

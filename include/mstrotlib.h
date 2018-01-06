@@ -23,6 +23,7 @@ class rotamerID {
 
 class RotamerLibrary {
   public:
+    enum bbAtomType { bbN = 1, bbCA, bbC, bbO, bbH };
     RotamerLibrary() {}
     RotamerLibrary(string rotLibFile);
     ~RotamerLibrary();
@@ -49,12 +50,17 @@ class RotamerLibrary {
     rotamerID getRotamer(Residue& res, string aa, int rotIndex, bool strict = false);
 
     /* decides whether the atom is a backbone atom basded on the name */
-    static bool isBackboneAtom(string atomName);
-    static bool isBackboneAtom(Atom& atom) { return isBackboneAtom(atom.getName()); }
-    static bool isBackboneAtom(Atom* atom) { return isBackboneAtom(atom->getName()); }
     static bool isHydrogen(string atomName);
     static bool isHydrogen(Atom& atom) { return isHydrogen(atom.getName()); }
     static bool isHydrogen(Atom* atom) { return isHydrogen(atom->getName()); }
+    static int isBackboneAtom(string atomName, bool noHyd = true);
+    static int isBackboneAtom(const Atom& atom, bool noHyd = true) { return isBackboneAtom(atom.getName(), noHyd); }
+    static int isBackboneAtom(Atom* atom, bool noHyd = true) { return isBackboneAtom(atom->getName(), noHyd); }
+    static bool hasFullBackbone(const Residue& res, bool noHyd = true);
+    static bool hasFullBackbone(Residue* res, bool noHyd = true) { return hasFullBackbone(*res, noHyd); }
+    static vector<Atom*> getBackbone(const Residue& res, bool noHyd = true);
+    static vector<Atom*> getBackbone(Residue* res, bool noHyd = true) { return getBackbone(*res, noHyd); }
+    static void extractProtein(System& S, const System& So, const vector<string>& legalResNames, bool skipMissingBB = true);
 
     int numberOfRotamers(string aa, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);
     mstreal rotamerProbability(string aa, int ri, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);

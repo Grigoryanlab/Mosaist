@@ -178,9 +178,13 @@ rotamerID RotamerLibrary::placeRotamer(Residue& res, string aa, int rotIndex, Re
   // position for which the rotamer library stores side-chain coordinates, to the actual
   // backbone position in the given residue. That's the transformation we will need to apply
   // to go from rotamer-library coordinates to the final placed coordinates.
-  CartesianPoint CA = CartesianPoint(res.findAtom("CA"));
-  CartesianPoint C = CartesianPoint(res.findAtom("C"));
-  CartesianPoint N = CartesianPoint(res.findAtom("N"));
+  vector<Atom*> bb = RotamerLibrary::getBackbone(res);
+  if ((bb[RotamerLibrary::bbCA] == NULL) || (bb[RotamerLibrary::bbC] == NULL) || (bb[RotamerLibrary::bbN] == NULL)) {
+    MstUtils::error("cannot place rotamer in residue " + MstUtils::toString(res) + ", as it lacks proper backbone", "RotamerLibrary::placeRotamer");
+  }
+  CartesianPoint CA = CartesianPoint(bb[RotamerLibrary::bbCA]);
+  CartesianPoint C = CartesianPoint(bb[RotamerLibrary::bbC]);
+  CartesianPoint N = CartesianPoint(bb[RotamerLibrary::bbN]);
   CartesianPoint X = CA - N;          // X-axis of the residue frame defined to be along N -> CA
   CartesianPoint Z = X.cross(C - CA); // since CA-C is defined to be in the XY plane, (N -> CA) x (CA -> C) will be a vector along Z
   CartesianPoint Y = Z.cross(X);      // finally, Z x X is Y
@@ -242,7 +246,7 @@ void RotamerLibrary::transformRotamerAtoms(Transform& T, Residue& rots, int rotI
   }
 }
 
-bool RotamerLibrary::isBackboneAtom(string atomName) {
+int RotamerLibrary::isBackboneAtom(string atomName, bool noHyd) {
   /* backbone atoms can be either nitrogens, carbons, oxigens, or hydrogens.
    * specifically, possible known names in each category are:
    * 'N', 'NT'
@@ -250,26 +254,76 @@ bool RotamerLibrary::isBackboneAtom(string atomName) {
    * 'OY', 'O', 'OCT*', 'OXT', 'OT1', 'OT2'
    * 'H', 'HY*', 'HA1', 'HN', 'HT*'
    */
-  if (atomName.size() == 0) return false;
-  switch (atomName[0]) {
-    case 'N':
-      if ((atomName.compare("N") == 0) || (atomName.compare("NT") == 0)) return true;
-      return false;
-    case 'C':
-      if ((atomName.compare("C") == 0) || (atomName.compare("CA") == 0) || (atomName.compare("CY") == 0) || (atomName.compare("CAY") == 0)) return true;
-      return false;
-    case 'O':
-      if ((atomName.compare("O") == 0) || (atomName.compare("OY") == 0) || (atomName.compare("OXT") == 0) ||
-          (atomName.compare("OT1") == 0) || (atomName.compare("OT2") == 0) ||
-          ((atomName.size() >= 3) && (atomName.compare(0, 3, "OCT") == 0))) return true;
-      return false;
-    case 'H':
-      if ((atomName.compare("H") == 0) || (atomName.compare("HA1") == 0) || (atomName.compare("HN") == 0) ||
-          ((atomName.size() >= 2) && ((atomName.compare(0, 2, "HT") == 0) || (atomName.compare(0, 2, "HY") == 0)))) return true;
-      return false;
-    default:
-      return false;
+  if (atomName.size() != 0) {
+    switch (atomName[0]) {
+      case 'N':
+        if ((atomName.compare("N") == 0) || (atomName.compare("NT") == 0)) return bbAtomType::bbN;
+      case 'C':
+        if (atomName.compare("CA") == 0) return bbAtomType::bbCA;
+        if ((atomName.compare("C") == 0) || (atomName.compare("CY") == 0)) return bbAtomType::bbC;
+      case 'O':
+        if ((atomName.compare("O") == 0) || (atomName.compare("OY") == 0) || (atomName.compare("OXT") == 0) ||
+            (atomName.compare("OT1") == 0) || (atomName.compare("OT2") == 0) || (atomName.compare(0, 3, "OCT") == 0)) return bbAtomType::bbO;
+      case 'H':
+        if (!noHyd && ((atomName.compare("H") == 0) || (atomName.compare("HA1") == 0) || (atomName.compare("HN") == 0) ||
+            (atomName.compare(0, 2, "HT") == 0) || (atomName.compare(0, 2, "HY") == 0))) return bbAtomType::bbH;
+    }
   }
+  return 0;
+}
+
+vector<Atom*> RotamerLibrary::getBackbone(const Residue& res, bool noHyd) {
+  vector<Atom*> bb(noHyd ? 4 : 5, NULL);
+  int toFind = bb.size();
+  for (int i = 0; i < res.atomSize(); i++) {
+    int idx = RotamerLibrary::isBackboneAtom(res[i], noHyd) - 1;
+    if (idx == -1) continue;
+    if (bb[idx] == NULL) {
+      bb[idx] = &(res[i]); toFind--;
+    }
+    if (toFind == 0) break;
+  }
+  return bb;
+}
+
+bool RotamerLibrary::hasFullBackbone(const Residue& res, bool noHyd) {
+  vector<Atom*> bb = RotamerLibrary::getBackbone(res, noHyd);
+  for (int i = 0; i < bb.size(); i++) {
+    if (bb[i] == NULL) return false;
+  }
+  return true;
+}
+
+void RotamerLibrary::extractProtein(System& S, const System& So, const vector<string>& legalResNames, bool skipMissingBB) {
+  AtomPointerVector A;
+  for (int i = 0; i < So.chainSize(); i++) {
+    Chain& chain = So[i];
+    for (int j = 0; j < chain.residueSize(); j++) {
+      Residue& res = chain[j];
+      bool includeRes = true;
+      vector<Atom*> bb = RotamerLibrary::getBackbone(res);
+      if (legalResNames.empty()) {
+        // if legal residue names are not specified, then accept all residues
+        // that have backbone atoms N, CA, C, and O
+        includeRes = ((bb[RotamerLibrary::bbN] != NULL) && (bb[RotamerLibrary::bbCA] != NULL) &&
+                      (bb[RotamerLibrary::bbC] != NULL) && (bb[RotamerLibrary::bbO] != NULL));
+      } else {
+        if (skipMissingBB) {
+          includeRes = ((bb[RotamerLibrary::bbN] != NULL) && (bb[RotamerLibrary::bbCA] != NULL) && (bb[RotamerLibrary::bbC] != NULL));
+        }
+        if (includeRes) {
+          includeRes = false;
+          for (int k = 0; k < legalResNames.size(); k++) {
+            if (res.isNamed(legalResNames[k])) { includeRes = true; break; }
+          }
+        }
+      }
+      if (includeRes) {
+        for (int ai = 0; ai < res.atomSize(); ai++) A.push_back(&(res[ai]));
+      }
+    }
+  }
+  S.addAtoms(&A);
 }
 
 bool RotamerLibrary::isHydrogen(string atomName) {
