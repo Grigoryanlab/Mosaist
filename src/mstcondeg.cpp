@@ -68,8 +68,8 @@ void ConFind::init(Structure& S) {
   for (int i = 0; i < atoms.size(); i++) {
     Atom* a = atoms[i];
     if (RotamerLibrary::isHydrogen(a)) continue;
-    int idx = RotamerLibrary::isBackboneAtom(a);
-    if (idx) backbone.push_back(a);
+    int idx = RotamerLibrary::backboneAtomType(a);
+    if (idx >= 0) backbone.push_back(a);
     if (idx == RotamerLibrary::bbCA) ca.push_back(a);
   }
   bbNN = new ProximitySearch(backbone, clashDist/2);

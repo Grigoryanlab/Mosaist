@@ -246,7 +246,7 @@ void RotamerLibrary::transformRotamerAtoms(Transform& T, Residue& rots, int rotI
   }
 }
 
-int RotamerLibrary::isBackboneAtom(string atomName, bool noHyd) {
+int RotamerLibrary::backboneAtomType(string atomName, bool noHyd) {
   /* backbone atoms can be either nitrogens, carbons, oxigens, or hydrogens.
    * specifically, possible known names in each category are:
    * 'N', 'NT'
@@ -269,15 +269,15 @@ int RotamerLibrary::isBackboneAtom(string atomName, bool noHyd) {
             (atomName.compare(0, 2, "HT") == 0) || (atomName.compare(0, 2, "HY") == 0))) return bbAtomType::bbH;
     }
   }
-  return 0;
+  return -1;
 }
 
 vector<Atom*> RotamerLibrary::getBackbone(const Residue& res, bool noHyd) {
   vector<Atom*> bb(noHyd ? 4 : 5, NULL);
   int toFind = bb.size();
   for (int i = 0; i < res.atomSize(); i++) {
-    int idx = RotamerLibrary::isBackboneAtom(res[i], noHyd) - 1;
-    if (idx == -1) continue;
+    int idx = RotamerLibrary::backboneAtomType(res[i], noHyd);
+    if (idx < 0) continue;
     if (bb[idx] == NULL) {
       bb[idx] = &(res[i]); toFind--;
     }
