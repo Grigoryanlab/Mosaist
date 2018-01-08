@@ -74,8 +74,8 @@ class ConFind {
     void setFreedomParams(mstreal _loCollProbCut, mstreal _hiCollProbCut, int type) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; freedomType = type; }
 
     // precomputes all necessary info and data structures for computing on this Structure
-    void cache(Structure& S);
-    void cache(vector<Residue*>& residues);
+    void cache(const Structure& S);
+    void cache(const vector<Residue*>& residues);
     void cache(Residue* res);
 
     // find those residues that are close enough to affect the passed residue(s)
@@ -90,7 +90,7 @@ class ConFind {
     mstreal contactDegree(Residue* resA, Residue* resB, bool cacheA = true, bool cacheB = true, bool checkNeighbors = true);
     contactList getContacts(Residue* res, mstreal cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(Structure& S, mstreal cdcut = 0.0, contactList* list = NULL);
-    contactList getContacts(vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
+    contactList getContacts(const vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, mstreal cdcut = 0.0);
     contactList getInterference(vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
     contactList getInterference(Structure& S, mstreal incut = 0.0, contactList* list = NULL);

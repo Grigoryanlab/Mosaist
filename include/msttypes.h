@@ -69,7 +69,7 @@ class Structure {
     Residue& getResidue(int i) const;
     Chain& operator[](int i) const { return *(chains[i]); }
     vector<Atom*> getAtoms() const;
-    vector<Residue*> getResidues();
+    vector<Residue*> getResidues() const;
     void setName(string _name) { name = _name; }
     string getName() const { return name; }
     void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout

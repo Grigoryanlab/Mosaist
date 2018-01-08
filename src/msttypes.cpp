@@ -485,7 +485,7 @@ vector<Atom*> Structure::getAtoms() const {
   return vec;
 }
 
-vector<Residue*> Structure::getResidues() {
+vector<Residue*> Structure::getResidues() const {
   vector<Residue*> vec;
 
   for (int i = 0; i < this->chainSize(); i++) {

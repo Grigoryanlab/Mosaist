@@ -165,12 +165,12 @@ int main(int argc, char *argv[]) {
           // make sure that the central residue within this match does not have
           // any additional contacts within its structure
           Residue& subRes = target.getResidue(residues[keyResidues[0]]);
-          contactList list = C.getContacts(&subRes, cdcut);
+          vector<Residue*> conts = C.getContactingResidues(&subRes, cdcut);
           set<int> keyResidueSet;
           for (int ri = 0; ri < keyResidues.size(); ri++) keyResidueSet.insert(residues[keyResidues[ri]]);
           bool reject = false;
-          for (int ci = 0; ci < list.size(); ci++) {
-            int ind = list.residueB(ci)->getResidueIndex();
+          for (int ci = 0; ci < conts.size(); ci++) {
+            int ind = conts[ci]->getResidueIndex();
             if (keyResidueSet.find(ind) == keyResidueSet.end()) {
               reject = true; // reject this match, because it has an extra contact with the central residue
             }

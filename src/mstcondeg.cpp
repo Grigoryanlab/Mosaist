@@ -170,11 +170,11 @@ bool ConFind::countsAsSidechain(Atom& a) {
   return true;
 }
 
-void ConFind::cache(vector<Residue*>& residues) {
+void ConFind::cache(const vector<Residue*>& residues) {
   for (int i = 0; i < residues.size(); i++) cache(residues[i]);
 }
 
-void ConFind::cache(Structure& S) {
+void ConFind::cache(const Structure& S) {
   vector<Residue*> residues = S.getResidues();
   cache(residues);
 }
@@ -228,43 +228,20 @@ mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool c
 }
 
 contactList ConFind::getContacts(Residue* res, mstreal cdcut, contactList* list) {
-  vector<Residue*> neighborhood = getNeighbors(res);
-  cache(neighborhood);
-  contactList L;
-
-  // compute contact degree between this residue and every one of its neighbors
-  if (list == NULL) list = &L;
-  collProbUpdateOn(res);
-  for (int i = 0; i < neighborhood.size(); i++) {
-    if (res == neighborhood[i]) continue;
-    mstreal cd = contactDegree(res, neighborhood[i], false, false, false);
-    if (cd > cdcut) list->addContact(res, neighborhood[i], cd);
-  }
-  collProbUpdateOff(res);
-  computeFreedom(res); // since all contacts for this residue have been visited
-
-  return *list;
+  // this way, the contact computing code lives only in one place (minimal cost)
+  return getContacts(vector<Residue*>(1, res), cdcut, list);
 }
 
 vector<Residue*> ConFind::getContactingResidues(Residue* res, mstreal cdcut) {
-  vector<Residue*> neighborhood = getNeighbors(res);
-  cache(neighborhood);
-
-  // compute contact degree between this residue and every one of its neighbors
-  vector<Residue*> partners;
+  // this way, the contact computing code lives only in one place (minimal cost)
+  contactList list = getContacts(vector<Residue*>(1, res), cdcut);
+  vector<Residue*> partners(list.size(), NULL);
   collProbUpdateOn(res);
-  for (int i = 0; i < neighborhood.size(); i++) {
-    if (res == neighborhood[i]) continue;
-    mstreal cd = contactDegree(res, neighborhood[i], false, false, false);
-    if (cd > cdcut) partners.push_back(neighborhood[i]);
-  }
-  collProbUpdateOff(res);
-  computeFreedom(res); // since all contacts for this residue have been visited
-
+  for (int i = 0; i < list.size(); i++) partners[i] = list.residueB(i);
   return partners;
 }
 
-contactList ConFind::getContacts(vector<Residue*>& residues, mstreal cdcut, contactList* list) {
+contactList ConFind::getContacts(const vector<Residue*>& residues, mstreal cdcut, contactList* list) {
   cache(residues);
   fastmap<Residue*, fastmap<Residue*, bool> > checked;
   fastmap<Residue*, bool> ofInterest;
