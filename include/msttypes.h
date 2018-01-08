@@ -51,7 +51,7 @@ class Structure {
 
     void readPDB(const string& pdbFile, string options = "");
     void writePDB(const string& pdbFile, string options = "") const;
-    void writePDB(fstream& ofs, string options = "") const;
+    void writePDB(ostream& ofs, string options = "") const;
     void writeData(const string& dataFile) const;
     void writeData(fstream& ofs) const;
     void readData(const string& dataFile);
@@ -148,7 +148,7 @@ class Chain {
     string getSegID() const { return sid; }
     Structure* getParent() { return parent; }
     Structure* getStructure() { return getParent(); }
-    int getResidueIndex(const Residue* res);
+    int getResidueIndex(const Residue* res); // this in the in-chain residue index!
 
     /* convenience functoins, not efficient (linear search). If you need to do this a lot,
      * call getResidues() and construct your own data structure (e.g., a map<>) for fast lookups. */
@@ -245,6 +245,7 @@ class Residue {
     mstreal getOmega(bool strict = true);
 
     int getResidueIndex() const;
+    int getResidueIndexInChain() const;
 
     static const mstreal badDihedral; // value that signals a dihedral angle that could not be computed for some reason
 
@@ -605,9 +606,16 @@ class RMSDCalculator {
     static mstreal rmsd(const vector<Atom*>& A, const vector<Atom*>& B);
     static mstreal rmsd(const Structure& A, const Structure& B);
 
-    // Craig's cutoff function
+    // -- Craig's cutoff function
+    /* L stores the number of residues in each chain, assumed to be contiguous.
+     * Residues in different chains are assumed to be statistically independent. */
     static mstreal rmsdCutoff(const vector<int>& L, mstreal rmsdMax = 1.1, mstreal L0 = 15);
+    /* Takes every chain in S to be independent. */
     static mstreal rmsdCutoff(const Structure& S, mstreal rmsdMax = 1.1, mstreal L0 = 15);
+    /* I stores residue indices of residues in each chain, so that non-contiguous
+     * residues within a chain can be treated. Residues in different chains are
+     * still assumed to be independent. */
+    static mstreal rmsdCutoff(const vector<vector<int> >& I, mstreal rmsdMax = 1.1, mstreal L0 = 15);
 
     template <class T>
     mstreal qcpRMSD(const T& A, const T& B, bool setTransform = false, bool setResiduals = false);

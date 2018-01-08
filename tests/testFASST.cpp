@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
   op.addOption("q", "query PDB file.", true);
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
-  op.addOption("r", "RMSD cutoff.", true);
+  op.addOption("r", "RMSD cutoff (takes the size-dependent cutoff by default).");
   op.addOption("red", "set redundancy cutoff level (default is 1.0, so no redundancy filtering).");
   op.addOption("min", "min number of matches.");
   op.addOption("max", "max number of matches.");
@@ -20,7 +20,8 @@ int main(int argc, char *argv[]) {
   FASST S;
   cout << "Reading the database..." << endl;
   auto begin = chrono::high_resolution_clock::now();
-  S.setQuery(op.getString("q"));
+  Structure query(op.getString("q"));
+  S.setQuery(query);
   S.setMemorySaveMode(true);
   if (op.isGiven("d")) {
     vector<string> pdbFiles = MstUtils::fileToArray(op.getString("d"));
@@ -47,7 +48,11 @@ int main(int argc, char *argv[]) {
   } else {
     MstUtils::error("either --b or --d must be given!");
   }
-  S.setRMSDCutoff(op.getReal("r"));
+  if (op.isGiven("r")) { S.setRMSDCutoff(op.getReal("r")); }
+  else {
+    cout << "setting RMSD cutoff to " << RMSDCalculator::rmsdCutoff(query) << endl;
+    S.setRMSDCutoff(RMSDCalculator::rmsdCutoff(query));
+  }
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
   S.setMaxGap(0, 1, 6); S.setMinGap(0, 1, 0);

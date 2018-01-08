@@ -47,9 +47,9 @@ class fasstSolution {
     }
 
   protected:
-    vector<Sequence> segmentSeqs() const { return context->segSeq; }
-    vector<Sequence> nTermContext() const { return context->nSeq; }
-    vector<Sequence> cTermContext() const { return context->cSeq; }
+    const vector<Sequence>& segmentSeqs() const { return context->segSeq; }
+    const vector<Sequence>& nTermContext() const { return context->nSeq; }
+    const vector<Sequence>& cTermContext() const { return context->cSeq; }
 
   private:
     vector<int> alignment, segLengths;
@@ -263,7 +263,7 @@ class FASST {
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     bool areNumMatchConstraintsConsistent();
-    void addSequenceContext(fasstSolution& sol, int currentTarget, int contextLength); // decorate the solution with sequence context
+    void addSequenceContext(fasstSolution& sol, int contextLength); // decorate the solution with sequence context
 
   private:
     /* targetStructs[i] and targets[i] store the original i-th target structure

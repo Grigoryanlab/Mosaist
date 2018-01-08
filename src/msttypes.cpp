@@ -215,7 +215,7 @@ void Structure::writePDB(const string& pdbFile, string options) const {
   ofs.close();
 }
 
-void Structure::writePDB(fstream& ofs, string options) const {
+void Structure::writePDB(ostream& ofs, string options) const {
   options = MstUtils::uc(options);
 
 ///  my $chainstr = shift; // probably want to implement this eventually. Or maybe some more generic selection mechanism based on regular expressions applied onto full atom strings.
@@ -956,6 +956,12 @@ int Residue::getResidueIndex() const {
   if (!found) MstUtils::error("residue not in its parent Structure '" + MstUtils::toString(this) + "'", "Residue::getResidueIndex()");
 
   return n;
+}
+
+int Residue::getResidueIndexInChain() const {
+  if (getParent() == NULL)
+    MstUtils::error("cannot find index of a disembodied residue '" + MstUtils::toString(this) + "'", "Residue::getResidueIndexInChain()");
+  return getParent()->getResidueIndex(this);
 }
 
 /* --------- Atom --------- */
@@ -2415,6 +2421,25 @@ mstreal RMSDCalculator::rmsdCutoff(const vector<int>& L, mstreal rmsdMax, mstrea
     N += L[i];
     n = L[i];
     c = c + (a/(1-a))*(n-1) - pow((a/(1-a)), 2)*(1 - pow(a, n-1));
+  }
+  double df = N*(1 - (2.0/(N*(N-1)))*c);
+
+  return rmsdMax/sqrt(N/df);
+}
+
+mstreal RMSDCalculator::rmsdCutoff(const vector<vector<int> >& I, mstreal rmsdMax, mstreal L0) {
+  int N = 0;
+  mstreal c = 0;
+
+  // disjoint segments are counted as independent, so their correlation
+  // with respect to each other is zero
+  for (int i = 0; i < I.size(); i++) {
+    for (int j = 0; j < I[i].size(); j++) {
+      for (int k = j + 1; k < I[i].size(); k++) {
+        c = c + exp(-abs(I[i][j] - I[i][k])/L0);
+      }
+    }
+    N += I[i].size();
   }
   double df = N*(1 - (2.0/(N*(N-1)))*c);
 

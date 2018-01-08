@@ -180,7 +180,12 @@ void ConFind::cache(Structure& S) {
 }
 
 mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cacheB, bool checkNeighbors) {
-  if ((degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end())) return degrees[resA][resB];
+  bool updateA = (updateCollProb.find(resA) != updateCollProb.end()) && updateCollProb[resA];
+  bool updateB = (updateCollProb.find(resB) != updateCollProb.end()) && updateCollProb[resB];
+  // if collision probabilities need to be updated, then go into CD calculation even if value already available
+  if ((degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end()) && !updateA && !updateB) {
+    return degrees[resA][resB];
+  }
   if (cacheA) cache(resA);
   if (cacheB) cache(resB);
   if (checkNeighbors && !areNeighbors(resA, resB)) return 0;
@@ -199,8 +204,6 @@ mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool c
     rotamerID* rID = cloudA->getPointTag(ai);
     for (int i = 0; i < p.size(); i++) clashing[rID][p[i]] = true;
   }
-  bool updateA = (updateCollProb.find(resA) != updateCollProb.end()) && updateCollProb[resA];
-  bool updateB = (updateCollProb.find(resB) != updateCollProb.end()) && updateCollProb[resB];
 
   // compute contact degree
   mstreal cd = 0;
@@ -376,8 +379,10 @@ vector<mstreal> ConFind::getFreedom(vector<Residue*>& residues) {
 
 mstreal ConFind::computeFreedom(Residue* res) {
   if (freedom.find(res) != freedom.end()) return freedom[res];
-  if (collProb.find(res) == collProb.end())
-    MstUtils::error("residue not cached " + MstUtils::toString(res), "ConFind::computeFreedom");
+  if (collProb.find(res) == collProb.end()) {
+cout << "in structure: " << res->getStructure()->getName() << ", residue " << *res << endl;
+    MstUtils::error("residue not cached", "ConFind::computeFreedom");
+  }
 
   // rotamers are in this map only if they do actually collide, so those that
   // do not collide with anything thus can be assumed to have zero collision probability mass

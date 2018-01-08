@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
       if (P.residueSize() != C.residueSize()) {
         cout << pdbFiles[i] << ", had " << P.residueSize() << " residues, and " << C.residueSize() << " residues after cleaning..." << endl;
       }
-      P = C;
+      C.setName(P.getName()); P = C;
     }
     S.addTarget(P);
     // compute and add some properties

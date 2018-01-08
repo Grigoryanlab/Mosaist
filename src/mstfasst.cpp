@@ -672,7 +672,7 @@ fasstSolutionSet FASST::search() {
       } else {
         // if at the lowest recursion level already, then record the solution
         fasstSolution sol(currAlignment, sqrt(currResidual/querySize), currentTarget, currentTransform(), segLen, qSegOrd);
-        if (redundancyCut < 1) addSequenceContext(sol, currentTarget, contextLength);
+        if (redundancyCut < 1) addSequenceContext(sol, contextLength);
         solutions.insert(sol, redundancyCut);
         if (isSufficientNumMatchesSet() && solutions.size() == suffNumMatches) return solutions;
         if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
@@ -922,7 +922,8 @@ string FASST::toString(const fasstSolution& sol) {
   return ss.str();
 }
 
-void FASST::addSequenceContext(fasstSolution& sol, int currentTarget, int contextLength) {
+void FASST::addSequenceContext(fasstSolution& sol, int contextLength) {
+  int currentTarget = sol.getTargetIndex();
   Sequence& targSeq = targSeqs[currentTarget];
   vector<int> alignment = sol.getAlignment();
   vector<Sequence> segs(sol.numSegments()), ntPad(sol.numSegments()), ctPad(sol.numSegments());
@@ -998,14 +999,14 @@ fasstSolutionSet& fasstSolutionSet::operator=(const fasstSolutionSet& sols) {
 bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
   // apply a redudancy filter, if needed
   if ((redundancyCut < 1) && sol.seqContextDefined()) {
-    vector<Sequence> segSeqs = sol.segmentSeqs();
-    vector<Sequence> nTermPad = sol.nTermContext();
-    vector<Sequence> cTermPad = sol.cTermContext();
+    const vector<Sequence>& segSeqs = sol.segmentSeqs();
+    const vector<Sequence>& nTermPad = sol.nTermContext();
+    const vector<Sequence>& cTermPad = sol.cTermContext();
     // compare this solution to each previously accepted solution
     for (auto psol = solsSet.begin(); psol != solsSet.end(); ) {
-      vector<Sequence> segSeqsPrev = psol->segmentSeqs();
-      vector<Sequence> nTermPadPrev = psol->nTermContext();
-      vector<Sequence> cTermPadPrev = psol->cTermContext();
+      const vector<Sequence>& segSeqsPrev = psol->segmentSeqs();
+      const vector<Sequence>& nTermPadPrev = psol->nTermContext();
+      const vector<Sequence>& cTermPadPrev = psol->cTermContext();
       // compare the contexts of each segment:
       bool psolStays = true;
       for (int i = 0; i < sol.numSegments(); i++) {
