@@ -25,12 +25,30 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
   if (!params.isStartingStructureGiven()) {
     fused.appendChain("A", true);
     for (int i = 0; i < resTopo.size(); i++) {
-      if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("position index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
+      // if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("position index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
       if (resTopo[i].size() == 0) MstUtils::error("position index " + MstUtils::toString(i) + " has not overlapping residues in the specified topology", "fusionEvaluator::fusionEvaluator");
       Residue* res = new Residue(resTopo[i][0]->getName(), 1);
       fused[0].appendResidue(res);
       for (int j = 0; j < bba.size(); j++) {
-        CartesianPoint m = atomInstances(i, bba[j]).getGeometricCenter();
+        /* I previously disallowed multiple residues to be aligned in fixed
+         * positions in the topology. BUT, it turns out this can be quite useful.
+         * For example, if we have residues 3 and 4 fixed, we may still want to
+         * have a fragment covering [2, 3, 4] and another one covering [3, 4, 5],
+         * because those fragments would consrain geometries between residues 2
+         * and 3 and residues 4 and 5. Sure, 3 and 4 could not move and so could
+         * not lower the RMSD score themselves. BUT, 2 and 5 can move and would
+         * affect the RMSDs arising from the above fragments. So, since allowing
+         * multiple residues aligned onto fixed topology positions does make
+         * sense, we have to decide how to initialize the coordinates of these
+         * fixed positions. If we take the usual average, then it is difficult
+         * for the user to specify what exactly these positions should be fixed
+         * to (specifying this via the average would be awkward for the user). So
+         * here I decided to adopt a convention, where for fixed positions the
+         * coordinates would be initialized from the FIRST available residue.
+         * The first one always exists, even if only one residue is aligned. And
+         * it is also relatively simple to use the first residue at fixed positions
+         * as a way of communicating the fixed coordinates. */
+        CartesianPoint m = fixed[i] ? atomInstances(i, bba[j])[0] : atomInstances(i, bba[j]).getGeometricCenter();
         res->appendAtom(new Atom(1, bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
       }
     }
@@ -366,15 +384,17 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point, Vector& grad) {
   eval(point);
   grad = gradient;
   // numerical test of the gradient
-  if (0) {
-    Vector fdGrad = finiteDifferenceGradient(point, vector<mstreal>(point.size(), 10E-4));
+  if (false) {
+    Vector fdGrad = finiteDifferenceGradient(point, vector<mstreal>(point.size(), 10E-5));
     mstreal diff = (grad - fdGrad).norm();
     if (diff > grad.norm()*10E-5) {
       cout << "comparison FAILED:\n";
       for (int i = 0; i < grad.length(); i++) {
         cout << grad[i] << " " << fdGrad[i] << endl;
       }
-      cout << "norm difference: " << diff << endl;
+      cout << "norm difference: " << diff << " (" << 100.0*diff/(0.5*(grad.norm() + fdGrad.norm())) << " %%)" << endl;
+    } else {
+      cout << "comparison SUCCEEDED\n";
     }
   }
   return score;
@@ -398,8 +418,9 @@ void fusionEvaluator::scoreIC(const icBound& b) {
   mstreal del = 0.0, f, *comp;
   switch (b.type) {
     case icDihedral: {
-      if (CartesianGeometry::angleDiffCCW(b.minVal, val) > CartesianGeometry::angleDiffCCW(b.maxVal, val)) return;
-      del = MstUtils::min(fabs(CartesianGeometry::angleDiff(b.minVal, val)), fabs(CartesianGeometry::angleDiff(b.maxVal, val)));
+      if (CartesianGeometry::angleDiffCCW(b.minVal, val) < CartesianGeometry::angleDiffCCW(b.maxVal, val)) {
+        del = MstUtils::min(fabs(CartesianGeometry::angleDiff(b.minVal, val)), fabs(CartesianGeometry::angleDiff(b.maxVal, val)));
+      }
       f = params.getDihedralFC(); comp = &dihePenalty;
       break;
     }
@@ -453,6 +474,12 @@ void fusionEvaluator::scoreRMSD() {
   RMSDCalculator rms;
   rmsdScore = 0; int N = 0;
   vector<mstreal> innerGradient;
+  // vector<mstreal> weights(alignedFrags.size(), 1.0);
+  // if (params.weighEquivalentFrags) { // average scores between fragments that cover the same exact residues
+  //   map<AtomPointerVector, int> numOcc;
+  //   for (int i = 0; i < alignedFrags.size(); i++) numOcc[alignedFrags[i]]++;
+  //   for (int i = 0; i < alignedFrags.size(); i++) weights[i] = 1.0/numOcc[alignedFrags[i]];
+  // }
   for (int i = 0; i < alignedFrags.size(); i++) {
     innerGradient.resize(alignedFrags[i].first.size()*3, 0.0);
     mstreal r = rms.qcpRMSDGrad(alignedFrags[i].first, alignedFrags[i].second, innerGradient);
@@ -466,7 +493,7 @@ void fusionEvaluator::scoreRMSD() {
       for (int d = 0; d < 3; d++) {
         map<int, mstreal> parts = gradOfXYZ.getPartials(alignedFrags[i].first[ai], d);
         for (auto it = parts.begin(); it != parts.end(); ++it) {
-          gradient[it->first] += 2 * r * innerGradient[j] * it->second;
+          gradient[it->first] += 2 * r * alignedFrags[i].first.size() * innerGradient[j] * it->second;
         }
         j++;
       }

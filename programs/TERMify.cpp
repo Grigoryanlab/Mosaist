@@ -15,6 +15,13 @@
 using namespace std;
 using namespace MST;
 
+bool isFoundWithin(const vector<int>& avec, const set<int>& aset) {
+  for (int i = 0; i < avec.size(); i++) {
+    if (aset.find(avec[i]) != aset.end()) return true;
+  }
+  return false;
+}
+
 mstreal getRadius(const Structure& S) {
   selector sel(S);
   AtomPointerVector atoms = sel.select("name N or name CA or name C or name O");
@@ -85,10 +92,12 @@ int main(int argc, char** argv) {
   op.addOption("o", "output base name.", true);
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
   op.addOption("cyc", "number of iteration cycles (10 by default).");
+  op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
   op.setOptions(argc, argv);
   RMSDCalculator rc;
   Structure I(op.getString("p"));
   FASST F;
+  vector<int> fixed; set<int> fixedSet;
   F.setMemorySaveMode(true);
   if (op.isGiven("d")) {
     F.addTargets(MstUtils::fileToArray(op.getString("d")));
@@ -100,6 +109,10 @@ int main(int argc, char** argv) {
   } else {
     MstUtils::error("either --b or --d must be given!");
   }
+  if (op.isGiven("f")) {
+    fixed = MstUtils::splitToInt(op.getString("f"));
+  }
+  for (int i = 0; i < fixed.size(); i++) fixedSet.insert(fixed[i]);
   F.pruneRedundancy(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
@@ -120,6 +133,8 @@ int main(int argc, char** argv) {
     // first self TERMs
     cout << "Searching for self TERMs..." << endl;
     vector<vector<Residue*> > resTopo(I.residueSize());
+    // by inserting the starting structure into the topology first, any fixed
+    // regions will be fixed to these starting coordinates
     for (int ri = 0; ri < S.residueSize(); ri++) resTopo[ri].push_back(&(S.getResidue(ri)));
     vector<Structure*> allMatches;
     for (int ci = 0; ci < S.chainSize(); ci++) {
@@ -165,7 +180,7 @@ int main(int argc, char** argv) {
 
     opts.setCompRad(compactnessRadius);
     cout << "will be trying to combine structure to a radius of " << compactnessRadius << endl;
-    Structure fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);
+    Structure fused = Fuser::fuse(resTopo, scores, fixed, opts);
     cout << "\t" << scores << endl;
     // opts.setStartingStructure(fused);
     // opts.setGradientDescentFlag(false);

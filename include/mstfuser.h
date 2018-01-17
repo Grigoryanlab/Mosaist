@@ -249,8 +249,9 @@ class fusionEvaluator: public optimizerEvaluator {
 
     /* A list of aligned bits between the fused structure and the overlapping
      * fragments. alignedFrags[i] is a pair of AtomPointerVectors, representing
-     * atoms on the fused structure and corresponding atoms on some relevant
-     * fragment, respectively. */
+     * atoms on the fused structure (in alignedFrags[i].first) and corresponding
+     * atoms on some relevant (in alignedFrags[i].secnond) fragment,
+     * respectively. */
     vector<pair<AtomPointerVector, AtomPointerVector> > alignedFrags;
 
     vector<mstreal> initPoint;

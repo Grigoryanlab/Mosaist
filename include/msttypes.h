@@ -491,7 +491,7 @@ class CartesianGeometry {
 
     /* Tests implementation of analytical gradients of bond, angle, and dihedral
      * using finite difference for comparison. */
-    static bool testPrimitiveGradients();
+    static bool testPrimitiveGradients(bool radians = false);
 };
 
 class AtomPointerVector : public vector<Atom*> {
@@ -800,6 +800,8 @@ class MstUtils {
     static MST::mstreal sign(MST::mstreal val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
+    static vector<MST::mstreal> splitToReal(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = false);
+    static vector<int> splitToInt(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = false);
     static string join(const string& delim, const vector<string>& words);
     static string readNullTerminatedString(fstream& ifs);
     static string getDate();

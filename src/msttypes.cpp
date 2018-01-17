@@ -1494,8 +1494,8 @@ pair<mstreal, mstreal> CartesianGeometry::angleRange(const vector<mstreal>& angl
   for (int minInd = 0; minInd < angles.size(); minInd++) {
     int maxInd = 0; double arc = 0;
     for (int j = 0; j < angles.size(); j++) {
-      if (CartesianGeometry::angleDiffCCW(angles[j], angles[minInd]) > arc) {
-        arc = CartesianGeometry::angleDiffCCW(angles[j], angles[minInd]);
+      if (CartesianGeometry::angleDiffCCW(angles[j], angles[minInd], radians) > arc) {
+        arc = CartesianGeometry::angleDiffCCW(angles[j], angles[minInd], radians);
         maxInd = j;
       }
     }
@@ -1540,7 +1540,6 @@ mstreal CartesianGeometry::distance(const CartesianPoint& atom1, const Cartesian
 // see derivation in http://grigoryanlab.org/docs/dynamics_derivatives.pdf
 template <class T>
 mstreal CartesianGeometry::angle(const CartesianPoint& atom1, const CartesianPoint& atom2, const CartesianPoint& atom3, T& grad, bool radians) {
-  mstreal f = (radians ? 1.0 : 180.0/M_PI);
   mstreal x12 = atom1.getX() - atom2.getX();
   mstreal y12 = atom1.getY() - atom2.getY();
   mstreal z12 = atom1.getZ() - atom2.getZ();
@@ -1556,6 +1555,7 @@ mstreal CartesianGeometry::angle(const CartesianPoint& atom1, const CartesianPoi
   }
   mstreal p = x12*x32 + y12*y32 + z12*z32;
   mstreal d = p/(L1*L2);
+  mstreal an = acos(d);
   if (MstUtils::closeEnough(fabs(d), 1.0)) {
     // signs are arbitrary in this case (set to + by convention)
     grad[0] = (sqrt(y12*y12 + z12*z12)/L1)/L1;
@@ -1566,7 +1566,7 @@ mstreal CartesianGeometry::angle(const CartesianPoint& atom1, const CartesianPoi
     grad[8] = (sqrt(x32*x32 + y32*y32)/L2)/L2;
   } else {
     mstreal L12 = L1*L2;
-    mstreal C = -f/(sqrt(1 - d*d)*L12*L12);
+    mstreal C = -1/(sqrt(1 - d*d)*L12*L12);
     mstreal pL12i = p*L1/L2;
     mstreal pL21i = p*L2/L1;
     grad[0] = C*(x32*L12 - pL21i*x12);
@@ -1582,7 +1582,13 @@ mstreal CartesianGeometry::angle(const CartesianPoint& atom1, const CartesianPoi
   grad[3] = -(grad[0] + grad[6]);
   grad[4] = -(grad[1] + grad[7]);
   grad[5] = -(grad[2] + grad[8]);
-  return f*acos(d);
+
+  if (!radians) {
+    mstreal f = 180.0/M_PI;
+    d *= f;
+    for (int i = 0; i < grad.size(); i++) grad[i] *= f;
+  }
+  return an;
 }
 
 // see derivation in http://grigoryanlab.org/docs/dynamics_derivatives.pdf
@@ -1633,7 +1639,7 @@ mstreal CartesianGeometry::dihedral(const CartesianPoint& atom1, const Cartesian
   return th;
 }
 
-bool CartesianGeometry::testPrimitiveGradients() {
+bool CartesianGeometry::testPrimitiveGradients(bool radians) {
   long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
   srand(x);
 
@@ -1668,16 +1674,16 @@ bool CartesianGeometry::testPrimitiveGradients() {
     }
 
     // test angle derivatives
-    CartesianGeometry::angle(P[0], P[1], P[2], angleGrad);
-    angleGradFD[0] = CartesianGeometry::angle(P[0] + CartesianPoint(del, 0, 0), P[1], P[2]) - CartesianGeometry::angle(P[0] - CartesianPoint(del, 0, 0), P[1], P[2]);
-    angleGradFD[1] = CartesianGeometry::angle(P[0] + CartesianPoint(0, del, 0), P[1], P[2]) - CartesianGeometry::angle(P[0] - CartesianPoint(0, del, 0), P[1], P[2]);
-    angleGradFD[2] = CartesianGeometry::angle(P[0] + CartesianPoint(0, 0, del), P[1], P[2]) - CartesianGeometry::angle(P[0] - CartesianPoint(0, 0, del), P[1], P[2]);
-    angleGradFD[3] = CartesianGeometry::angle(P[0], P[1] + CartesianPoint(del, 0, 0), P[2]) - CartesianGeometry::angle(P[0], P[1] - CartesianPoint(del, 0, 0), P[2]);
-    angleGradFD[4] = CartesianGeometry::angle(P[0], P[1] + CartesianPoint(0, del, 0), P[2]) - CartesianGeometry::angle(P[0], P[1] - CartesianPoint(0, del, 0), P[2]);
-    angleGradFD[5] = CartesianGeometry::angle(P[0], P[1] + CartesianPoint(0, 0, del), P[2]) - CartesianGeometry::angle(P[0], P[1] - CartesianPoint(0, 0, del), P[2]);
-    angleGradFD[6] = CartesianGeometry::angle(P[0], P[1], P[2] + CartesianPoint(del, 0, 0)) - CartesianGeometry::angle(P[0], P[1], P[2] - CartesianPoint(del, 0, 0));
-    angleGradFD[7] = CartesianGeometry::angle(P[0], P[1], P[2] + CartesianPoint(0, del, 0)) - CartesianGeometry::angle(P[0], P[1], P[2] - CartesianPoint(0, del, 0));
-    angleGradFD[8] = CartesianGeometry::angle(P[0], P[1], P[2] + CartesianPoint(0, 0, del)) - CartesianGeometry::angle(P[0], P[1], P[2] - CartesianPoint(0, 0, del));
+    CartesianGeometry::angle(P[0], P[1], P[2], angleGrad, radians);
+    angleGradFD[0] = CartesianGeometry::angle(P[0] + CartesianPoint(del, 0, 0), P[1], P[2], radians) - CartesianGeometry::angle(P[0] - CartesianPoint(del, 0, 0), P[1], P[2], radians);
+    angleGradFD[1] = CartesianGeometry::angle(P[0] + CartesianPoint(0, del, 0), P[1], P[2], radians) - CartesianGeometry::angle(P[0] - CartesianPoint(0, del, 0), P[1], P[2], radians);
+    angleGradFD[2] = CartesianGeometry::angle(P[0] + CartesianPoint(0, 0, del), P[1], P[2], radians) - CartesianGeometry::angle(P[0] - CartesianPoint(0, 0, del), P[1], P[2], radians);
+    angleGradFD[3] = CartesianGeometry::angle(P[0], P[1] + CartesianPoint(del, 0, 0), P[2], radians) - CartesianGeometry::angle(P[0], P[1] - CartesianPoint(del, 0, 0), P[2], radians);
+    angleGradFD[4] = CartesianGeometry::angle(P[0], P[1] + CartesianPoint(0, del, 0), P[2], radians) - CartesianGeometry::angle(P[0], P[1] - CartesianPoint(0, del, 0), P[2], radians);
+    angleGradFD[5] = CartesianGeometry::angle(P[0], P[1] + CartesianPoint(0, 0, del), P[2], radians) - CartesianGeometry::angle(P[0], P[1] - CartesianPoint(0, 0, del), P[2], radians);
+    angleGradFD[6] = CartesianGeometry::angle(P[0], P[1], P[2] + CartesianPoint(del, 0, 0), radians) - CartesianGeometry::angle(P[0], P[1], P[2] - CartesianPoint(del, 0, 0), radians);
+    angleGradFD[7] = CartesianGeometry::angle(P[0], P[1], P[2] + CartesianPoint(0, del, 0), radians) - CartesianGeometry::angle(P[0], P[1], P[2] - CartesianPoint(0, del, 0), radians);
+    angleGradFD[8] = CartesianGeometry::angle(P[0], P[1], P[2] + CartesianPoint(0, 0, del), radians) - CartesianGeometry::angle(P[0], P[1], P[2] - CartesianPoint(0, 0, del), radians);
 
     angleGradFD /= 2*del;
     if ((angleGrad - angleGradFD).norm() > tol) {
@@ -1688,19 +1694,19 @@ bool CartesianGeometry::testPrimitiveGradients() {
     }
 
     // test dihedral derivatives
-    CartesianGeometry::dihedral(P[0], P[1], P[2], P[3], diheGrad);
-    diheGradFD[0] = CartesianGeometry::dihedral(P[0] + CartesianPoint(del, 0, 0), P[1], P[2], P[3]) - CartesianGeometry::dihedral(P[0] - CartesianPoint(del, 0, 0), P[1], P[2], P[3]);
-    diheGradFD[1] = CartesianGeometry::dihedral(P[0] + CartesianPoint(0, del, 0), P[1], P[2], P[3]) - CartesianGeometry::dihedral(P[0] - CartesianPoint(0, del, 0), P[1], P[2], P[3]);
-    diheGradFD[2] = CartesianGeometry::dihedral(P[0] + CartesianPoint(0, 0, del), P[1], P[2], P[3]) - CartesianGeometry::dihedral(P[0] - CartesianPoint(0, 0, del), P[1], P[2], P[3]);
-    diheGradFD[3] = CartesianGeometry::dihedral(P[0], P[1] + CartesianPoint(del, 0, 0), P[2], P[3]) - CartesianGeometry::dihedral(P[0], P[1] - CartesianPoint(del, 0, 0), P[2], P[3]);
-    diheGradFD[4] = CartesianGeometry::dihedral(P[0], P[1] + CartesianPoint(0, del, 0), P[2], P[3]) - CartesianGeometry::dihedral(P[0], P[1] - CartesianPoint(0, del, 0), P[2], P[3]);
-    diheGradFD[5] = CartesianGeometry::dihedral(P[0], P[1] + CartesianPoint(0, 0, del), P[2], P[3]) - CartesianGeometry::dihedral(P[0], P[1] - CartesianPoint(0, 0, del), P[2], P[3]);
-    diheGradFD[6] = CartesianGeometry::dihedral(P[0], P[1], P[2] + CartesianPoint(del, 0, 0), P[3]) - CartesianGeometry::dihedral(P[0], P[1], P[2] - CartesianPoint(del, 0, 0), P[3]);
-    diheGradFD[7] = CartesianGeometry::dihedral(P[0], P[1], P[2] + CartesianPoint(0, del, 0), P[3]) - CartesianGeometry::dihedral(P[0], P[1], P[2] - CartesianPoint(0, del, 0), P[3]);
-    diheGradFD[8] = CartesianGeometry::dihedral(P[0], P[1], P[2] + CartesianPoint(0, 0, del), P[3]) - CartesianGeometry::dihedral(P[0], P[1], P[2] - CartesianPoint(0, 0, del), P[3]);
-    diheGradFD[9] = CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] + CartesianPoint(del, 0, 0)) - CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] - CartesianPoint(del, 0, 0));
-    diheGradFD[10] = CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] + CartesianPoint(0, del, 0)) - CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] - CartesianPoint(0, del, 0));
-    diheGradFD[11] = CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] + CartesianPoint(0, 0, del)) - CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] - CartesianPoint(0, 0, del));
+    CartesianGeometry::dihedral(P[0], P[1], P[2], P[3], diheGrad, radians);
+    diheGradFD[0] =  CartesianGeometry::dihedral(P[0] + CartesianPoint(del, 0, 0), P[1], P[2], P[3], radians) - CartesianGeometry::dihedral(P[0] - CartesianPoint(del, 0, 0), P[1], P[2], P[3], radians);
+    diheGradFD[1] =  CartesianGeometry::dihedral(P[0] + CartesianPoint(0, del, 0), P[1], P[2], P[3], radians) - CartesianGeometry::dihedral(P[0] - CartesianPoint(0, del, 0), P[1], P[2], P[3], radians);
+    diheGradFD[2] =  CartesianGeometry::dihedral(P[0] + CartesianPoint(0, 0, del), P[1], P[2], P[3], radians) - CartesianGeometry::dihedral(P[0] - CartesianPoint(0, 0, del), P[1], P[2], P[3], radians);
+    diheGradFD[3] =  CartesianGeometry::dihedral(P[0], P[1] + CartesianPoint(del, 0, 0), P[2], P[3], radians) - CartesianGeometry::dihedral(P[0], P[1] - CartesianPoint(del, 0, 0), P[2], P[3], radians);
+    diheGradFD[4] =  CartesianGeometry::dihedral(P[0], P[1] + CartesianPoint(0, del, 0), P[2], P[3], radians) - CartesianGeometry::dihedral(P[0], P[1] - CartesianPoint(0, del, 0), P[2], P[3], radians);
+    diheGradFD[5] =  CartesianGeometry::dihedral(P[0], P[1] + CartesianPoint(0, 0, del), P[2], P[3], radians) - CartesianGeometry::dihedral(P[0], P[1] - CartesianPoint(0, 0, del), P[2], P[3], radians);
+    diheGradFD[6] =  CartesianGeometry::dihedral(P[0], P[1], P[2] + CartesianPoint(del, 0, 0), P[3], radians) - CartesianGeometry::dihedral(P[0], P[1], P[2] - CartesianPoint(del, 0, 0), P[3], radians);
+    diheGradFD[7] =  CartesianGeometry::dihedral(P[0], P[1], P[2] + CartesianPoint(0, del, 0), P[3], radians) - CartesianGeometry::dihedral(P[0], P[1], P[2] - CartesianPoint(0, del, 0), P[3], radians);
+    diheGradFD[8] =  CartesianGeometry::dihedral(P[0], P[1], P[2] + CartesianPoint(0, 0, del), P[3], radians) - CartesianGeometry::dihedral(P[0], P[1], P[2] - CartesianPoint(0, 0, del), P[3], radians);
+    diheGradFD[9] =  CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] + CartesianPoint(del, 0, 0), radians) - CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] - CartesianPoint(del, 0, 0), radians);
+    diheGradFD[10] = CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] + CartesianPoint(0, del, 0), radians) - CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] - CartesianPoint(0, del, 0), radians);
+    diheGradFD[11] = CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] + CartesianPoint(0, 0, del), radians) - CartesianGeometry::dihedral(P[0], P[1], P[2], P[3] - CartesianPoint(0, 0, del), radians);
     diheGradFD /= 2*del;
     if ((diheGrad - diheGradFD).norm() > tol) {
       cout << "test FAILED for dihedral gradient, point set: " << MstUtils::vecToString(P, " | ") << endl;
@@ -3165,6 +3171,20 @@ vector<string> MstUtils::split(const string& str, string delimiters, bool skipTr
   vector<string> tokens;
   while (!strCopy.empty()) tokens.push_back(nextToken(strCopy, delimiters, skipTrailingDelims));
   return tokens;
+}
+
+vector<MST::mstreal> MstUtils::splitToReal(const string& str, string delimiters, bool skipTrailingDelims, bool strict) {
+  vector<string> tokens = MstUtils::split(str, delimiters, skipTrailingDelims);
+  vector<MST::mstreal> vec(tokens.size());
+  for (int i = 0; i < tokens.size(); i++) vec[i] = MstUtils::toReal(tokens[i], strict);
+  return vec;
+}
+
+vector<int> MstUtils::splitToInt(const string& str, string delimiters, bool skipTrailingDelims, bool strict) {
+  vector<string> tokens = MstUtils::split(str, delimiters, skipTrailingDelims);
+  vector<int> vec(tokens.size());
+  for (int i = 0; i < tokens.size(); i++) vec[i] = MstUtils::toInt(tokens[i], strict);
+  return vec;
 }
 
 string MstUtils::join(const string& delim, const vector<string>& words) {
