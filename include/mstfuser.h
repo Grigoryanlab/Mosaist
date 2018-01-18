@@ -17,6 +17,7 @@ class fusionParams {
       verbose = false;
       optimCartesian = true;
       gradDescent = true;
+      normRMSD = true;
       noise = 0;
       Ni = 100;
       Nc = 1;
@@ -45,6 +46,8 @@ class fusionParams {
     bool useGradientDescent() const { return gradDescent; }
     Structure getStartingStructure() const { return startStruct; }
     bool isStartingStructureGiven() const { return (startStruct.chainSize() != 0); }
+    bool normalizeRMSD() const { return normRMSD; }
+    bool fragRedundancyWeighting() const { return fragRedWeighting; }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }
@@ -61,12 +64,14 @@ class fusionParams {
     void setCompRad(mstreal _r) { Rcomp = _r; }
     void setGradientDescentFlag(bool _f) { gradDescent = _f; }
     void setStartingStructure(const Structure& _S) { startStruct = _S; }
+    void setNormalizeRMSD(bool flag) { normRMSD = flag; }
+    void setFragRedundancyWeighting(bool flag) { fragRedWeighting = flag; }
 
   private:
     // start optimization from the averaged Cartesian structure or the structure
     // that results from average internal coordinates?
     fusionParams::coorInitType startType;
-    bool verbose, optimCartesian, gradDescent;
+    bool verbose, optimCartesian, gradDescent, normRMSD, fragRedWeighting;
     mstreal noise; // noise level for initalizing the starting point
     int Ni, Nc;    // number of iterations per cycle and number of cycles
     mstreal tol;   // error tolerance stopping criterion for optimization
