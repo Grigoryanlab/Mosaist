@@ -15,12 +15,23 @@
 using namespace std;
 using namespace MST;
 
-bool isFoundWithin(const vector<int>& avec, const set<int>& aset) {
-  for (int i = 0; i < avec.size(); i++) {
-    if (aset.find(avec[i]) != aset.end()) return true;
+AtomPointerVector getBackbone(const Structure& S, vector<int> residues) {
+  AtomPointerVector atoms;
+  vector<string> bba = {"N", "CA", "C", "O"};
+  for (int i = 0; i < residues.size(); i++) {
+    Residue& res = S.getResidue(residues[i]);
+    for (int j = 0; j < bba.size(); j++) {
+      atoms.push_back(res.findAtom(bba[j]));
+    }
   }
-  return false;
+  return atoms;
 }
+// bool isFoundWithin(const vector<int>& avec, const set<int>& aset) {
+//   for (int i = 0; i < avec.size(); i++) {
+//     if (aset.find(avec[i]) != aset.end()) return true;
+//   }
+//   return false;
+// }
 
 mstreal getRadius(const Structure& S) {
   selector sel(S);
@@ -97,7 +108,7 @@ int main(int argc, char** argv) {
   RMSDCalculator rc;
   Structure I(op.getString("p"));
   FASST F;
-  vector<int> fixed; set<int> fixedSet;
+  vector<int> fixed; //set<int> fixedSet;
   F.setMemorySaveMode(true);
   if (op.isGiven("d")) {
     F.addTargets(MstUtils::fileToArray(op.getString("d")));
@@ -112,7 +123,7 @@ int main(int argc, char** argv) {
   if (op.isGiven("f")) {
     fixed = MstUtils::splitToInt(op.getString("f"));
   }
-  for (int i = 0; i < fixed.size(); i++) fixedSet.insert(fixed[i]);
+  // for (int i = 0; i < fixed.size(); i++) fixedSet.insert(fixed[i]);
   F.pruneRedundancy(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
@@ -186,6 +197,13 @@ int main(int argc, char** argv) {
     // opts.setGradientDescentFlag(false);
     // fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);
     // cout << "\t" << scores << endl;
+
+    // align based on the fixed part, if anything was fixed (for ease of visualization)
+    if (fixed.size() > 0) {
+      AtomPointerVector before = getBackbone(S, fixed);
+      AtomPointerVector after = getBackbone(fused, fixed);
+      rc.align(after, before, fused);
+    }
 
     /* --- write intermediate result and clean up--- */
     fused.writePDB(out); out << "ENDMDL" << endl;
