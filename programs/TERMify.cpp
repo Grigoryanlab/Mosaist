@@ -67,6 +67,7 @@ void selectAround(const vector<Residue*>& cenRes, int pm, Structure& frag, vecto
 }
 
 void addMatches(FASST& F, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo) {
+//frag.writePDB("/tmp/pair.pdb"); cout << "fragment saved, RMSD = " << RMSDCalculator::rmsdCutoff(frag) << endl;
   F.setQuery(frag, false);
   F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
   F.setMaxNumMatches(10);

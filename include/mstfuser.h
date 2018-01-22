@@ -17,7 +17,7 @@ class fusionParams {
       verbose = false;
       optimCartesian = true;
       gradDescent = true;
-      normRMSD = true;
+      normRMSD = true; fragRedWeighting = false;
       noise = 0;
       Ni = 100;
       Nc = 1;

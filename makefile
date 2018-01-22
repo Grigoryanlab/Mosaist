@@ -64,7 +64,7 @@ test_DEPS				:= msttypes
 testAutofuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testConFind_DEPS		:= mstcondeg mstoptions mstrotlib mstsystem msttransforms msttypes
 testClusterer_DEPS		:= mstoptions msttypes
-testFASST_DEPS			:= testFASST mstfasst mstoptions mstsequence msttransforms msttypes
+testFASST_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 testFuser_DEPS			:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testGrads_DEPS			:= msttypes
 testRotlib_DEPS			:= mstrotlib msttransforms msttypes
@@ -158,33 +158,41 @@ $(BIN_FILES): | $(BIND)
 # recipes to compile object files (targets, helpers, and boost.python)
 COMPILE_OBJ = $(CC) $(FLAGS) -c -o $@ $(INC) $(LIB) $<
 
-$(OBJD)/%.o: $(SRCD)/%.cpp $(INCD)/%.h
+$(OBJD)/%.o: $(SRCD)/%.cpp $(INCD)/%.h | $(OBJD)
 	$(COMPILE_OBJ)
-$(OBJD)/%.o: $(TESTD)/%.cpp
-	$(COMPILE_OBJ)
-$(OBJD)/%.o: $(PROGRAMD)/%.cpp
-	$(COMPILE_OBJ)
-$(OBJD)/mstpython.o: $(SRCD)/mstpython.cpp
+$(OBJD)/mstpython.o: $(SRCD)/mstpython.cpp | $(OBJD)
 	$(CC) $(PYFLAGS) -c -o $@ $<
 
 # secondary expansion is used to specify each target/library's dependencies
 #	specifically, "$(LIBD)/%.a: $$($$*_DEPS)" specifies that the library named $lib depends on what's stored in a variable named $lib_DEPS
 #	each $lib_DEPS contains the names of the dependencies of $lib
-#	to get the files, the function DEP_FILE_MAP (defined below) maps each name to its corresponding file
+#	to get the files, the functions DEP_HEADER_FILE_MAP and DEP_OBJ_FILE_MAP (defined below) map each name to its corresponding header and object file, respectively
 #	this kind of variable substitution requires two passes (since $* is not defined yet on the first pass through)
 .SECONDEXPANSION:
 
-DEP_FILE_MAP = $(patsubst %, $(OBJD)/%.o, $1)
+# maps from each dependency name to its respective header or object file
+DEP_HEADER_FILE_MAP = $(patsubst %, $(INCD)/%.h, $1)
+DEP_OBJ_FILE_MAP = $(patsubst %, $(OBJD)/%.o, $1)
+
+# recipes to compile objects
+$(OBJD)/%.o: $(TESTD)/%.cpp $$(foreach dep, $$($$*_DEPS), $$(call DEP_HEADER_FILE_MAP, $$(dep))) | $(OBJD)
+	$(COMPILE_OBJ)
+$(OBJD)/%.o: $(PROGRAMD)/%.cpp $$(foreach dep, $$($$*_DEPS), $$(call DEP_HEADER_FILE_MAP, $$(dep))) | $(OBJD)
+	$(COMPILE_OBJ)
 
 # recipes to compile libraries
-$(LIBD)/%.a: $$(foreach dep, $$($$*_DEPS), $$(call DEP_FILE_MAP, $$(dep))) | $(LIBD)
-	ar rs $(LIBD)/$*.a $^
+COMPILE_LIB = ar rs $(LIBD)/$*.a $^
+
+$(LIBD)/%.a: $$(foreach dep, $$($$*_DEPS), $$(call DEP_OBJ_FILE_MAP, $$(dep))) | $(LIBD)
+	$(COMPILE_LIB)
 $(LIBD)/mstpython.so: $(OBJD)/mstpython.o
 	$(CC) $(PYLIB) -Wl,-rpath,$(PYLIB_PATH) -shared -o $@ $<
 
 # recipe to compile targets
-$(BIND)/%: $(OBJD)/%.o $$(foreach dep, $$($$*_DEPS), $$(call DEP_FILE_MAP, $$(dep))) | $(BIND)
-	$(CC) $(FLAGS) -o $@ $(INC) $(LIB) $^
+COMPILE_BIN = $(CC) $(FLAGS) -o $@ $(INC) $(LIB) $^
+
+$(BIND)/%: $(OBJD)/%.o $$(foreach dep, $$($$*_DEPS), $$(call DEP_OBJ_FILE_MAP, $$(dep))) | $(BIND)
+	$(COMPILE_BIN)
 
 # recipes that map names to literal files
 $(DEPS): $(OBJD)/$$@.o

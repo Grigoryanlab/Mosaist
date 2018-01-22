@@ -2888,9 +2888,9 @@ bool ProximitySearch::isPointWithinGrid(CartesianPoint _p) {
 }
 
 void ProximitySearch::pointBucket(mstreal px, mstreal py, mstreal pz, int* i, int* j, int* k) {
-  *i = (int) floor((px - xlo)/xbw + 0.5);
-  *j = (int) floor((py - ylo)/ybw + 0.5);
-  *k = (int) floor((pz - zlo)/zbw + 0.5);
+  *i = int((px - xlo)/xbw + 0.5);
+  *j = int((py - ylo)/ybw + 0.5);
+  *k = int((pz - zlo)/zbw + 0.5);
 }
 
 void ProximitySearch::limitIndex(int *ind) {

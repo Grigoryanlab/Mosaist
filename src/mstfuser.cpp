@@ -472,33 +472,39 @@ void fusionEvaluator::scoreIC(const icBound& b) {
 
 void fusionEvaluator::scoreRMSD() {
   RMSDCalculator rms;
-  rmsdScore = 0; int N = 0;
+  rmsdScore = rmsdTot = 0; int N = 0;
   vector<mstreal> innerGradient;
   vector<mstreal> weights(alignedFrags.size(), 1.0);
   if (params.fragRedundancyWeighting()) { // down-weight RMSD contributions from regions with many overlapped fragments
-    map<Residue*, int> numOcc;
+    map<Residue*, int> numOcc; // proportional to the number of times each residue is overlapped
     for (int i = 0; i < alignedFrags.size(); i++) {
       AtomPointerVector& atoms = alignedFrags[i].first;
+      // easier to iterate over atoms, so numOcc[res] is not exactly the number
+      // of res' occurances, but proportional to it
       for (int j = 0; j < atoms.size(); j++) numOcc[atoms[j]->getResidue()]++;
     }
     mstreal C = 0; // normalization constant
     for (int i = 0; i < alignedFrags.size(); i++) {
-      int N = 0;
+      int T = 0;
       AtomPointerVector& atoms = alignedFrags[i].first;
-      for (int j = 0; j < atoms.size(); j++) N += numOcc[atoms[j]->getResidue()];
-      weights[i] = 1.0/N;
-      C += 1.0/N;
+      for (int j = 0; j < atoms.size(); j++) T += numOcc[atoms[j]->getResidue()];
+      weights[i] = 1.0/T;
+      C += 1.0/T;
     }
+    // the sum of the weights stays the same (alignedFrags.size()), but they get redistributed
     for (int i = 0; i < alignedFrags.size(); i++) weights[i] = weights[i]*(alignedFrags.size())/C;
   }
   if (params.normalizeRMSD()) { // score per-fragment residual, not total residual
-    for (int i = 0; i < alignedFrags.size(); i++) weights[i] /= alignedFrags.size();
+    int N = 0;
+    for (int i = 0; i < alignedFrags.size(); i++) N += alignedFrags[i].first.size();
+    for (int i = 0; i < alignedFrags.size(); i++) weights[i] *= (1.0*numMobileAtoms)/N;
   }
   for (int i = 0; i < alignedFrags.size(); i++) {
     innerGradient.resize(alignedFrags[i].first.size()*3, 0.0);
     mstreal r = rms.qcpRMSDGrad(alignedFrags[i].first, alignedFrags[i].second, innerGradient);
     // mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
     rmsdScore += weights[i] * r * r * alignedFrags[i].first.size();
+    rmsdTot += r * r * alignedFrags[i].first.size();
     N += alignedFrags[i].first.size();
 
     // gradient of RMSD
@@ -514,8 +520,8 @@ void fusionEvaluator::scoreRMSD() {
     }
   }
   score += rmsdScore;
-  rmsdTot = sqrt(rmsdScore/N);
-  if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (total RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
+  rmsdTot = sqrt(rmsdTot/N);
+  if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (overall RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
 }
 
 fusionScores fusionEvaluator::getScores() {

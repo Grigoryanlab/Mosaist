@@ -468,12 +468,15 @@ void FASST::prepForSearch(int ti) {
     AtomPointerVector& seg = query[i];
     int Na = atomToResIdx(target.size()) - atomToResIdx(seg.size()) + 1; // number of possible alignments
     segmentResiduals[i].resize(MstUtils::max(Na, 0));
+    AtomPointerVector targSeg(query[i].size(), NULL);
     for (int j = 0; j < Na; j++) {
       // NOTE: can save on this in several ways:
       // 1. the centroid calculation is effectively already done inside RMSDCalculator::bestRMSD
       // 2. updating just one atom involves a simple centroid adjustment, rather than recalculation
       // 3. is there a speedup to be gained from re-calculating RMSD with one atom updated only?
-      AtomPointerVector targSeg = target.subvector(resToAtomIdx(j), resToAtomIdx(j) + query[i].size());
+      int off = resToAtomIdx(j);
+      for (int k = 0; k < query[i].size(); k++) targSeg[k] = target[off + k];
+      // AtomPointerVector targSeg = target.subvector(resToAtomIdx(j), resToAtomIdx(j) + query[i].size());
       segmentResiduals[i][j] = RC.bestResidual(query[i], targSeg);
       targSeg.getGeometricCenter(xc, yc, zc);
       if (query.size() > 1) ps[i]->addPoint(xc, yc, zc, j);
