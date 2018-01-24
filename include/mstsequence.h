@@ -12,7 +12,6 @@ class Sequence {
     // allows one to mixes of 3- and 1-letter codes, with a delimiter
     Sequence(const string& _seq, const string& _name = "", const string& delim = "");
     Sequence(const Sequence& S);
-    ~Sequence() {}
 
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }

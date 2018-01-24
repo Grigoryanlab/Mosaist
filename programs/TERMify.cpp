@@ -140,12 +140,16 @@ fasstSolutionSet fasstCache::search() {
 
     // -- perform the search and cache
     matches = S->search();
-    fasstCachedResult result(S->getQuerySearchedAtoms(),
-                             new fasstSolutionSet(matches),
-                             matches.rbegin()->getRMSD(),
-                             fasstCache::getStructureTopology(S->getQuery()));
-    cache.insert(result);
-    if (cache.size() > maxNumResults) cache.erase(cache.begin()); // bump off the least used cached result if reached limit
+// fasstSolutionSet matches1 = S->getMatches();
+// for (int k = 0; k < matches.size(); k++) {
+//   cout << matches[k] << " vs " << matches1[k] << endl;
+// }
+    // fasstCachedResult result(S->getQuerySearchedAtoms(),
+    //                          new fasstSolutionSet(matches),
+    //                          matches.rbegin()->getRMSD(),
+    //                          topo);
+    // cache.insert(result);
+    // if (cache.size() > maxNumResults) cache.erase(cache.begin()); // bump off the least used cached result if reached limit
 
     // -- reset search setting to their old values
     if (redSet) S->pruneRedundancy(redCut);

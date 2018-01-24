@@ -1006,9 +1006,9 @@ fasstSolutionSet::fasstSolutionSet(const fasstSolution& sol) {
 }
 
 fasstSolutionSet& fasstSolutionSet::operator=(const fasstSolutionSet& sols) {
+  updated = false;
   solsSet.clear(); solsVec.clear();
-  for (auto it = sols.solsSet.begin(); it != sols.solsSet.end(); ++it) solsSet.insert(*it);
-  updated = (sols.solsSet.size() > 0);
+  for (auto it = sols.begin(); it != sols.end(); ++it) this->insert(*it);
   return *this;
 }
 
@@ -1099,9 +1099,11 @@ bool fasstSolutionSet::isWithinSeqID(int L0, mstreal cut, int numTot, int numID)
 }
 
 vector<fasstSolution*> fasstSolutionSet::orderByDiscovery() {
-  vector<fasstSolution*> sols;
-  sols.resize(solsSet.size(), NULL); int k = 0;
-  for (auto it = solsSet.begin(); it != solsSet.end(); ++it, ++k) sols[k] = (fasstSolution*) &(*it);
+  vector<fasstSolution*> sols(solsSet.size(), NULL);
+  int k = 0;
+  for (auto it = solsSet.begin(); it != solsSet.end(); ++it, ++k) {
+    sols[k] = (fasstSolution*) &(*it);
+  }
   sort(sols.begin(), sols.end(), fasstSolution::foundBefore);
   return sols;
 }
