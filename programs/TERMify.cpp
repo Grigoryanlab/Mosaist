@@ -15,6 +15,179 @@
 using namespace std;
 using namespace MST;
 
+class fasstCache {
+  public:
+    fasstCache(FASST* s) { S = s; maxNumResults = 1000; }
+    ~fasstCache();
+    FASST* getFASST() const { return S; }
+    fasstSolutionSet search();
+
+  protected:
+    static vector<int> getStructureTopology(const Structure& S) {
+      vector<int> topo(S.chainSize(), 0);
+      for (int i = 0; i < S.chainSize(); i++) topo[i] = S[i].residueSize();
+      return topo;
+    }
+
+  private:
+    class fasstCachedResult {
+      friend class fasstCache;
+      public:
+        fasstCachedResult() { rmsdCut = 0.0; solSet = NULL; priority = 0; }
+        fasstCachedResult(const AtomPointerVector& q, fasstSolutionSet* sols, mstreal cut, vector<int> topo) {
+          q.clone(query); rmsdCut = cut; solSet = sols; priority = 0; topology = topo;
+        }
+        fasstCachedResult(const fasstCachedResult& r) {
+          query = r.query; rmsdCut = r.rmsdCut; solSet = r.solSet; priority = r.priority; topology = r.topology;
+        }
+        void upPriority() { priority++; }
+
+        AtomPointerVector getQuery() const { return query; }
+        fasstSolutionSet* getSolutions() const { return solSet; }
+        mstreal getRMSDCutoff() const { return rmsdCut; }
+        int getPriority() const { return priority; }
+        vector<int> getTopology() const { return topology; }
+        bool isSameTopology(const vector<int>& compTopo) const {
+          if (topology.size() != compTopo.size()) return false;
+          for (int i = 0; i < topology.size(); i++) {
+            if (topology[i] != compTopo[i]) return false;
+          }
+          return true;
+        }
+
+        friend bool operator<(const fasstCachedResult& ri, const fasstCachedResult& rj) {
+          if (ri.priority != rj.priority) return (ri.priority < rj.priority);
+          if (ri.solSet->size() != rj.solSet->size()) return ri.solSet->size() < rj.solSet->size();
+          if (ri.query.size() != rj.query.size()) return ri.query.size() < rj.query.size();
+          return ri.query < rj.query;
+        }
+
+      private:
+        AtomPointerVector query;
+        vector<int> topology;
+        mstreal rmsdCut;
+        fasstSolutionSet* solSet;
+        int priority;
+    };
+    int maxNumResults; // max number of searches to cache
+    FASST* S;
+    set<fasstCachedResult> cache;
+    RMSDCalculator rc;
+};
+
+fasstCache::~fasstCache() {
+  for (auto it = cache.begin(); it != cache.end(); ++it) {
+    it->getQuery().deletePointers();
+    delete(it->getSolutions());
+  }
+}
+
+fasstSolutionSet fasstCache::search() {
+  int n;
+  if (S->isSufficientNumMatchesSet()) MstUtils::error("cannot cache when \"sufficient\" number of matches is set", "fasstCache::search");
+  mstreal cut = S->getRMSDCutoff();
+  fasstSolutionSet matches;
+
+  /* See whether all matches for the current query, within the given cutoff, are
+   * among the list of matches of some previously cached query. */
+  vector<int> topo = fasstCache::getStructureTopology(S->getQuery());
+  set<fasstCachedResult>::iterator bestComp = cache.end(); mstreal bestDist = -1;
+  for (auto it = cache.begin(); it != cache.end(); ++it) {
+    if (!it->isSameTopology(topo)) continue;
+    mstreal r = rc.bestRMSD(S->getQuerySearchedAtoms(), it->getQuery());
+    // if multiple cached options are available, pick the one with least extra
+    if (it->getRMSDCutoff() - r >= cut) {
+      if ((bestComp == cache.end()) || (bestDist > r)) {
+        bestComp = it; bestDist = r;
+      }
+    }
+  }
+  if (bestComp != cache.end()) {
+    // visit all matches of the most suitable cached result and find matches for current query
+    const fasstSolutionSet& sols = *(bestComp->getSolutions());
+    for (auto it = sols.begin(); it != sols.end(); ++it) {
+      Structure match;
+      S->getMatchStructure(*it, match, false, FASST::matchType::REGION, false);
+      if (rc.bestRMSD(S->getQuerySearchedAtoms(), match.getAtoms()) <= cut) {
+        matches.insert(*it);
+      }
+    }
+
+    // up the priority of this cached result
+    fasstCachedResult result(*bestComp);
+    result.upPriority();
+    cache.erase(bestComp); cache.insert(result);
+  }
+
+  /* If no suitable cached query was found OR if the best cached query did not
+   * provide sufficient matches to match the minimum cutoff, will need to
+   * initiate a new search, which will be cached. */
+  bool doNewSearch = (bestComp == cache.end()) || (S->isMinNumMatchesSet() && (matches.size() < S->getMinNumMatches()));
+  if (doNewSearch) {
+    // -- loosen search criteria a bit to extract maximal value from search
+    mstreal redCut; int maxN;
+    bool maxSet = S->isMaxNumMatchesSet();
+    bool redSet = S->isRedundancyCutSet();
+    if (maxSet) {
+      maxN = S->getMaxNumMatches();
+      S->setMaxNumMatches(MstUtils::max(int(maxN*2 + 1), maxN + 500));
+    }
+    if (redSet) {
+      redCut = S->getRedundancy();
+      S->pruneRedundancy(1.1); // set to a value above 1 in order to accumulate sequence context within solutions
+    }
+    S->setRMSDCutoff(1.1*cut);
+
+    // -- perform the search and cache
+    matches = S->search();
+    fasstCachedResult result(S->getQuerySearchedAtoms(),
+                             new fasstSolutionSet(matches),
+                             matches.rbegin()->getRMSD(),
+                             fasstCache::getStructureTopology(S->getQuery()));
+    cache.insert(result);
+    if (cache.size() > maxNumResults) cache.erase(cache.begin()); // bump off the least used cached result if reached limit
+
+    // -- reset search setting to their old values
+    if (redSet) S->pruneRedundancy(redCut);
+    S->setRMSDCutoff(cut);
+    if (maxSet) S->setMaxNumMatches(maxN);
+  }
+
+  /* At this point, matches stores raw search results, whether from an actual
+   * search or deduced from a previously cached result. But these may need to be
+   * filtered in some way, if various limits were set in the FASST object. */
+  // first, remove redundancy (in the same way it would be during the search)
+  if (S->isRedundancyCutSet()) {
+    fasstSolutionSet finalMatches;
+    vector<fasstSolution*> orderedMatches = matches.orderByDiscovery();
+    for (int i = 0; i < orderedMatches.size(); i++) {
+      fasstSolution& sol = *(orderedMatches[i]);
+      finalMatches.insert(sol,  S->getRedundancy());
+    }
+    matches = finalMatches;
+  }
+
+  // apply the RMSD filter if a looser raw search was run
+  if (doNewSearch) {
+    n = 0;
+    for (auto it = matches.begin(); it != matches.end(); ) {
+      if ((S->isMinNumMatchesSet() && (n < S->getMinNumMatches())) || (it->getRMSD() <= cut)) { n++; it++; }
+      else { it = matches.erase(it); }
+    }
+  }
+
+  // apply the max filter
+  if (S->isMaxNumMatchesSet()) {
+    if (matches.size() > S->getMaxNumMatches()) {
+      auto it = matches.begin(); advance(it, S->getMaxNumMatches());
+      while (it != matches.end()) it = matches.erase(it);
+    }
+  }
+
+  return matches;
+}
+
+
 AtomPointerVector getBackbone(const Structure& S, vector<int> residues) {
   AtomPointerVector atoms;
   vector<string> bba = {"N", "CA", "C", "O"};
@@ -66,17 +239,17 @@ void selectAround(const vector<Residue*>& cenRes, int pm, Structure& frag, vecto
   }
 }
 
-void addMatches(FASST& F, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo) {
+void addMatches(fasstCache& C, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo) {
 //frag.writePDB("/tmp/pair.pdb"); cout << "fragment saved, RMSD = " << RMSDCalculator::rmsdCutoff(frag) << endl;
-  F.setQuery(frag, false);
-  F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
-  F.setMaxNumMatches(10);
-  F.setMinNumMatches(2);
-  F.search();
-  fasstSolutionSet matches = F.getMatches();
+  FASST* F = C.getFASST();
+  F->setQuery(frag, false);
+  F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
+  F->setMaxNumMatches(10);
+  F->setMinNumMatches(2);
+  fasstSolutionSet matches = C.search();
   cout << "found " << matches.size() << " matches" << endl;
   for (auto it = matches.begin(); it != matches.end(); ++it) {
-    allMatches.push_back(new Structure(F.getMatchStructure(*it, false, FASST::matchType::REGION)));
+    allMatches.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
     Structure& match = *(allMatches.back());
     for (int k = 0; k < fragResIdx.size(); k++) {
       resTopo[fragResIdx[k]].push_back(&(match.getResidue(k)));
@@ -103,6 +276,7 @@ int main(int argc, char** argv) {
   RMSDCalculator rc;
   Structure I(op.getString("p"));
   FASST F;
+  fasstCache cache(&F);
   vector<int> fixed;
   F.setMemorySaveMode(true);
   if (op.isGiven("d")) {
@@ -149,7 +323,7 @@ int main(int argc, char** argv) {
         selectAround({&C[ri]}, pmSelf, frag, fragResIdx);
 // frag.writePDB("/tmp/self." + MstUtils::toString(ri) + ".pdb");
         cout << "TERM around " << C[ri] << " ";
-        addMatches(F, frag, fragResIdx, allMatches, resTopo);
+        addMatches(cache, frag, fragResIdx, allMatches, resTopo);
       }
     }
 
@@ -165,7 +339,7 @@ int main(int argc, char** argv) {
       selectAround({resA, resB}, pmPair, frag, fragResIdx);
 // frag.writePDB("/tmp/pair." + MstUtils::toString(k) + ".pdb");
       cout << "TERM around " << *resA << " x " << *resB << " ";
-      addMatches(F, frag, fragResIdx, allMatches, resTopo);
+      addMatches(cache, frag, fragResIdx, allMatches, resTopo);
     }
 
 // fstream ofs;

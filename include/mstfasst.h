@@ -30,6 +30,14 @@ class fasstSolution {
     void setSeqContext(const vector<Sequence>& _segSeq, const vector<Sequence>& _nSeq, const vector<Sequence>& _cSeq);
     void setStructContext(const vector<AtomPointerVector>& _segStr, const vector<AtomPointerVector>& _nStr, const vector<AtomPointerVector>& _cStr);
 
+    static bool foundBefore(const fasstSolution* solA, const fasstSolution* solB) {
+      if (solA->targetIndex != solB->targetIndex) return solA->targetIndex < solB->targetIndex;
+      if (solA->alignment.size() != solB->alignment.size()) MstUtils::error("cannot compare solutions of different topology", "fasstSolution::foundBefore");
+      for (int i = 0; i < solA->alignment.size(); i++) {
+        if (solA->alignment[i] != solB->alignment[i]) return solA->alignment[i] < solB->alignment[i];
+      }
+      return true;
+    }
     friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
       if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
       if (si.targetIndex != sj.targetIndex) return (si.targetIndex < sj.targetIndex);
@@ -72,9 +80,10 @@ class fasstSolutionSet {
     fasstSolutionSet(const fasstSolutionSet& sols);
     fasstSolutionSet& operator=(const fasstSolutionSet& sols);
     bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
-    set<fasstSolution>::iterator begin() { return solsSet.begin(); }
-    set<fasstSolution>::reverse_iterator rbegin() { return solsSet.rbegin(); }
-    set<fasstSolution>::iterator end() { return solsSet.end(); }
+    set<fasstSolution>::iterator begin() const { return solsSet.begin(); }
+    set<fasstSolution>::reverse_iterator rbegin() const { return solsSet.rbegin(); }
+    set<fasstSolution>::iterator end() const { return solsSet.end(); }
+    set<fasstSolution>::reverse_iterator rend() const { return solsSet.rend(); }
     set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it) { return solsSet.erase(it); updated = true; }
     // const fasstSolution& operator[] (int i) const;
     const fasstSolution& operator[] (int i);
@@ -82,6 +91,7 @@ class fasstSolutionSet {
     void clear() { solsSet.clear(); updated = true; }
     mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
     mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
+    vector<fasstSolution*> orderByDiscovery();
 
     friend ostream& operator<<(ostream &_os, const fasstSolutionSet& _sols) {
       for (auto it = _sols.solsSet.begin(); it != _sols.solsSet.end(); ++it) {
@@ -197,7 +207,8 @@ class FASST {
     FASST();
     void setQuery(const string& pdbFile, bool autoSplitChains = true);
     void setQuery(const Structure& Q, bool autoSplitChains = true);
-    Structure getQuery() { return queryStruct; }
+    Structure getQuery() const { return queryStruct; }
+    AtomPointerVector getQuerySearchedAtoms() const;
     void addTarget(const Structure& T);
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
@@ -217,6 +228,7 @@ class FASST {
     void setMinNumMatches(int _min);
     void setSufficientNumMatches(int _suff);
     void unsetSufficientNumMatches() { suffNumMatches = -1; }
+    mstreal getRMSDCutoff() { return rmsdCutRequested; }
     int getMaxNumMatches() { return maxNumMatches; }
     int getMinNumMatches() { return minNumMatches; }
     int getSufficientNumMatches() { return suffNumMatches; }
@@ -245,7 +257,14 @@ class FASST {
     vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
     vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type = matchType::REGION); // figure out the range of residues to excise from target structure
 
+    /* Normally, the redundancy cutoff is between 0 and 1. But one can set it to
+     * values outside of this range, in principle. Setting it to a value above 1
+     * will cause no redundancy cutoff to be applied, but will populate solution
+     * objects with sequence context information, in case (for example) a filter
+     * for redundancy will need to be applied later. */
     void pruneRedundancy(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
+    bool isRedundancyCutSet() { return redundancyCut < 1; }
+    mstreal getRedundancy() { return redundancyCut; }
 
   protected:
     void processQuery();
@@ -263,7 +282,7 @@ class FASST {
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
     bool areNumMatchConstraintsConsistent();
-    void addSequenceContext(fasstSolution& sol, int contextLength); // decorate the solution with sequence context
+    void addSequenceContext(fasstSolution& sol); // decorate the solution with sequence context
 
   private:
     /* targetStructs[i] and targets[i] store the original i-th target structure
