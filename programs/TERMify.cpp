@@ -34,11 +34,19 @@ class fasstCache {
       friend class fasstCache;
       public:
         fasstCachedResult() { rmsdCut = 0.0; solSet = NULL; priority = 0; }
-        fasstCachedResult(const AtomPointerVector& q, fasstSolutionSet* sols, mstreal cut, vector<int> topo) {
-          q.clone(query); rmsdCut = cut; solSet = sols; priority = 0; topology = topo;
+        fasstCachedResult(const AtomPointerVector& q, const fasstSolutionSet& sols, mstreal cut, vector<int> topo) {
+          q.clone(query);
+          solSet = new fasstSolutionSet(sols);
+          priority = 0; topology = topo; rmsdCut = cut;
         }
         fasstCachedResult(const fasstCachedResult& r) {
-          query = r.query; rmsdCut = r.rmsdCut; solSet = r.solSet; priority = r.priority; topology = r.topology;
+          r.query.clone(query);
+          solSet = new fasstSolutionSet(*(r.solSet));
+          rmsdCut = r.rmsdCut; priority = r.priority; topology = r.topology;
+        }
+        ~fasstCachedResult() {
+          query.deletePointers();
+          delete(solSet);
         }
         void upPriority() { priority++; }
 
@@ -59,7 +67,7 @@ class fasstCache {
           if (ri.priority != rj.priority) return (ri.priority < rj.priority);
           if (ri.solSet->size() != rj.solSet->size()) return ri.solSet->size() < rj.solSet->size();
           if (ri.query.size() != rj.query.size()) return ri.query.size() < rj.query.size();
-          return ri.query < rj.query;
+          return &ri < &rj;
         }
 
       private:
@@ -92,16 +100,20 @@ fasstSolutionSet fasstCache::search() {
    * among the list of matches of some previously cached query. */
   vector<int> topo = fasstCache::getStructureTopology(S->getQuery());
   set<fasstCachedResult>::iterator bestComp = cache.end(); mstreal bestDist = -1;
+cout << endl;
   for (auto it = cache.begin(); it != cache.end(); ++it) {
     if (!it->isSameTopology(topo)) continue;
     mstreal r = rc.bestRMSD(S->getQuerySearchedAtoms(), it->getQuery());
     // if multiple cached options are available, pick the one with least extra
+cout << "RMSD from cached query is " << r << ", its cutoff used was " << it->getRMSDCutoff() << ", current cutoff " << cut << endl;
     if (it->getRMSDCutoff() - r >= cut) {
       if ((bestComp == cache.end()) || (bestDist > r)) {
         bestComp = it; bestDist = r;
+cout << "\tworks!\n";
       }
     }
   }
+cout << "DONE" << endl;
   if (bestComp != cache.end()) {
     // visit all matches of the most suitable cached result and find matches for current query
     const fasstSolutionSet& sols = *(bestComp->getSolutions());
@@ -130,7 +142,8 @@ fasstSolutionSet fasstCache::search() {
     bool redSet = S->isRedundancyCutSet();
     if (maxSet) {
       maxN = S->getMaxNumMatches();
-      S->setMaxNumMatches(MstUtils::max(int(maxN*2 + 1), maxN + 500));
+      // S->setMaxNumMatches(MstUtils::max(int(maxN*2 + 1), maxN + 500));
+      S->unsetMaxNumMatches();
     }
     if (redSet) {
       redCut = S->getRedundancy();
@@ -140,16 +153,10 @@ fasstSolutionSet fasstCache::search() {
 
     // -- perform the search and cache
     matches = S->search();
-// fasstSolutionSet matches1 = S->getMatches();
-// for (int k = 0; k < matches.size(); k++) {
-//   cout << matches[k] << " vs " << matches1[k] << endl;
-// }
-    // fasstCachedResult result(S->getQuerySearchedAtoms(),
-    //                          new fasstSolutionSet(matches),
-    //                          matches.rbegin()->getRMSD(),
-    //                          topo);
-    // cache.insert(result);
-    // if (cache.size() > maxNumResults) cache.erase(cache.begin()); // bump off the least used cached result if reached limit
+    fasstCachedResult result(S->getQuerySearchedAtoms(), matches, matches.rbegin()->getRMSD(), topo);
+cout << "found " << matches.size() << " matches, last RMSD " << matches.rbegin()->getRMSD() << ", cutoff was " << S->getRMSDCutoff() << endl;
+    cache.insert(result);
+    if (cache.size() > maxNumResults) cache.erase(cache.begin()); // bump off the least used cached result if reached limit
 
     // -- reset search setting to their old values
     if (redSet) S->pruneRedundancy(redCut);

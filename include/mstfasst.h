@@ -36,7 +36,7 @@ class fasstSolution {
       for (int i = 0; i < solA->alignment.size(); i++) {
         if (solA->alignment[i] != solB->alignment[i]) return solA->alignment[i] < solB->alignment[i];
       }
-      return true;
+      return false;
     }
     friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
       if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
@@ -46,7 +46,7 @@ class fasstSolution {
       }
       // this will only happen if the two solutioins are identical: have the same
       // RMSD, come from the same target, and signify exactly the same alignment
-      return true;
+      return false;
     }
 
     friend ostream& operator<<(ostream &_os, const fasstSolution& _sol) {
@@ -226,6 +226,8 @@ class FASST {
     int numMatches() { return solutions.size(); }
     void setMaxNumMatches(int _max);
     void setMinNumMatches(int _min);
+    void unsetMaxNumMatches() { maxNumMatches = -1; }
+    void unsetMinNumMatches() { minNumMatches = -1; }
     void setSufficientNumMatches(int _suff);
     void unsetSufficientNumMatches() { suffNumMatches = -1; }
     mstreal getRMSDCutoff() { return rmsdCutRequested; }

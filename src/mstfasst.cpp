@@ -263,7 +263,7 @@ void FASST::processQuery() {
 
 AtomPointerVector FASST::getQuerySearchedAtoms() const {
   int len = 0, k = 0;
-  for (int i = 0; i < queryOrig.size(); i++) len += queryOrig.size();
+  for (int i = 0; i < queryOrig.size(); i++) len += queryOrig[i].size();
   AtomPointerVector atoms(len, NULL);
   for (int i = 0; i < queryOrig.size(); i++) {
     for (int j = 0; j < queryOrig[i].size(); j++) {
@@ -695,7 +695,7 @@ fasstSolutionSet FASST::search() {
           setCurrentRMSDCutoff(solutions.worstRMSD());
         } else if (isMinNumMatchesSet() && (solutions.size() > minNumMatches) && (rmsdCut > rmsdCutRequested)) {
           if (solutions.worstRMSD() > rmsdCutRequested) solutions.erase(--solutions.end());
-          setCurrentRMSDCutoff(solutions.worstRMSD());
+          setCurrentRMSDCutoff(MstUtils::max(solutions.worstRMSD(), rmsdCutRequested));
         }
       }
     }
