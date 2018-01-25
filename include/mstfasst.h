@@ -259,6 +259,11 @@ class FASST {
     vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
     vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type = matchType::REGION); // figure out the range of residues to excise from target structure
 
+    /* Computes the RMSD of the given match to a query that is (possibly)
+     * different from the one it was found with (if it even came from a search). */
+    // mstreal matchRMSD(const fasstSolution& sol, const AtomPointerVector& query);
+    vector<mstreal> matchRMSDs(const fasstSolutionSet& sols, const AtomPointerVector& query);
+
     /* Normally, the redundancy cutoff is between 0 and 1. But one can set it to
      * values outside of this range, in principle. Setting it to a value above 1
      * will cause no redundancy cutoff to be applied, but will populate solution

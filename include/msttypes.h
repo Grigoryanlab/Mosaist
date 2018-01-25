@@ -878,7 +878,7 @@ template <class T1, class T2>
 vector<T1> MstUtils::keys(map<T1, T2>& _map) {
   vector<T1> K(_map.size());
   int k = 0;
-  for (typename map<T1, T2>::iterator it = _map.begin(); it != _map.end(); ++it) {
+  for (typename map<T1, T2>::iterator it = _map.begin(); it != _map.end(); ++it, ++k) {
     K[k] = it->first;
   }
   return K;
@@ -888,7 +888,7 @@ template <class T1, class T2>
 vector<T2> MstUtils::values(map<T1, T2>& _map) {
   vector<T2> V(_map.size());
   int k = 0;
-  for (typename map<T1, T2>::iterator it = _map.begin(); it != _map.end(); ++it) {
+  for (typename map<T1, T2>::iterator it = _map.begin(); it != _map.end(); ++it, ++k) {
     V[k] = it->second;
   }
   return V;

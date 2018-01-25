@@ -776,7 +776,6 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
     AtomPointerVector& target = targets[idx];
     bool reread = detailed && targetSource[idx].memSave; // should we re-read the target structure?
     Transform& transf = tr[idx];
-    Transform transfInv = transf.inverse();
     if (reread) {
       dummy.reset();
       // re-read structure
@@ -820,7 +819,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
       if (algn) {
         sol.getTransform().apply(match);
       } else {
-        transfInv.apply(match);
+        transf.inverse().apply(match);
       }
     }
   }
@@ -930,6 +929,33 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
 
   return residueIndices;
 }
+
+vector<mstreal> FASST::matchRMSDs(const fasstSolutionSet& sols, const AtomPointerVector& query) {
+  vector<mstreal> rmsds(sols.size(), 0);
+  if (sols.size() == 0) return rmsds;
+  AtomPointerVector match(query.size(), NULL);
+  RMSDCalculator rc;
+  int c = 0;
+  for (auto it = sols.begin(); it != sols.end(); ++it, ++c) {
+    int idx = it->getTargetIndex();
+    AtomPointerVector& target = targets[idx];
+    int k = 0;
+    for (int i = 0; i < it->numSegments(); i++) {
+      int si = (*it)[i];
+      int L = it->segLength(i);
+      if (k + resToAtomIdx(L) > match.size()) MstUtils::error("solution alignment size is larger than the specified query", "FASST::matchRMSDs(const fasstSolutionSet& sols, AtomPointerVector& query)");
+      for (int ri = si; ri < si + L; ri++) {
+        for (int ai = resToAtomIdx(ri); ai < resToAtomIdx(ri) + atomsPerRes; ai++) {
+          match[k] = target[ai]; k++;
+        }
+      }
+    }
+    if (k != match.size()) MstUtils::error("solution alignment size is smaller than the specified query", "FASST::matchRMSDs(const fasstSolutionSet& sols, AtomPointerVector& query)");
+    rmsds[c] = rc.bestRMSD(match, query);
+  }
+  return rmsds;
+}
+
 
 string FASST::toString(const fasstSolution& sol) {
   stringstream ss;
