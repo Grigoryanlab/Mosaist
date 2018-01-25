@@ -97,11 +97,14 @@ fasstCache::~fasstCache() {
 fasstSolutionSet fasstCache::search() {
   int n;
   if (S->isSufficientNumMatchesSet()) MstUtils::error("cannot cache when \"sufficient\" number of matches is set", "fasstCache::search");
-  mstreal cut = S->getRMSDCutoff();
   fasstSolutionSet matches;
+  mstreal cut = S->getRMSDCutoff();
   bool maxSet = S->isMaxNumMatchesSet();
   bool redSet = S->isRedundancyCutSet();
   bool minSet = S->isMinNumMatchesSet();
+  int maxN = S->getMaxNumMatches();
+  int minN = S->getMaxNumMatches();
+  mstreal redCut = S->getRedundancy();
 
   /* See whether all matches for the current query, within the given cutoff, are
    * among the list of matches of some previously cached query. */
@@ -117,7 +120,6 @@ fasstSolutionSet fasstCache::search() {
      * is set on the number of matches, however, we will need to find all matches
      * below the cutoff, so we must find a previously cached query guaranteed to
      * have ALL matches to the current query under the given cutoff. */
-    // if ((maxSet && (r < cut + it->getRMSDCutoff())) || (!maxSet && (it->getRMSDCutoff() - r >= cut))) {
     if ((maxSet && (result->getRMSDCutoff() - r > 0)) || (!maxSet && (result->getRMSDCutoff() - r >= cut))) {
       if ((bestComp == cache.end()) || (bestDist > r)) {
         bestComp = it; bestDist = r; safeRadius = result->getRMSDCutoff() - r;
@@ -128,14 +130,14 @@ fasstSolutionSet fasstCache::search() {
   // first trying going through matches of a close query
   if (bestComp != cache.end()) {
 auto begin = chrono::high_resolution_clock::now();
-    // visit all matches of the most suitable cached result and find matches for current query
+    // visit all matches of the most suitable cached result
     fasstSolutionSet& sols = *((*bestComp)->getSolutions());
     vector<mstreal> rmsds = S->matchRMSDs(sols, S->getQuerySearchedAtoms());
     for (int k = 0; k < sols.size(); k++) {
       if (rmsds[k] <= cut) {
         if (redSet) matches.insert(sols[k], S->getRedundancy());
         else matches.insert(sols[k]);
-        if (maxSet && (matches.size() > S->getMaxNumMatches())) matches.erase(--matches.end());
+        if (maxSet && (matches.size() > maxN)) matches.erase(--matches.end());
       }
     }
 auto end = chrono::high_resolution_clock::now();
@@ -151,31 +153,52 @@ cout << "\tquick-search time " << searchTime << " ms" << std::endl;
   bool doNewSearch = (bestComp == cache.end()) ||
                      (matches.size() == 0) || // test if there are any matches so that worsetRMSD() exists
                      (matches.worstRMSD() > safeRadius) ||
-                     (minSet && (matches.size() < S->getMinNumMatches())) ||
-                     (maxSet && (matches.size() < S->getMaxNumMatches()));
+                     (minSet && (matches.size() < minN)) ||
+                     (maxSet && (matches.size() < maxN)); // TODO ??????????????
   if (doNewSearch) {
-cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)..." << endl;
+cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
+if (matches.size() > 0) cout << " (worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << ")";
+cout << endl;
 auto begin = chrono::high_resolution_clock::now();
     // -- loosen search criteria a bit to extract maximal value from search
-    mstreal redCut; int maxN;
     if (maxSet) {
-      maxN = S->getMaxNumMatches();
       S->setMaxNumMatches(MstUtils::max(int(maxN*2 + 1), maxN + 1000));
       // S->unsetMaxNumMatches();
     }
     // set redundancy value to above 1 in order to accumulate sequence context,
     // regardless of current requirements (for any future needs)
-    redCut = S->getRedundancy();
     S->pruneRedundancy(1.1);
     S->setRMSDCutoff(1.1*cut);
 
-    // -- perform the search and cache
-    matches = S->search();
-    fasstCachedResult* result = new fasstCachedResult(S->getQuerySearchedAtoms(), matches, matches.rbegin()->getRMSD(), topo);
+    /* The minimum number of matches limit is costly to include in the search,
+     * but is sometimes not necesary (i.e., you find at least that many matches
+     * under the given RMSD cutoff anyway). So first try without it. */
+    for (int c = 0; c < (minSet ? 2 : 1); c++) {
+      if (minSet) {
+        if (c) S->setMinNumMatches(minN);
+        else S->unsetMinNumMatches();
+if (c) cout << "\t\t\tDID NOT WORK without min, so repeating search..." << endl;
+      }
+
+      // -- perform the search and cache
+      matches = S->search();
+      if ((c == 0) && (matches.size() > 0)) {
+        fasstCachedResult* result = new fasstCachedResult(S->getQuerySearchedAtoms(), matches, matches.rbegin()->getRMSD(), topo);
 cout << "\t\tfound " << matches.size() << " matches, last RMSD " << matches.rbegin()->getRMSD() << ", cutoff was " << S->getRMSDCutoff() << endl;
-    cache.insert(result);
+        cache.insert(result);
 cout << "\t\tcache now has " << cache.size() << " elements" << endl;
-    if (cache.size() > maxNumResults) cache.erase(cache.begin()); // bump off the least used cached result if reached limit
+        if (cache.size() > maxNumResults) {
+          auto leastUseful = --cache.end();
+cout << "\t\t\t\tERASING entry with priority " << (*leastUseful)->getPriority() << endl;
+          delete(*leastUseful);
+          cache.erase(leastUseful); // bump off the least used cached result if reached limit
+        }
+      }
+
+      // did we get the min number of matches anyway?
+      if (minSet && (c == 0) && (matches.size() >= minN)) break;
+    }
+
     // -- reset search setting to their old values
     S->pruneRedundancy(redCut);
     S->setRMSDCutoff(cut);
@@ -184,28 +207,18 @@ auto end = chrono::high_resolution_clock::now();
 int searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
 cout << "\t\tregular-search time " << searchTime << " ms" << std::endl;
 
-    /* At this point, matches stores raw search results, whether from an actual
-     * search or deduced from a previously cached result. But these may need to be
-     * filtered in some way, if various limits were set in the FASST object. */
-    // first, remove redundancy and apply max cutoff (in the same way it would be during the search)
-    if (redSet || maxSet) {
-      fasstSolutionSet finalMatches;
-      vector<fasstSolution*> orderedMatches = matches.orderByDiscovery();
-      for (int i = 0; i < orderedMatches.size(); i++) {
-        fasstSolution& sol = *(orderedMatches[i]);
-        finalMatches.insert(sol, S->getRedundancy());
-        if (maxSet && (finalMatches.size() > S->getMaxNumMatches())) finalMatches.erase(--finalMatches.end());
-      }
-      matches = finalMatches;
+    // apply all needed cutoffs
+    fasstSolutionSet finalMatches;
+    vector<fasstSolution*> orderedMatches = matches.orderByDiscovery();
+    for (int i = 0; i < orderedMatches.size(); i++) {
+      fasstSolution& sol = *(orderedMatches[i]);
+      bool haveMin = !minSet || (minSet && (finalMatches.size() >= S->getMinNumMatches()));
+      if (haveMin && (sol.getRMSD() > cut)) continue;
+      if (redSet) finalMatches.insert(sol, S->getRedundancy());
+      else finalMatches.insert(sol);
+      if (maxSet && (finalMatches.size() > S->getMaxNumMatches())) finalMatches.erase(--finalMatches.end());
     }
-
-    // apply the RMSD filter if a looser raw search was run
-    n = 0;
-    for (auto it = matches.begin(); it != matches.end(); ) {
-      if ((minSet && (n < S->getMinNumMatches())) || (it->getRMSD() <= cut)) { n++; it++; }
-      else { it = matches.erase(it); }
-    }
-
+    matches = finalMatches;
   } else {
     // up the priority of this cached result just used
     fasstCachedResult* result = *bestComp;
