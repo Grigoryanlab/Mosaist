@@ -1357,6 +1357,15 @@ mstreal CartesianPoint::mean() const {
   return sum()/size();
 }
 
+mstreal CartesianPoint::stdev() const {
+  return sqrt(var());
+}
+
+mstreal CartesianPoint::var() const {
+  mstreal m = mean();
+  return norm2()/size() - m*m;
+}
+
 mstreal CartesianPoint::sum() const {
   mstreal s = 0;
   for (int i = 0; i < size(); i++) s += (*this)[i];

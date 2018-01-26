@@ -125,7 +125,9 @@ fasstSolutionSet fasstCache::search(bool verb) {
      * have ALL matches to the current query under the given cutoff. */
     if ((maxSet && (result->getRMSDCutoff() - r > 0)) || (!maxSet && (result->getRMSDCutoff() - r >= cut))) {
       if ((bestComp == cache.end()) || (bestDist > r)) {
-        bestComp = it; bestDist = r; safeRadius = result->getRMSDCutoff() - r;
+        bestComp = it;
+        safeRadius = result->getRMSDCutoff() - r;
+        bestDist = maxSet ? safeRadius : -safeRadius;
       }
     }
   }

@@ -418,6 +418,8 @@ class CartesianPoint : public vector<mstreal> {
     mstreal norm() const;
     mstreal norm2() const;
     mstreal mean() const;
+    mstreal stdev() const;
+    mstreal var() const;
     mstreal median() const;
     mstreal sum() const;
     CartesianPoint cross(CartesianPoint other) const;
