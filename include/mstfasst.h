@@ -29,6 +29,8 @@ class fasstSolution {
     bool seqContextDefined() const { return ((context != NULL) && (!context->segSeq.empty())); }
     void setSeqContext(const vector<Sequence>& _segSeq, const vector<Sequence>& _nSeq, const vector<Sequence>& _cSeq);
     void setStructContext(const vector<AtomPointerVector>& _segStr, const vector<AtomPointerVector>& _nStr, const vector<AtomPointerVector>& _cStr);
+    void setRMSD(mstreal r) { rmsd = r; }
+    void setTransform(const Transform& _tr) { tr = _tr; }
 
     static bool foundBefore(const fasstSolution* solA, const fasstSolution* solB) {
       if (solA->targetIndex != solB->targetIndex) return solA->targetIndex < solB->targetIndex;
@@ -41,6 +43,7 @@ class fasstSolution {
     friend bool operator<(const fasstSolution& si, const fasstSolution& sj) {
       if (si.rmsd != sj.rmsd) return (si.rmsd < sj.rmsd);
       if (si.targetIndex != sj.targetIndex) return (si.targetIndex < sj.targetIndex);
+      if (si.alignment.size() != sj.alignment.size()) MstUtils::error("cannot compare solutions of different topology", "fasstSolution::operator<");
       for (int k = 0; k < si.alignment.size(); k++) {
         if (si.alignment[k] != sj.alignment[k]) return (si.alignment[k] < sj.alignment[k]);
       }
@@ -86,7 +89,7 @@ class fasstSolutionSet {
     set<fasstSolution>::reverse_iterator rend() const { return solsSet.rend(); }
     set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it) { return solsSet.erase(it); updated = true; }
     // const fasstSolution& operator[] (int i) const;
-    const fasstSolution& operator[] (int i);
+    fasstSolution& operator[] (int i);
     int size() const { return solsSet.size(); }
     void clear() { solsSet.clear(); updated = true; }
     mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
@@ -262,7 +265,7 @@ class FASST {
     /* Computes the RMSD of the given match to a query that is (possibly)
      * different from the one it was found with (if it even came from a search). */
     // mstreal matchRMSD(const fasstSolution& sol, const AtomPointerVector& query);
-    vector<mstreal> matchRMSDs(const fasstSolutionSet& sols, const AtomPointerVector& query);
+    vector<mstreal> matchRMSDs(fasstSolutionSet& sols, const AtomPointerVector& query, bool update = false);
 
     /* Normally, the redundancy cutoff is between 0 and 1. But one can set it to
      * values outside of this range, in principle. Setting it to a value above 1

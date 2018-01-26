@@ -930,19 +930,19 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
   return residueIndices;
 }
 
-vector<mstreal> FASST::matchRMSDs(const fasstSolutionSet& sols, const AtomPointerVector& query) {
+vector<mstreal> FASST::matchRMSDs(fasstSolutionSet& sols, const AtomPointerVector& query, bool update) {
   vector<mstreal> rmsds(sols.size(), 0);
   if (sols.size() == 0) return rmsds;
   AtomPointerVector match(query.size(), NULL);
   RMSDCalculator rc;
-  int c = 0;
-  for (auto it = sols.begin(); it != sols.end(); ++it, ++c) {
-    int idx = it->getTargetIndex();
+  for (int c = 0; c < sols.size(); c++) {
+    fasstSolution& sol = sols[c];
+    int idx = sol.getTargetIndex();
     AtomPointerVector& target = targets[idx];
     int k = 0;
-    for (int i = 0; i < it->numSegments(); i++) {
-      int si = (*it)[i];
-      int L = it->segLength(i);
+    for (int i = 0; i < sol.numSegments(); i++) {
+      int si = sol[i];
+      int L = sol.segLength(i);
       if (k + resToAtomIdx(L) > match.size()) MstUtils::error("solution alignment size is larger than the specified query", "FASST::matchRMSDs(const fasstSolutionSet& sols, AtomPointerVector& query)");
       for (int ri = si; ri < si + L; ri++) {
         for (int ai = resToAtomIdx(ri); ai < resToAtomIdx(ri) + atomsPerRes; ai++) {
@@ -951,7 +951,11 @@ vector<mstreal> FASST::matchRMSDs(const fasstSolutionSet& sols, const AtomPointe
       }
     }
     if (k != match.size()) MstUtils::error("solution alignment size is smaller than the specified query", "FASST::matchRMSDs(const fasstSolutionSet& sols, AtomPointerVector& query)");
-    rmsds[c] = rc.bestRMSD(match, query);
+    rmsds[c] = rc.bestRMSD(match, query, update);
+    if (update) {
+      sol.setTransform(Transform(rc.lastRotation(), rc.lastTranslation()));
+      sol.setRMSD(rmsds[c]);
+    }
   }
   return rmsds;
 }
@@ -1101,7 +1105,7 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
   return true;
 }
 
-const fasstSolution& fasstSolutionSet::operator[] (int i) {
+fasstSolution& fasstSolutionSet::operator[] (int i) {
   // if solutions changed since last time, first copy to vector
   if (updated) {
     solsVec.resize(solsSet.size(), NULL); int k = 0;
