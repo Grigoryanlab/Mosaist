@@ -21,6 +21,7 @@ class fasstCache {
     ~fasstCache();
     FASST* getFASST() const { return S; }
     fasstSolutionSet search(bool verb = false);
+    int getMaxNumResults() const { return maxNumResults; }
 
   protected:
     static vector<int> getStructureTopology(const Structure& S) {
@@ -33,11 +34,11 @@ class fasstCache {
     class fasstCachedResult {
       friend class fasstCache;
       public:
-        fasstCachedResult() { rmsdCut = 0.0; solSet = NULL; priority = 0; }
+        fasstCachedResult() { rmsdCut = 0.0; solSet = NULL; priority = 1.0; }
         fasstCachedResult(const AtomPointerVector& q, const fasstSolutionSet& sols, mstreal cut, vector<int> topo) {
           q.clone(query);
           solSet = new fasstSolutionSet(sols);
-          priority = 0; topology = topo; rmsdCut = cut;
+          priority = 1.0; topology = topo; rmsdCut = cut;
         }
         fasstCachedResult(const fasstCachedResult& r) {
           r.query.clone(query);
@@ -48,12 +49,13 @@ class fasstCache {
           query.deletePointers();
           delete(solSet);
         }
-        void upPriority() { priority++; }
+        void upPriority(mstreal del = 1.0) { priority += del; }
+        void elapsePriority(int Thalf) { priority *= pow(0.5, 1.0/Thalf); }
 
         AtomPointerVector getQuery() const { return query; }
         fasstSolutionSet* getSolutions() const { return solSet; }
         mstreal getRMSDCutoff() const { return rmsdCut; }
-        int getPriority() const { return priority; }
+        mstreal getPriority() const { return priority; }
         vector<int> getTopology() const { return topology; }
         bool isSameTopology(const vector<int>& compTopo) const {
           if (topology.size() != compTopo.size()) return false;
@@ -75,7 +77,7 @@ class fasstCache {
         vector<int> topology;
         mstreal rmsdCut;
         fasstSolutionSet* solSet;
-        int priority;
+        mstreal priority;
     };
 
     struct compResults {
@@ -109,6 +111,19 @@ fasstSolutionSet fasstCache::search(bool verb) {
   int searchTime;
   AtomPointerVector queryAtoms = S->getQuerySearchedAtoms();
 
+  /* Old cached results should eventually "expire", so uniformly lower priority
+   * slightly first. This way, cached results that have not been used in a while
+   * will eventually have a lower priority than brand new searches and these
+   * will then push out these old (aparently) useless results. */
+  for (auto it = cache.begin(); it != cache.end(); it++) {
+    // NOTE: gets rid of const qualifier! This is safe to do only because I know
+    // I will monotonically lower everybody's priority (order will not change).
+    fasstCachedResult* res = &(*(*it));
+    res->elapsePriority(getMaxNumResults());
+    if (verb) cout << " " << res->getPriority();
+  }
+  if (verb) cout << endl;
+
   /* See whether all matches for the current query, within the given cutoff, are
    * among the list of matches of some previously cached query. */
   vector<int> topo = fasstCache::getStructureTopology(S->getQuery());
@@ -124,15 +139,18 @@ fasstSolutionSet fasstCache::search(bool verb) {
      * below the cutoff, so we must find a previously cached query guaranteed to
      * have ALL matches to the current query under the given cutoff. */
     if ((maxSet && (result->getRMSDCutoff() - r > 0)) || (!maxSet && (result->getRMSDCutoff() - r >= cut))) {
-      if ((bestComp == cache.end()) || (bestDist > r)) {
+      // If max is set, we want as large of a safe radius as possible. If max is
+      // not set, then all suitable queries are safe, so we want as few extra
+      // fluff to search through as possible
+      if ((bestComp == cache.end()) || ((maxSet && (bestDist < safeRadius)) || (!maxSet && (bestDist > safeRadius)))) {
         bestComp = it;
         safeRadius = result->getRMSDCutoff() - r;
-        bestDist = maxSet ? safeRadius : -safeRadius;
+        bestDist = safeRadius;
       }
     }
   }
 
-  // first trying going through matches of a close query
+  // first try going through matches of a close query
   if (bestComp != cache.end()) {
     if (verb) begin = chrono::high_resolution_clock::now();
     // visit all matches of the most suitable cached result
@@ -168,12 +186,12 @@ fasstSolutionSet fasstCache::search(bool verb) {
                      (matches.worstRMSD() > safeRadius) ||  // if maxN is not set, this is guaranteed
                      (maxSet && (matches.size() < maxN));
   if (doNewSearch) {
-  if (verb) {
-    cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
-    if (matches.size() > 0) cout << " (worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << ")";
-    cout << endl;
-    begin = chrono::high_resolution_clock::now();
-  }
+    if (verb) {
+      cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
+      if (matches.size() > 0) cout << " (worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << ")";
+      cout << endl;
+      begin = chrono::high_resolution_clock::now();
+    }
     // -- loosen search criteria a bit to extract maximal value from search
     if (maxSet) {
       S->setMaxNumMatches(MstUtils::max(int(maxN*2 + 1), maxN + 1000));
