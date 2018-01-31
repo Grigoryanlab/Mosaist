@@ -749,17 +749,24 @@ class DecoratedProximitySearch : public ProximitySearch {
 
 class Clusterer {
   public:
+    Clusterer(bool _flag = true) { optimAlign = true; }
+    void optimizeAlignments(bool _flag) { optimAlign = _flag; }
+    bool getOptimizeAlignments() { return optimAlign; }
+
     /* Will greedy cluster the given set of units (must all have the same number of atoms),
      * using the given RMSD cutoff, while making sure that no more than Nmax x Nmax RMSD
      * computations are done per iteration. So, if the number of units is below Nmax, a
      * normal greedy clustering will be performed. However, if above Nmax, then will try
-     * be further greedy and find best centroids without ever doing all-by-all comparisons. */
+     * be further greedy and find best centroids without ever doing all-by-all comparisons.
+     * Output a vector of clusters, in decreasing size, each of which is a vector of
+     * indices of elements mapping to that cluster. The centroid is always listed first
+     * in each cluster. */
     vector<vector<int> > greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax = 10000);
 
     /* Perform k-means clustering of a point cloud in arbitrary dimension, using
      * Euclidean distance as the metric. Returns a list of clusters of size k,
      * where each cluster is represented by a vector point indices. */
-    static vector<vector<int> > kmeans(const vector<CartesianPoint>& points, int k, int Ntrials = 1, int Niter = 10);
+    vector<vector<int> > kmeans(const vector<CartesianPoint>& points, int k, int Ntrials = 1, int Niter = 10);
 
   protected:
     // these functions are protected because they assume that the cache of pre-
@@ -771,6 +778,7 @@ class Clusterer {
   private:
     // won't cache for now (need careful memory management)
     map<int, map<int, mstreal > > coputedRMSDs;
+    bool optimAlign;
 };
 
 }

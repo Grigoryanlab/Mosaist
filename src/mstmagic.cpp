@@ -137,3 +137,41 @@ vector<AtomPointerVector> TERMUtils::mostDesignableFragments(Structure& C, vecto
 
   return ret;
 }
+
+void TERMUtils::selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+  vector<Residue*> conts = C.getContactingResidues(&cenRes, cdCut);
+  conts.insert(conts.begin(), &cenRes);
+  TERMUtils::selectTERM(conts, frag, pm, fragResIdx);
+}
+
+void TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm, vector<int>* fragResIdx) {
+  Structure* S = cenRes[0]->getChain()->getParent();
+  vector<bool> selected(S->residueSize(), false);
+  for (int i = 0; i < cenRes.size(); i++) {
+    Residue& res = *(cenRes[i]);
+    Chain* C = res.getChain();
+    int ri = res.getResidueIndex();
+    int Li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
+    for (int k = ri - pm; k <= ri + pm; k++) {
+      if ((k < 0) || (k > Li)) continue;
+      selected[k] = true;
+    }
+  }
+  Chain* newChain = frag.appendChain("A", true);
+  for (int k = 0; k < selected.size(); k++) {
+    if (selected[k]) {
+      // where there is a break in the selection, start a new chain
+      if ((newChain->residueSize() > 0) && ((!selected[k-1]) || (S->getResidue(k-1).getChain() != S->getResidue(k).getChain()))) {
+        newChain = frag.appendChain("A", true);
+      }
+      newChain->appendResidue(new Residue(S->getResidue(k)));
+      if (fragResIdx != NULL) fragResIdx->push_back(k);
+    }
+  }
+}
+
+Structure TERMUtils::selectTERM(Residue& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+  Structure term;
+  TERMUtils::selectTERM(cenRes, C, term, pm, cdCut, fragResIdx);
+  return term;
+}

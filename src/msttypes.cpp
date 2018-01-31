@@ -2990,7 +2990,7 @@ vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& unit
   vector<vector<int> > clusters;
   set<int> remIndices;
   for (int i = 0; i < units.size(); i++) remIndices.insert(i);
-  if (remIndices.size() >= Nmax) return Clusterer::greedyClusterBruteForce(units, remIndices, rmsdCut);
+  if (remIndices.size() <= Nmax) return Clusterer::greedyClusterBruteForce(units, remIndices, rmsdCut);
 
   while (remIndices.size() > Nmax) {
     // sub-sample Nmax elements
@@ -3043,7 +3043,7 @@ vector<int> Clusterer::elementsWithin(const vector<vector<Atom*> >& units, set<i
   const vector<Atom*>& fromUnit = units[from];
   RMSDCalculator rCalc;
   for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
-    mstreal r = rCalc.bestRMSD(fromUnit, units[*it]);
+    mstreal r = optimAlign ? rCalc.rmsd(fromUnit, units[*it]) : rCalc.bestRMSD(fromUnit, units[*it]);
     if (r <= rmsdCut) {
       neigh.push_back(*it);
       rmsds.push_back(r);

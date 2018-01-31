@@ -53,7 +53,7 @@ LIB_DIRS :=
 
 # targets and MST libraries
 TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testFASST testFuser testGrads testRotlib testTERMUtils testTransforms
-PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB
+PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB chainGrow
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans
@@ -68,11 +68,12 @@ testFASST_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 testFuser_DEPS			:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testGrads_DEPS			:= msttypes
 testRotlib_DEPS			:= mstrotlib msttransforms msttypes
-testTERMUtils_DEPS		:= mstmagic msttypes
+testTERMUtils_DEPS		:= mstmagic msttypes mstcondeg mstrotlib msttransforms
 testTransforms_DEPS		:= mstlinalg msttransforms msttypes
 findTERMs_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 renumber_DEPS			:= mstsystem msttypes
 TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions
+chainGrow_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence
 
@@ -82,7 +83,7 @@ libmstcondeg_DEPS		:= mstcondeg mstrotlib msttransforms
 libmstfasst_DEPS		:= mstfasst mstsequence msttransforms msttypes
 libmstfuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
 libmstlinalg_DEPS		:= mstlinalg
-libmstmagic_DEPS		:= msttypes mstmagic
+libmstmagic_DEPS		:= msttypes mstmagic mstcondeg
 libmstoptim_DEPS		:= mstoptim mstlinalg
 libmsttrans_DEPS		:= msttransforms
 
