@@ -59,11 +59,15 @@ class RotamerLibrary {
     static int backboneAtomType(string atomName, bool noHyd = true);
     static int backboneAtomType(const Atom& atom, bool noHyd = true) { return backboneAtomType(atom.getName(), noHyd); }
     static int backboneAtomType(Atom* atom, bool noHyd = true) { return backboneAtomType(atom->getName(), noHyd); }
+    static string standardBackboneAtomName(string atomName, bool noHyd = true);
+    static string standardBackboneAtomName(Atom* atom, bool noHyd = true) { return standardBackboneAtomName(atom->getName(), noHyd); }
+    static string standardBackboneAtomName(const Atom& atom, bool noHyd = true) { return standardBackboneAtomName(atom.getName(), noHyd); }
     static bool hasFullBackbone(const Residue& res, bool noHyd = true);
     static bool hasFullBackbone(Residue* res, bool noHyd = true) { return hasFullBackbone(*res, noHyd); }
     static vector<Atom*> getBackbone(const Residue& res, bool noHyd = true);
     static vector<Atom*> getBackbone(Residue* res, bool noHyd = true) { return getBackbone(*res, noHyd); }
     static void extractProtein(System& S, const System& So, const vector<string>& legalResNames = vector<string>(), bool skipMissingBB = true);
+    static void standardizeBackboneNames(System& S);
 
     int numberOfRotamers(string aa, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);
     mstreal rotamerProbability(string aa, int ri, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);

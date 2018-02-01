@@ -142,10 +142,11 @@ fasstSolutionSet fasstCache::search(bool verb) {
       // If max is set, we want as large of a safe radius as possible. If max is
       // not set, then all suitable queries are safe, so we want as few extra
       // fluff to search through as possible
-      if ((bestComp == cache.end()) || ((maxSet && (bestDist < safeRadius)) || (!maxSet && (bestDist > safeRadius)))) {
+      mstreal curSafeRadius = result->getRMSDCutoff() - r;
+      if ((bestComp == cache.end()) || ((maxSet && (bestDist < curSafeRadius)) || (!maxSet && (bestDist > curSafeRadius)))) {
         bestComp = it;
-        safeRadius = result->getRMSDCutoff() - r;
-        bestDist = safeRadius;
+        safeRadius = curSafeRadius;
+        bestDist = safeRadius; // could optimize in terms of things other than safe radius
       }
     }
   }

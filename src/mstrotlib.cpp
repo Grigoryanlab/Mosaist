@@ -272,6 +272,23 @@ int RotamerLibrary::backboneAtomType(string atomName, bool noHyd) {
   return -1;
 }
 
+string RotamerLibrary::standardBackboneAtomName(string atomName, bool noHyd) {
+  int type = RotamerLibrary::backboneAtomType(atomName, noHyd);
+  switch (type) {
+    case bbAtomType::bbN:
+      return "N";
+    case bbAtomType::bbCA:
+      return "CA";
+    case bbAtomType::bbC:
+      return "C";
+    case bbAtomType::bbO:
+      return "O";
+    case bbAtomType::bbH:
+      if (!noHyd) return "H";
+  }
+  return "";
+}
+
 vector<Atom*> RotamerLibrary::getBackbone(const Residue& res, bool noHyd) {
   vector<Atom*> bb(noHyd ? 4 : 5, NULL);
   int toFind = bb.size();
@@ -324,6 +341,19 @@ void RotamerLibrary::extractProtein(System& S, const System& So, const vector<st
     }
   }
   S.addAtoms(&A);
+}
+
+void RotamerLibrary::standardizeBackboneNames(System& S) {
+  for (int i = 0; i < S.chainSize(); i++) {
+    Chain& C = S[i];
+    for (int j = 0; j < C.residueSize(); j++) {
+      Residue& R = C[j];
+      for (int ai = 0; ai < R.atomSize(); ai++) {
+        string newName = standardBackboneAtomName(R[ai], false);
+        if (!newName.empty()) R[ai].setName(newName);
+      }
+    }
+  }
 }
 
 bool RotamerLibrary::isHydrogen(string atomName) {
