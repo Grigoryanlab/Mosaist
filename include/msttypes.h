@@ -749,7 +749,7 @@ class DecoratedProximitySearch : public ProximitySearch {
 
 class Clusterer {
   public:
-    Clusterer(bool _flag = true) { optimAlign = true; }
+    Clusterer(bool _flag = true) { optimAlign = _flag; }
     void optimizeAlignments(bool _flag) { optimAlign = _flag; }
     bool getOptimizeAlignments() { return optimAlign; }
 

@@ -3025,9 +3025,10 @@ vector<vector<int> > Clusterer::greedyClusterBruteForce(const vector<vector<Atom
     vector<int> bestClust;
     for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
       vector<int> clust = elementsWithin(units, remIndices, *it, rmsdCut);
-      if (clust.size() > bestClust.size()) bestClust = clust;
+      if (clust.size() > bestClust.size()) {
+        bestClust = clust;
+      }
     }
-
     // add its corresponding cluster
     clusters.push_back(bestClust);
     for (int i = 0; i < bestClust.size(); i++) remIndices.erase(bestClust[i]);
@@ -3043,7 +3044,7 @@ vector<int> Clusterer::elementsWithin(const vector<vector<Atom*> >& units, set<i
   const vector<Atom*>& fromUnit = units[from];
   RMSDCalculator rCalc;
   for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
-    mstreal r = optimAlign ? rCalc.rmsd(fromUnit, units[*it]) : rCalc.bestRMSD(fromUnit, units[*it]);
+    mstreal r = optimAlign ? rCalc.bestRMSD(fromUnit, units[*it]) : rCalc.rmsd(fromUnit, units[*it]);
     if (r <= rmsdCut) {
       neigh.push_back(*it);
       rmsds.push_back(r);
