@@ -344,3 +344,37 @@ mstreal Matrix::norm2() const {
   }
   return n;
 }
+
+#ifdef ARMA
+  MST::Matrix MstLinAlg::getPrincipalAxes(const MST::AtomPointerVector& atoms) {
+    // extract coordinates into a 3 x N matrix
+    armaMat C = arma::zeros(atoms.size(), 3);
+    for (int i = 0; i < atoms.size(); i++) {
+      C(i, 0) = atoms[i]->getX();
+      C(i, 1) = atoms[i]->getY();
+      C(i, 2) = atoms[i]->getZ();
+    }
+
+    // create covariance matrix (between columns)
+    armaMat M = arma::cov(C, C);
+
+    // calculate the principal component of the covariance matrix
+    armaVec eigval;
+    armaMat eigvec;
+    arma::eig_sym(eigval, eigvec, M); // eigenvectors are sorted in ascending order by eigenvalue
+    MST::Matrix pc(3, 3, 0);
+    for (int i = 2; i >= 0; i--) {
+      for (int j = 0; j < 3; j++) {
+        pc(j, 2 - i) = eigvec(j, i);
+      }
+    }
+
+    // make sure system is right handed
+    if (arma::dot(arma::cross(eigvec.col(2), eigvec.col(1)), eigvec.col(0)) < 0) {
+      pc(0, 0) = -pc(0, 0);
+      pc(1, 0) = -pc(1, 0);
+      pc(2, 0) = -pc(2, 0);
+    }
+    return pc;
+  }
+#endif

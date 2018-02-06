@@ -90,4 +90,19 @@ class Vector : public Matrix {
 
 }
 
+/* If compiling with a proper linear algebra package, many more things are possible */
+#ifdef ARMA
+
+#include <armadillo>
+#define armaVec arma::Col<MST::mstreal>
+#define armaMat arma::Mat<MST::mstreal>
+
+// collection of linear algebra functions
+class MstLinAlg {
+  public:
+    static MST::Matrix getPrincipalAxes(const MST::AtomPointerVector& atoms);
+};
+
+#endif
+
 #endif

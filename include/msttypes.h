@@ -210,6 +210,7 @@ class Residue {
     void setIcode(char _icode) { icode = _icode; }
     void setNum(int num) { resnum = num; }
     void copyAtoms(Residue& R, bool copyAlt = true);
+    void copyAtoms(const vector<Atom*>& _atoms, bool copyAlt = true);
     void compactify() { atoms.shrink_to_fit(); } // saves memory by adjusting capacity to match length
 
     /* for all atoms in this residue, overwrite the main coordinate set with the
@@ -281,6 +282,7 @@ class Atom {
   public:
     Atom();
     Atom(const Atom& A, bool copyAlt = true);
+    Atom(const Atom* A, bool copyAlt = true) : Atom(*A, copyAlt) {}
     Atom(int _index, string _name, mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, bool _het, char _alt = ' ', Residue* _parent = NULL);
     ~Atom();
 

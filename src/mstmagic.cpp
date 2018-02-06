@@ -144,6 +144,29 @@ void TERMUtils::selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm,
   TERMUtils::selectTERM(conts, frag, pm, fragResIdx);
 }
 
+void TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+  set<Residue*> included;
+  vector<Residue*> list;
+  // for order consistency, first insert the central residues
+  for (int i = 0; i < cenRes.size(); i++) {
+    if (included.find(cenRes[i]) == included.end()) {
+      included.insert(cenRes[i]);
+      list.push_back(cenRes[i]);
+    }
+  }
+  // then their contacts
+  for (int i = 0; i < cenRes.size(); i++) {
+    vector<Residue*> conts = C.getContactingResidues(cenRes[i], cdCut);
+    for (int j = 0; j < conts.size(); j++) {
+      if (included.find(conts[j]) == included.end()) {
+        included.insert(conts[j]);
+        list.push_back(conts[j]);
+      }
+    }
+  }
+  TERMUtils::selectTERM(list, frag, pm, fragResIdx);
+}
+
 void TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm, vector<int>* fragResIdx) {
   Structure* S = cenRes[0]->getChain()->getParent();
   vector<bool> selected(S->residueSize(), false);
@@ -171,6 +194,12 @@ void TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int 
 }
 
 Structure TERMUtils::selectTERM(Residue& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+  Structure term;
+  TERMUtils::selectTERM(cenRes, C, term, pm, cdCut, fragResIdx);
+  return term;
+}
+
+Structure TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx) {
   Structure term;
   TERMUtils::selectTERM(cenRes, C, term, pm, cdCut, fragResIdx);
   return term;

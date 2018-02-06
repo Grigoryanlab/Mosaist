@@ -29,12 +29,17 @@
 #	on a pedantic note, I have alphabetized the lists of targets, libraries, and dependencies to make it easier to find things
 #		consider maintaining this so it's easier to determine whether a target, library, or dependency already exists!
 
+# customizations
+# define environmental variable INCLUDd_ARMA if you want to compile with Armadillo C++ linear algebra library (needed for some more complex things in mstlinalg)
+
 # stuff meant to be regularly updated:
 
 # flags
 CC := g++
 CPP_FLAGS := -O3 -std=c++11 -fPIC
 DEBUG_FLAGS := -g
+CPP_FLAGS := $(if $(INCLUDE_ARMA), $(CPP_FLAGS) -DARMA, $(CPP_FLAGS))
+LDLIBS := $(if $(INCLUDE_ARMA), -larmadillo, )
 
 # essential directories
 INCD := include
@@ -131,7 +136,7 @@ all: $(TARGETS) $(LIBRARIES)
 
 # delete every output file
 clean:
-	rm -f $(OBJD)/* $(LIBD)/* $(BIND)/*
+	rm -f $(OBJD)/* $(LIBD)/*.a $(BIND)/*
 
 # make every library that can be made
 libs: $(patsubst %, $(LIBD)/%.a, $(LIBRARIES))
@@ -190,7 +195,7 @@ $(LIBD)/mstpython.so: $(OBJD)/mstpython.o
 	$(CC) $(PYLIB) -Wl,-rpath,$(PYLIB_PATH) -shared -o $@ $<
 
 # recipe to compile targets
-COMPILE_BIN = $(CC) $(FLAGS) -o $@ $(INC) $(LIB) $^
+COMPILE_BIN = $(CC) $(FLAGS) $(LDLIBS) -o $@ $(INC) $(LIB) $^
 
 $(BIND)/%: $(OBJD)/%.o $$(foreach dep, $$($$*_DEPS), $$(call DEP_OBJ_FILE_MAP, $$(dep))) | $(BIND)
 	$(COMPILE_BIN)

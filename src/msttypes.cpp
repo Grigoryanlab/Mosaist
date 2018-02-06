@@ -780,12 +780,16 @@ void Residue::deleteAtom(int i) {
 }
 
 void Residue::copyAtoms(Residue& R, bool copyAlt) {
+  copyAtoms(R.getAtoms(), copyAlt);
+}
+
+void Residue::copyAtoms(const vector<Atom*>& _atoms, bool copyAlt) {
+  if (parent != NULL) parent->incrementNumAtoms(_atoms.size() - atoms.size());
   deleteAtoms();
-  for (int i = 0; i < R.atomSize(); i++) {
-    atoms.push_back(new Atom(R[i], copyAlt));
+  for (int i = 0; i < _atoms.size(); i++) {
+    atoms.push_back(new Atom(_atoms[i], copyAlt));
     atoms.back()->setParent(this);
   }
-  if (parent != NULL) parent->incrementNumAtoms(R.atomSize());
 }
 
 void Residue::makeAlternativeMain(int altInd) {
@@ -798,7 +802,6 @@ void Residue::deleteAtoms() {
   if (parent != NULL) {
     parent->incrementNumAtoms(-atoms.size());
   }
-  Structure* S = getStructure();
   for (int i = 0; i < atoms.size(); i++) {
     delete atoms[i];
   }
@@ -3290,18 +3293,18 @@ char* MstUtils::copyStringC(const char* str) {
 
 int MstUtils::toInt(string num, bool strict) {
   int ret = 0;
-  if ((sscanf(num.c_str(), "%d", &ret) == 0) && strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
+  if ((sscanf(num.c_str(), "%d", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
   return ret;
 }
 
 bool MstUtils::isInt(string num) {
   int ret;
-  return (sscanf(num.c_str(), "%d", &ret) != 0);
+  return (sscanf(num.c_str(), "%d", &ret) == 1);
 }
 
 bool MstUtils::isReal(string num) {
   double ret;
-  return (sscanf(num.c_str(), "%lf", &ret) != 0);
+  return (sscanf(num.c_str(), "%lf", &ret) == 1);
 }
 
 MST::mstreal MstUtils::toReal(string num, bool strict) {
