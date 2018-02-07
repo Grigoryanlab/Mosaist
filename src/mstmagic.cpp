@@ -174,9 +174,10 @@ void TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int 
     Residue& res = *(cenRes[i]);
     Chain* C = res.getChain();
     int ri = res.getResidueIndex();
-    int Li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
+    int li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
+    int fi = C->getResidue(0).getResidueIndex(); // first residue index in the chain
     for (int k = ri - pm; k <= ri + pm; k++) {
-      if ((k < 0) || (k > Li)) continue;
+      if ((k < fi) || (k > li)) continue;
       selected[k] = true;
     }
   }

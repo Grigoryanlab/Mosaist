@@ -852,6 +852,8 @@ class MstUtils {
     template <class T>
     static set<T> contents(const vector<T>& vec);
     template <class T>
+    static map<T, int> indexMap(const vector<T>& vec);
+    template <class T>
     static vector<T> setdiff(const vector<T>& A, const vector<T>& B);
 
     // randomly shuffle the array in place using the Fisher-Yates shuffle
@@ -984,6 +986,13 @@ set<T> MstUtils::contents(const vector<T>& vec) {
   set<T> cont;
   for (int i = 0; i < vec.size(); i++) cont.insert(vec[i]);
   return cont;
+}
+
+template <class T>
+map<T, int> MstUtils::indexMap(const vector<T>& vec) {
+  map<T, int> indices;
+  for (int i = 0; i < vec.size(); i++) indices[vec[i]] = i;
+  return indices;
 }
 
 template <class T>

@@ -574,9 +574,9 @@ CartesianPoint fusionEvaluator::bondInstances(int rj, Atom* atomI, Atom* atomJ, 
   // find Chains that contain all necessary residues
   vector<Residue*>& resI = overlappingResidues[ri];
   vector<Residue*>& resJ = overlappingResidues[rj];
-  map<Chain*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
+  map<Structure*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 2) continue;
@@ -584,7 +584,7 @@ CartesianPoint fusionEvaluator::bondInstances(int rj, Atom* atomI, Atom* atomJ, 
     Atom* Aj = residues[1]->findAtom(aj);
     p.push_back(Ai->distance(Aj));
   }
-  // if no comboes from the same chain were found, that means this element crosses
+  // if no comboes from the same Structure were found, that means this element crosses
   // a chain boundary, so we should try all combinations of atoms
   if (p.size() == 0) {
     chainBreak = true;
@@ -614,10 +614,10 @@ CartesianPoint fusionEvaluator::angleInstances(int rk, Atom* atomI, Atom* atomJ,
   vector<Residue*>& resI = overlappingResidues[ri];
   vector<Residue*>& resJ = overlappingResidues[rj];
   vector<Residue*>& resK = overlappingResidues[rk];
-  map<Chain*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
-  for (int i = 0; i < resK.size(); i++) S[resK[i]->getChain()].push_back(resK[i]);
+  map<Structure*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
+  for (int i = 0; i < resK.size(); i++) S[resK[i]->getStructure()].push_back(resK[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 3) continue;
@@ -626,7 +626,7 @@ CartesianPoint fusionEvaluator::angleInstances(int rk, Atom* atomI, Atom* atomJ,
     Atom* Ak = residues[2]->findAtom(ak);
     p.push_back(Ai->angle(Aj, Ak));
   }
-  // if no comboes from the same chain were found, that means this element crosses
+  // if no comboes from the same Structure were found, that means this element crosses
   // a chain boundary, so we should try all combinations of atoms
   if (p.size() == 0) {
     chainBreak = true;
@@ -661,11 +661,11 @@ CartesianPoint fusionEvaluator::dihedralInstances(int rl, Atom* atomI, Atom* ato
   vector<Residue*>& resJ = overlappingResidues[rj];
   vector<Residue*>& resK = overlappingResidues[rk];
   vector<Residue*>& resL = overlappingResidues[rl];
-  map<Chain*, vector<Residue*> > S;
-  for (int i = 0; i < resI.size(); i++) S[resI[i]->getChain()].push_back(resI[i]);
-  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getChain()].push_back(resJ[i]);
-  for (int i = 0; i < resK.size(); i++) S[resK[i]->getChain()].push_back(resK[i]);
-  for (int i = 0; i < resL.size(); i++) S[resL[i]->getChain()].push_back(resL[i]);
+  map<Structure*, vector<Residue*> > S;
+  for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
+  for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
+  for (int i = 0; i < resK.size(); i++) S[resK[i]->getStructure()].push_back(resK[i]);
+  for (int i = 0; i < resL.size(); i++) S[resL[i]->getStructure()].push_back(resL[i]);
   for (auto it = S.begin(); it != S.end(); it++) {
     vector<Residue*>& residues = it->second;
     if (residues.size() != 4) continue;
@@ -675,7 +675,7 @@ CartesianPoint fusionEvaluator::dihedralInstances(int rl, Atom* atomI, Atom* ato
     Atom* Al = residues[3]->findAtom(al);
     p.push_back(Ai->dihedral(Aj, Ak, Al));
   }
-  // if no combos from the same chain were found, that means this element crosses
+  // if no combos from the same Structure were found, that means this element crosses
   // a chain boundary, so we should try all combinations of atoms
   if (p.size() == 0) {
     chainBreak = true;

@@ -11,6 +11,7 @@
 #include "mstfuser.h"
 #include "mstcondeg.h"
 #include "mstoptions.h"
+#include "mstmagic.h"
 
 using namespace std;
 using namespace MST;
@@ -215,7 +216,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
 
       // -- perform the search and cache
       matches = S->search();
-      if ((c == 0) && (matches.size() > 0)) {
+      if (matches.size() > 0) {
         fasstCachedResult* result = new fasstCachedResult(queryAtoms, matches, matches.rbegin()->getRMSD(), topo);
         cache.insert(result);
         if (verb) {
@@ -303,32 +304,6 @@ mstreal getRadius(const Structure& S) {
   return rad;
 }
 
-void selectAround(const vector<Residue*>& cenRes, int pm, Structure& frag, vector<int>& fragResIdx) {
-  Structure* S = cenRes[0]->getChain()->getParent();
-  vector<bool> selected(S->residueSize(), false);
-  for (int i = 0; i < cenRes.size(); i++) {
-    Residue& res = *(cenRes[i]);
-    Chain* C = res.getChain();
-    int ri = res.getResidueIndex();
-    int Li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
-    for (int k = ri - pm; k <= ri + pm; k++) {
-      if ((k < 0) || (k > Li)) continue;
-      selected[k] = true;
-    }
-  }
-  Chain* newChain = frag.appendChain("A", true);
-  for (int k = 0; k < selected.size(); k++) {
-    if (selected[k]) {
-      // where there is a break in the selection, start a new chain
-      if ((newChain->residueSize() > 0) && ((!selected[k-1]) || (S->getResidue(k-1).getChain() != S->getResidue(k).getChain()))) {
-        newChain = frag.appendChain("A", true);
-      }
-      newChain->appendResidue(new Residue(S->getResidue(k)));
-      fragResIdx.push_back(k);
-    }
-  }
-}
-
 void addMatches(fasstCache& C, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo) {
 //frag.writePDB("/tmp/pair.pdb"); cout << "fragment saved, RMSD = " << RMSDCalculator::rmsdCutoff(frag) << endl;
   FASST* F = C.getFASST();
@@ -383,6 +358,8 @@ int main(int argc, char** argv) {
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
   op.addOption("cyc", "number of iteration cycles (10 by default).");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
+  op.addOption("fs", "a selection string for residues to fix.");
+  if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
   op.setOptions(argc, argv);
   RMSDCalculator rc;
   Structure I(op.getString("p"));
@@ -403,6 +380,16 @@ int main(int argc, char** argv) {
   if (op.isGiven("f")) {
     fixed = MstUtils::splitToInt(op.getString("f"));
   }
+  if (op.isGiven("fs")) {
+    selector sel(I);
+    vector<Residue*> fixedResidues = sel.selectRes(op.getString("fs"));
+    cout << "fix selection gave " << fixedResidues.size() << " residues, fixing..." << endl;
+    map<Residue*, int> indices = MstUtils::indexMap(I.getResidues());
+    fixed.resize(fixedResidues.size());
+    for (int i = 0; i < fixedResidues.size(); i++) {
+      fixed[i] = indices[fixedResidues[i]];
+    }
+  }
   F.pruneRedundancy(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
@@ -410,14 +397,13 @@ int main(int argc, char** argv) {
   fusionScores scores;
 
   // TERMify loop
-  Structure S = I;
+  Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
   mstreal R0 = getRadius(I);
   mstreal Rf = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
   int Ncyc = op.getInt("cyc", 10);
   fstream out; MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios_base::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
   for (int c = 0; c < Ncyc; c++) {
-    out << "MODEL " << c+1 << endl;
     cout << "Cycle " << c+1 << "..." << endl;
     /* --- Decorate the current conformation with TERMs --- */
     // first self TERMs
@@ -431,8 +417,8 @@ int main(int argc, char** argv) {
       Chain& C = S[ci];
       for (int ri = 0; ri < C.residueSize(); ri++) {
         Structure frag; vector<int> fragResIdx;
-        selectAround({&C[ri]}, pmSelf, frag, fragResIdx);
-// frag.writePDB("/tmp/self." + MstUtils::toString(ri) + ".pdb");
+        TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
+        if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
         addMatches(cache, frag, fragResIdx, allMatches, resTopo);
       }
@@ -447,17 +433,11 @@ int main(int argc, char** argv) {
       Residue* resA = list[k].first;
       Residue* resB = list[k].second;
       Structure frag; vector<int> fragResIdx;
-      selectAround({resA, resB}, pmPair, frag, fragResIdx);
-// frag.writePDB("/tmp/pair." + MstUtils::toString(k) + ".pdb");
+      TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
+      if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
       addMatches(cache, frag, fragResIdx, allMatches, resTopo);
     }
-
-// fstream ofs;
-// MstUtils::openFile(ofs, "/tmp/allmatches.pdb", ios_base::out);
-// S.writePDB(ofs);
-// for (int i = 0; i < allMatches.size(); i++) allMatches[i]->writePDB(ofs);
-// ofs.close();
 
     /* --- Fuse --- */
     fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
@@ -485,8 +465,10 @@ int main(int argc, char** argv) {
     }
 
     /* --- write intermediate result and clean up--- */
-    fused.writePDB(out); out << "ENDMDL" << endl;
-    S = fused;
+    out << "MODEL " << c+1 << endl;
+    fused.writePDB(out);
+    out << "ENDMDL" << endl;
+    S = fused.reassignChainsByConnectivity();
     for (int mi = 0; mi < allMatches.size(); mi++) delete(allMatches[mi]);
   }
   out.close();
