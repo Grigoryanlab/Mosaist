@@ -38,8 +38,6 @@
 CC := g++
 CPP_FLAGS := -O3 -std=c++11 -fPIC
 DEBUG_FLAGS := -g
-CPP_FLAGS := $(if $(INCLUDE_ARMA), $(CPP_FLAGS) -DARMA, $(CPP_FLAGS))
-LDLIBS := $(if $(INCLUDE_ARMA), -larmadillo, )
 
 # essential directories
 INCD := include
@@ -56,16 +54,24 @@ PROGRAMD	:= programs
 INC_DIRS := $(INCD)
 LIB_DIRS := 
 
+# armadillo-dependent stuff
+ifdef INCLUDE_ARMA
+  CPP_FLAGS := $(CPP_FLAGS) -DARMA
+  LDLIBS := -larmadillo
+  ARMA_PROGRAMS			:= chainGrow
+  chainGrow_DEPS		:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
+endif
+
 # targets and MST libraries
 TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testFASST testFuser testGrads testRotlib testTERMUtils testTransforms
-PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB chainGrow
+PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans
 
 # target dependencies
 findBestFreedom_DEPS	:= mstcondeg mstrotlib mstsystem msttransforms msttypes
-test_DEPS				:= msttypes
+test_DEPS			:= msttypes
 testAutofuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testConFind_DEPS		:= mstcondeg mstoptions mstrotlib mstsystem msttransforms msttypes
 testClusterer_DEPS		:= mstoptions msttypes
@@ -78,7 +84,6 @@ testTransforms_DEPS		:= mstlinalg msttransforms msttypes
 findTERMs_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 renumber_DEPS			:= mstsystem msttypes
 TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
-chainGrow_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence
 
