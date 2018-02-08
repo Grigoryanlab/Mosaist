@@ -2470,6 +2470,16 @@ mstreal RMSDCalculator::rmsdCutoff(const Structure& S, mstreal rmsdMax, mstreal 
   return RMSDCalculator::rmsdCutoff(L, rmsdMax, L0);
 }
 
+mstreal RMSDCalculator::rmsdCutoff(const vector<int>& J, const Structure& S, mstreal rmsdMax, mstreal L0) {
+  vector<vector<int> > I;
+  map<Chain*, vector<int> > residuesFromChain;
+  for (int i = 0; i < J.size(); i++) residuesFromChain[S.getResidue(J[i]).getChain()].push_back(J[i]);
+  vector<Chain*> keys = MstUtils::keys(residuesFromChain);
+  I.resize(keys.size());
+  for (int i = 0; i < keys.size(); i++) I[i] = residuesFromChain[keys[i]];
+  return RMSDCalculator::rmsdCutoff(I, rmsdMax, L0);
+}
+
 // QCP algorithm from: http://onlinelibrary.wiley.com/doi/10.1002/jcc.21439/epdf
 template <class T>
 mstreal RMSDCalculator::qcpRMSD(const T& A, const T& B, bool setTransform, bool setResiduals) {

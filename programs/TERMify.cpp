@@ -108,6 +108,9 @@ fasstSolutionSet fasstCache::search(bool verb) {
   int maxN = S->getMaxNumMatches();
   int minN = S->getMinNumMatches();
   mstreal redCut = S->getRedundancy();
+  // for some of the logic below it is convenient to assume no funny business
+  if (minSet && (minN <= 0)) MstUtils::error("min number of matches is set, but actual limit is not positive");
+  if (maxSet && (maxN <= 0)) MstUtils::error("min number of matches is set, but actual limit is not positive");
   chrono::high_resolution_clock::time_point begin, end;
   int searchTime;
   AtomPointerVector queryAtoms = S->getQuerySearchedAtoms();
@@ -159,7 +162,8 @@ fasstSolutionSet fasstCache::search(bool verb) {
     fasstSolutionSet& sols = *((*bestComp)->getSolutions());
     vector<mstreal> rmsds = S->matchRMSDs(sols, queryAtoms);
     for (int k = 0; k < sols.size(); k++) {
-      if (rmsds[k] <= cut) {
+      // take all below the cutoff, but at least minN and at most maxN (if set)
+      if ((rmsds[k] <= cut) || (minSet && (matches.size() < minN))) {
         rmsd = sols[k].getRMSD(); sols[k].setRMSD(rmsds[k]);      // overwrite with RMSD relative to current query
         if (redSet) matches.insert(sols[k], S->getRedundancy());  // insert copies the solution
         else matches.insert(sols[k]);
@@ -183,10 +187,33 @@ fasstSolutionSet fasstCache::search(bool verb) {
    * maxN ahd not been set, then the test of suitability for a cached query
    * guarantees that all matches to the current query within the desired cutoff
    * are among the matches to the cached query. */
-  bool doNewSearch = (bestComp == cache.end()) ||
-                     (matches.size() == 0) ||               // test if there are any matches so that worsetRMSD() exists
-                     (matches.worstRMSD() > safeRadius) ||  // if maxN is not set, this is guaranteed
-                     (maxSet && (matches.size() < maxN));
+  // bool doNewSearch = (bestComp == cache.end()) ||
+  //                    (matches.size() == 0) ||               // test if there are any matches so that worsetRMSD() exists
+  //                    (matches.worstRMSD() > safeRadius) ||  // if maxN is not set, we are guaranteed to have recovered all matches within the RMSD cutoff
+  //                    (maxSet && (matches.size() < maxN));
+
+  /* We can skip doing an actual search (i.e., we are guaranteed to already have
+   * all of the relevant matches) if all of the following are true:
+   * 1. a suitable neighboring cached query was available
+   * 2. one of the following (mutually exclusive) conditions is true:
+   *    A. max was not set, in which case, the earlier requirement that the safe
+   *       RMSD be no less than the desired cutoff means we have found all
+   *       matches period.
+   *    B. max was set ADN either i) we found that many matches, all within the
+   *       safe RMSD cutoff (i.e., they are guaranteed to be the best matches
+   *       overall) or ii) we possibly found fewer matches BUT the safe radius
+   *       was no smaller than the cutoff, so these are all the matches that
+   *       there are in the full database (under the cutoff).
+   * 3. one of the following (mutually exclusive) conditions is true:
+   *    A. min was not set
+   *    B. min was set and we have at least that many matches, all of which are
+   *       under the safe RMSD cutoff.
+   *    matches???
+   * */
+  bool noNeedForNewSearch = (bestComp != cache.end()) &&
+                            (!maxSet || ((safeRadius >= cut) || ((matches.size() >= maxN) && (matches.worstRMSD() < safeRadius)))) &&
+                            (!minSet || ((matches.size() >= minN) && (matches.worstRMSD() < safeRadius)));
+  bool doNewSearch = !noNeedForNewSearch;
   if (doNewSearch) {
     if (verb) {
       cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
@@ -209,7 +236,11 @@ fasstSolutionSet fasstCache::search(bool verb) {
      * under the given RMSD cutoff anyway). So first try without it. */
     for (int c = 0; c < (minSet ? 2 : 1); c++) {
       if (minSet) {
-        if (c) S->setMinNumMatches(minN);
+        // if removing the min requirement does not fly, bring the requirement
+        // back, by find a few more. In this way, if this type of search is
+        // repeated with a slightly different query, we will be more likely to
+        // succeed with a lookup
+        if (c) S->setMinNumMatches(minN*2);
         else S->unsetMinNumMatches();
         if (c && verb) cout << "\t\t\tDID NOT WORK without min (found only " << matches.size() << " matches, while minN = " << minN << "), so repeating search..." << endl;
       }
@@ -304,11 +335,11 @@ mstreal getRadius(const Structure& S) {
   return rad;
 }
 
-void addMatches(fasstCache& C, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo) {
+void addMatches(fasstCache& C, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo, fstream& matchOut) {
 //frag.writePDB("/tmp/pair.pdb"); cout << "fragment saved, RMSD = " << RMSDCalculator::rmsdCutoff(frag) << endl;
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
-  F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
+  // F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
   F->setMaxNumMatches(10);
   F->setMinNumMatches(2);
 // TODO: fix so that it _always_ reports the same results as regular searching (basically, up to removing duplicates in the right way)
@@ -337,6 +368,10 @@ if (0) {
   for (auto it = matches.begin(); it != matches.end(); ++it) {
     allMatches.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
     Structure& match = *(allMatches.back());
+    if (matchOut.is_open() && (it == matches.begin())) {
+      match.writePDB(matchOut);
+      matchOut << "END" << endl;
+    }
     for (int k = 0; k < fragResIdx.size(); k++) {
       resTopo[fragResIdx[k]].push_back(&(match.getResidue(k)));
     }
@@ -395,16 +430,23 @@ int main(int argc, char** argv) {
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000;
   fusionScores scores;
+  fstream out, shellOut;
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
   mstreal R0 = getRadius(I);
   mstreal Rf = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
   int Ncyc = op.getInt("cyc", 10);
-  fstream out; MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios_base::out);
+  MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios_base::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
   for (int c = 0; c < Ncyc; c++) {
     cout << "Cycle " << c+1 << "..." << endl;
+    if (c == 0) {
+      MstUtils::openFile(shellOut, op.getString("o") + ".shell.init.pdb", ios_base::out);
+    }
+    if (c == Ncyc - 1) {
+      MstUtils::openFile(shellOut, op.getString("o") + ".shell.pdb", ios_base::out);
+    }
     /* --- Decorate the current conformation with TERMs --- */
     // first self TERMs
     cout << "Searching for self TERMs..." << endl;
@@ -420,7 +462,8 @@ int main(int argc, char** argv) {
         TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
-        addMatches(cache, frag, fragResIdx, allMatches, resTopo);
+        F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
+        addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut);
       }
     }
 
@@ -436,7 +479,8 @@ int main(int argc, char** argv) {
       TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
-      addMatches(cache, frag, fragResIdx, allMatches, resTopo);
+      F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
+      addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut);
     }
 
     /* --- Fuse --- */
@@ -470,6 +514,7 @@ int main(int argc, char** argv) {
     out << "ENDMDL" << endl;
     S = fused.reassignChainsByConnectivity();
     for (int mi = 0; mi < allMatches.size(); mi++) delete(allMatches[mi]);
+    if (shellOut.is_open()) shellOut.close();
   }
   out.close();
   S.writePDB(op.getString("o") + ".fin.pdb");

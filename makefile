@@ -30,7 +30,7 @@
 #		consider maintaining this so it's easier to determine whether a target, library, or dependency already exists!
 
 # customizations
-# define environmental variable INCLUDd_ARMA if you want to compile with Armadillo C++ linear algebra library (needed for some more complex things in mstlinalg)
+# define environmental variable INCLUDE_ARMA if you want to compile with Armadillo C++ linear algebra library (needed for some more complex things in mstlinalg)
 
 # stuff meant to be regularly updated:
 

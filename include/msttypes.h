@@ -620,6 +620,11 @@ class RMSDCalculator {
      * residues within a chain can be treated. Residues in different chains are
      * still assumed to be independent. */
     static mstreal rmsdCutoff(const vector<vector<int> >& I, mstreal rmsdMax = 1.1, mstreal L0 = 15);
+    /* RMSD is computed for the fragment comprising residues from the given
+     * Structure S, whose indides are given in J. Like in the previous function,
+     * for residues located within the same chain of S, their relative locations
+     * are accounted for when computing degrees of freedom. */
+    static mstreal rmsdCutoff(const vector<int>& J, const Structure& S, mstreal rmsdMax = 1.1, mstreal L0 = 15);
 
     template <class T>
     mstreal qcpRMSD(const T& A, const T& B, bool setTransform = false, bool setResiduals = false);
