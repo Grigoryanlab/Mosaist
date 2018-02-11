@@ -417,16 +417,8 @@ vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
   // find all residues that are within cutoff distance of the given list of residues
   fastmap<Residue*, bool> within;
   for (int k = 0; k < residues.size(); k++) {
-    vector<int> close = caNN->getPointsWithin(residues[k]->findAtom("CA"), 0, dcut);
-    bool foundSelf = false;
-    for (int i = 0; i < close.size(); i++) {
-      Residue* wres = ca[close[i]]->getResidue();
-      within[wres] = true;
-      if (residues[i] == wres) foundSelf = true;
-    }
-    if (!foundSelf) {
-      MstUtils::error("when looking for residues around " + MstUtils::toString(residues[k]) + " did not find self!", "ConFind::getNeighbors(vector<Residue*>&)");
-    }
+    vector<Residue*> neigh = getNeighbors(residues[k]);
+    for (int i = 0; i < neigh.size(); i++) within[neigh[i]] = true;
   }
   vector<Residue*> neighborhood(within.size(), NULL);
   fastmap<Residue*, bool>::iterator it; int i;
@@ -437,9 +429,12 @@ vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
 }
 
 bool ConFind::areNeighbors(Residue* resA, Residue* resB) {
-  Atom* CAA = resA->findAtom("CA");
-  Atom* CAB = resB->findAtom("CA");
-  return (CAA->distance(*CAB) <= dcut);
+  MstUtils::error("function ConFind::areNeighbors is deprecated; use ConFind::getNeighbors instead", "ConFind::areNeighbors(Residue*, Residue*)");
+  return true; // for the compiler
+
+  // Atom* CAA = resA->findAtom("CA");
+  // Atom* CAB = resB->findAtom("CA");
+  // return (CAA->distance(*CAB) <= dcut);
 }
 
 void ConFind::openLogFile(string fname, bool append) {

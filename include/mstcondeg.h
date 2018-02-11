@@ -133,7 +133,7 @@ class ConFind {
                                                               // resB can potentially interfere with the amino-acid choice at resA
 
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
-    mstreal dcut;                  // CA-AC distance cutoff beyond which we do not consider pairwise interactions
+    mstreal dcut;                  // CA-CA distance cutoff beyond which we do not consider pairwise interactions
     mstreal clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively
     fastmap<string, double> aaProp; // amino-acid propensities (in percent)
     bool doNotCountCB;          // if true, CB is not counted as a side-chain atom for counting clashes (except for ALA)
