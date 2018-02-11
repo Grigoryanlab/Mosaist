@@ -1032,6 +1032,20 @@ mstreal& Atom::operator[](int i) {
   return x; // just to silence the warning from some compilres; in reality, this is never reached
 }
 
+const mstreal& Atom::operator[](int i) const {
+  switch(i) {
+    case 0:
+      return x;
+    case 1:
+      return y;
+    case 2:
+      return z;
+    default:
+      MstUtils::error("invalid coordinate index " + MstUtils::toString(i), "Atom::operator[](int) const");
+  }
+  return x; // just to silence the warning from some compilres; in reality, this is never reached
+}
+
 CartesianPoint Atom::getCoor() const {
   CartesianPoint coor(x, y, z); return coor;
 }

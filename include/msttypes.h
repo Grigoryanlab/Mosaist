@@ -290,6 +290,7 @@ class Atom {
     mstreal getY() const{ return y; }
     mstreal getZ() const{ return z; }
     mstreal& operator[](int i);
+    const mstreal& operator[](int i) const;
     CartesianPoint getCoor() const;
     CartesianPoint getAltCoor(int altInd) const;
     mstreal getAltB(int altInd) const;

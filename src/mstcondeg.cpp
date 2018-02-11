@@ -252,7 +252,7 @@ contactList ConFind::getContacts(const vector<Residue*>& residues, mstreal cdcut
   for (int i = 0; i < residues.size(); i++) {
     Residue* resi = residues[i];
     collProbUpdateOn(resi);
-    vector<Residue*> neighborhood = getNeighbors(resi); // TODO: a lot of efficiency is being lost due to the neighbors list being so permissive
+    vector<Residue*> neighborhood = getNeighbors(resi);
     for (int j = 0; j < neighborhood.size(); j++) {
       Residue* resj = neighborhood[j];
       if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
@@ -357,7 +357,6 @@ vector<mstreal> ConFind::getFreedom(vector<Residue*>& residues) {
 mstreal ConFind::computeFreedom(Residue* res) {
   if (freedom.find(res) != freedom.end()) return freedom[res];
   if (collProb.find(res) == collProb.end()) {
-cout << "in structure: " << res->getStructure()->getName() << ", residue " << *res << endl;
     MstUtils::error("residue not cached", "ConFind::computeFreedom");
   }
 
@@ -388,8 +387,6 @@ cout << "in structure: " << res->getStructure()->getName() << ", residue " << *r
          n1 /= numLibraryRotamers[res]; n2 /= numLibraryRotamers[res];
          freedom[res] = sqrt((n2 * n2 + n2*n1)/2);
       }
-//      freedom[res] = sqrt((n1*n1 + 0.2*n2*n2)/(1 + 0.2))/numLibraryRotamers[res];
-//cout << "REPORT: " << *res << " " << n1 << " " << n2 << endl;
       break;
     default:
       MstUtils::error("unknown freedom type '" + MstUtils::toString(freedomType) + "'", "ConFind::computeFreedom");
@@ -429,12 +426,9 @@ vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
 }
 
 bool ConFind::areNeighbors(Residue* resA, Residue* resB) {
-  MstUtils::error("function ConFind::areNeighbors is deprecated; use ConFind::getNeighbors instead", "ConFind::areNeighbors(Residue*, Residue*)");
-  return true; // for the compiler
-
-  // Atom* CAA = resA->findAtom("CA");
-  // Atom* CAB = resB->findAtom("CA");
-  // return (CAA->distance(*CAB) <= dcut);
+  Atom* CAA = resA->findAtom("CA");
+  Atom* CAB = resB->findAtom("CA");
+  return (CAA->distance(*CAB) <= dcut);
 }
 
 void ConFind::openLogFile(string fname, bool append) {
