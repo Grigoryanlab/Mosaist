@@ -321,6 +321,18 @@ void Transform::apply(const AtomPointerVector& vec) {
   for (int i = 0; i < vec.size(); i++) apply(vec[i]);
 }
 
+void Transform::write(ostream& _os) const {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) MstUtils::writeBin(_os, M[i][j]);
+  }
+}
+
+void Transform::read(istream& _is) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) MstUtils::readBin(_is, M[i][j]);
+  }
+}
+
 
 /* --------- TransformFactory --------- */
 /* lots of valuable information was taken from http://web.cs.iastate.edu/~cs577/handouts/homogeneous-transform.pdf */

@@ -19,10 +19,42 @@ using namespace MST;
 class fasstCache {
   public:
     fasstCache(FASST* s) { S = s; maxNumResults = 1000; }
-    ~fasstCache();
+    ~fasstCache() { clear(); }
+    void clear(); // clears cache (removes all solutions)
     FASST* getFASST() const { return S; }
     fasstSolutionSet search(bool verb = false);
     int getMaxNumResults() const { return maxNumResults; }
+
+    void write(const string& filename) const {
+      fstream out;
+      MstUtils::openFile(out, filename, fstream::out | fstream::binary, "fasstCache::write");
+      write(out);
+      out.close();
+    }
+
+    void write(ostream &_os) const { // write the object to a binary stream
+      MstUtils::writeBin(_os, maxNumResults);
+      MstUtils::writeBin(_os, (int) cache.size());
+      for (auto it = cache.begin(); it != cache.end(); ++it) (*it)->write(_os);
+    }
+
+    void read(const string& filename) {
+      fstream in;
+      MstUtils::openFile(in, filename, fstream::in | fstream::binary, "fasstCache::read");
+      read(in);
+      in.close();
+    }
+
+    void read(istream &_is) { // write object from a binary stream
+      clear();
+      MstUtils::readBin(_is, maxNumResults);
+      int numResults; MstUtils::readBin(_is, numResults);
+      for (int i = 0; i < numResults; i++) {
+        fasstCachedResult* result = new fasstCachedResult();
+        result->read(_is);
+        cache.insert(result);
+      }
+    }
 
   protected:
     static vector<int> getStructureTopology(const Structure& S) {
@@ -73,6 +105,31 @@ class fasstCache {
           return &ri < &rj;
         }
 
+        friend ostream& operator<<(ostream &_os, const fasstCachedResult& _res) {
+          _os << "[" << MstUtils::vecToString(_res.topology) << "] " << _res.rmsdCut << "(" << _res.priority << ")" << endl;
+          _os << _res.query << endl << *(_res.solSet);
+          return _os;
+        }
+
+        void write(ostream &_os) const {
+          MstUtils::writeBin(_os, topology);
+          MstUtils::writeBin(_os, rmsdCut);
+          MstUtils::writeBin(_os, priority);
+          solSet->write(_os);
+          query.write(_os);
+        }
+
+        void read(istream &_is) {
+          MstUtils::readBin(_is, topology);
+          MstUtils::readBin(_is, rmsdCut);
+          MstUtils::readBin(_is, priority);
+          if (solSet != NULL) delete(solSet);
+          solSet = new fasstSolutionSet();
+          solSet->read(_is);
+          query.deletePointers();
+          query.read(_is);
+        }
+
       private:
         AtomPointerVector query;
         vector<int> topology;
@@ -93,8 +150,9 @@ class fasstCache {
     RMSDCalculator rc;
 };
 
-fasstCache::~fasstCache() {
+void fasstCache::clear() {
   for (auto it = cache.begin(); it != cache.end(); ++it) delete(*it);
+  cache.clear();
 }
 
 fasstSolutionSet fasstCache::search(bool verb) {
@@ -178,20 +236,6 @@ fasstSolutionSet fasstCache::search(bool verb) {
     }
   }
 
-  /* In order for us to forgo a raw search, we have to have found a suitable
-   * neighboring cached query. If max number of matches had been set, we have to
-   * have identified maxN matches to the current query within safe RMSD of it.
-   * The matches being within the safe RMSD cutoff guarantees that no better
-   * matches exist, and there being maxN of them means no better matches would
-   * be needed anyway, since we have already git the maximum number allowed. If
-   * maxN ahd not been set, then the test of suitability for a cached query
-   * guarantees that all matches to the current query within the desired cutoff
-   * are among the matches to the cached query. */
-  // bool doNewSearch = (bestComp == cache.end()) ||
-  //                    (matches.size() == 0) ||               // test if there are any matches so that worsetRMSD() exists
-  //                    (matches.worstRMSD() > safeRadius) ||  // if maxN is not set, we are guaranteed to have recovered all matches within the RMSD cutoff
-  //                    (maxSet && (matches.size() < maxN));
-
   /* We can skip doing an actual search (i.e., we are guaranteed to already have
    * all of the relevant matches) if all of the following are true:
    * 1. a suitable neighboring cached query was available
@@ -208,7 +252,6 @@ fasstSolutionSet fasstCache::search(bool verb) {
    *    A. min was not set
    *    B. min was set and we have at least that many matches, all of which are
    *       under the safe RMSD cutoff.
-   *    matches???
    * */
   bool noNeedForNewSearch = (bestComp != cache.end()) &&
                             (!maxSet || ((safeRadius >= cut) || ((matches.size() >= maxN) && (matches.worstRMSD() < safeRadius)))) &&

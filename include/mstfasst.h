@@ -52,6 +52,9 @@ class fasstSolution {
       return false;
     }
 
+    void write(ostream& _os) const;
+    void read(istream& _is);
+
     friend ostream& operator<<(ostream &_os, const fasstSolution& _sol) {
       _os << std::setprecision(6) << std::fixed << _sol.rmsd << " " << _sol.targetIndex << " [" << MstUtils::vecToString(_sol.alignment, ", ") << "]";
       return _os;
@@ -70,6 +73,42 @@ class fasstSolution {
 
     class solContext {
       public:
+        solContext() {}
+        solContext(const solContext& sol) {
+          segSeq = sol.segSeq; nSeq = sol.nSeq; cSeq = sol.cSeq;
+          segStr = sol.segStr; nStr = sol.nStr; cStr = sol.cStr;
+          for (int i = 0; i < sol.segStr.size(); i++) segStr[i] = sol.segStr[i].clone();
+          for (int i = 0; i < sol.nStr.size(); i++) nStr[i] = sol.nStr[i].clone();
+          for (int i = 0; i < sol.cStr.size(); i++) cStr[i] = sol.cStr[i].clone();
+        }
+        ~solContext() {
+          for (int i = 0; i < segStr.size(); i++) segStr[i].deletePointers();
+          for (int i = 0; i < nStr.size(); i++) nStr[i].deletePointers();
+          for (int i = 0; i < cStr.size(); i++) cStr[i].deletePointers();
+        }
+        void write(ostream &_os) const { // write solContext to a binary stream
+          MstUtils::writeBin(_os, (int) segSeq.size());
+          for (int i = 0; i < segSeq.size(); i++) {
+            segSeq[i].write(_os); nSeq[i].write(_os); cSeq[i].write(_os);
+          }
+          MstUtils::writeBin(_os, (int) segStr.size());
+          for (int i = 0; i < segStr.size(); i++) {
+            segStr[i].write(_os); nStr[i].write(_os); cStr[i].write(_os);
+          }
+        }
+        void read(istream &_is) { // read solContext from a binary stream
+          int len; MstUtils::readBin(_is, len);
+          segSeq.resize(len); nSeq.resize(len); cSeq.resize(len);
+          for (int i = 0; i < len; i++) {
+            segSeq[i].read(_is); nSeq[i].read(_is); cSeq[i].read(_is);
+          }
+          MstUtils::readBin(_is, len);
+          segStr.resize(len); nStr.resize(len); cStr.resize(len);
+          for (int i = 0; i < len; i++) {
+            segStr[i].read(_is); nStr[i].read(_is); cStr[i].read(_is);
+          }
+        }
+
         vector<Sequence> segSeq, nSeq, cSeq; // sequence of each segment and N- and C-terminal contexts
         vector<AtomPointerVector> segStr, nStr, cStr; // structure of each segment and N- and C-terminal contexts
     };
@@ -96,9 +135,12 @@ class fasstSolutionSet {
     mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
     vector<fasstSolution*> orderByDiscovery();
 
+    void write(ostream &_os) const; // write fasstSolutionSet to a binary stream
+    void read(istream &_os);  // read fasstSolutionSet from a binary stream
+
     friend ostream& operator<<(ostream &_os, const fasstSolutionSet& _sols) {
       for (auto it = _sols.solsSet.begin(); it != _sols.solsSet.end(); ++it) {
-        _os << *it << endl;
+        _os << *it;
       }
       return _os;
     }

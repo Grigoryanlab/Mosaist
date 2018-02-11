@@ -212,6 +212,19 @@ void Sequence::resize(int newLen, int newIdx) {
   else seq.resize(newLen, newIdx);
 }
 
+void Sequence::write(ostream& _os) const {
+  MstUtils::writeBin(_os, getName());
+  MstUtils::writeBin(_os, length());
+  for (int i = 0; i < length(); i++) MstUtils::writeBin(_os, (*this)[i]);
+}
+
+void Sequence::read(istream& _is) {
+  MstUtils::readBin(_is, name);
+  int len; MstUtils::readBin(_is, len);
+  seq.resize(len);
+  for (int i = 0; i < seq.size(); i++) MstUtils::readBin(_is, seq[i]);
+}
+
 ostream& MST::operator<<(ostream &_os, const Sequence& _seq) {
   _os << "> " << _seq.getName() << endl;
   int k = 0;

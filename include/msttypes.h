@@ -70,7 +70,7 @@ class Structure {
     Chain& operator[](int i) const { return *(chains[i]); }
     vector<Atom*> getAtoms() const;
     vector<Residue*> getResidues() const;
-    void setName(string _name) { name = _name; }
+    void setName(const string& _name) { name = _name; }
     string getName() const { return name; }
     void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout
 
@@ -206,7 +206,7 @@ class Residue {
     Structure* getStructure() const { return (parent == NULL) ? NULL : parent->getParent(); }
 
     void setName(const char* _name) { resname = (string) _name; }
-    void setName(string _name) { resname = _name; }
+    void setName(const string& _name) { resname = _name; }
     void setIcode(char _icode) { icode = _icode; }
     void setNum(int num) { resnum = num; }
     void copyAtoms(Residue& R, bool copyAlt = true);
@@ -311,7 +311,7 @@ class Atom {
     Structure* getStructure() { Chain* chain = getChain(); return (chain == NULL) ? NULL : chain->getParent(); }
 
     void setName(const char* _name);
-    void setName(string _name);
+    void setName(const string& _name);
     void setX(mstreal _x) { x = _x; }
     void setY(mstreal _y) { y = _y; }
     void setZ(mstreal _z) { z = _z; }
@@ -333,6 +333,7 @@ class Atom {
     void makeAlternativeMain(int altInd);
 
     void addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, char _alt = ' ');
+    void clearAlternatives();
 
     string pdbLine() { return pdbLine((this->parent == NULL) ? 1 : this->parent->getNum(), index); }
     string pdbLine(int resIndex, int atomIndex);
@@ -355,11 +356,9 @@ class Atom {
       return build(*diA, *anA, *thA, di, an, th, radians);
     }
 
-    friend ostream & operator<<(ostream &_os, const Atom& _atom) {
-      _os << _atom.getName() << _atom.getAlt() << " " << _atom.index << " " << (_atom.isHetero() ? "HETERO" : "");
-      _os << _atom.x << " " << _atom.y << " " << _atom.z << " : " << _atom.occ << " " << _atom.B;
-      return _os;
-    }
+    void write(ostream& _os) const; // write Atom to a binary stream
+    void read(istream& _is);  // read Atom from a binary stream
+    friend ostream & operator<<(ostream &_os, const Atom& _atom);
 
   protected:
     void setParent(Residue* _parent) { parent = _parent; } // will not itself update residue/atom counts in parents
@@ -519,16 +518,13 @@ class AtomPointerVector : public vector<Atom*> {
     mstreal boundingSphereRadiusCent();
     void deletePointers();
 
-    AtomPointerVector clone();
+    AtomPointerVector clone() const;
     void clone(AtomPointerVector& into) const;
     AtomPointerVector subvector(int beg, int end); // returns the range [beg, end)
 
-    friend ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms) {
-      for (int i = 0; i < _atoms.size(); i++) {
-        _os << _atoms[i]->pdbLine() << endl;
-      }
-      return _os;
-    }
+    void write(ostream& _os) const; // write AtomPointerVector to a binary stream (parent information will be lost)
+    void read(istream& _is);  // read AtomPointerVector from a binary stream
+    friend ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms);
 };
 
 class expressionTree {
@@ -817,8 +813,8 @@ class MstUtils {
     static MST::mstreal sign(MST::mstreal val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
-    static vector<MST::mstreal> splitToReal(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = false);
-    static vector<int> splitToInt(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = false);
+    static vector<MST::mstreal> splitToReal(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = true);
+    static vector<int> splitToInt(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = true);
     static string join(const string& delim, const vector<string>& words);
     static string readNullTerminatedString(fstream& ifs);
     static string getDate();
@@ -867,11 +863,15 @@ class MstUtils {
 
     // read to/from binary file
     template <class T>
-    static void writeBin(fstream& ofs, const T& val); // binary output for primitive types
-    static void writeBin(fstream& ofs, const string& str) { ofs << str << '\0'; } // special overload for strings
+    static void writeBin(ostream& ofs, const T& val); // binary output for primitive types
+    static void writeBin(ostream& ofs, const string& str) { ofs << str << '\0'; } // special overload for strings
     template <class T>
-    static void readBin(fstream& ifs, T& val);
-    static void readBin(fstream& ifs, string& str) { getline(ifs, str, '\0'); };
+    static void writeBin(ostream& ofs, const vector<T>& vec);
+    template <class T>
+    static void readBin(istream& ifs, T& val);
+    static void readBin(istream& ifs, string& str) { getline(ifs, str, '\0'); };
+    template <class T>
+    static void readBin(istream& ifs, vector<T>& vec);
 };
 
 template <class T>
@@ -1001,13 +1001,26 @@ map<T, int> MstUtils::indexMap(const vector<T>& vec) {
 }
 
 template <class T>
-void MstUtils::writeBin(fstream& ofs, const T& val) {
+void MstUtils::writeBin(ostream& ofs, const T& val) {
   ofs.write((char*) (&val), sizeof(T));
 }
 
 template <class T>
-void MstUtils::readBin(fstream& ifs, T& val) {
+void MstUtils::writeBin(ostream& ofs, const vector<T>& vec) {
+  MstUtils::writeBin(ofs, (int) vec.size());
+  for (int i = 0; i < vec.size(); i++) MstUtils::writeBin(ofs, vec[i]);
+}
+
+template <class T>
+void MstUtils::readBin(istream& ifs, T& val) {
   ifs.read((char*) (&val), sizeof(T));
+}
+
+template <class T>
+void MstUtils::readBin(istream& ifs, vector<T>& vec) {
+  int len; MstUtils::readBin(ifs, len);
+  vec.resize(len);
+  for (int i = 0; i < vec.size(); i++) MstUtils::readBin(ifs, vec[i]);
 }
 
 template <class T>

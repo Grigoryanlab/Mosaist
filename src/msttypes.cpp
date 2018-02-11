@@ -1068,7 +1068,7 @@ void Atom::setName(const char* _name) {
   strcpy(name, _name);
 }
 
-void Atom::setName(string _name) {
+void Atom::setName(const string& _name) {
   if (name != NULL) delete[] name;
   name = new char[_name.size()+1];
   strcpy(name, _name.c_str());
@@ -1099,6 +1099,11 @@ void Atom::addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstrea
   }
   alternatives->push_back(altInfo(_x, _y, _z, _B, _occ, _alt));
 }
+
+void Atom::clearAlternatives() {
+  if (alternatives != NULL) { delete alternatives; alternatives = NULL; }
+}
+
 
 string Atom::pdbLine(int resIndex, int atomIndex) {
   char line[100]; // a PDB line is at most 80 characters, so this is plenty
@@ -1191,6 +1196,49 @@ bool Atom::build(const Atom& diA, const Atom& anA, const Atom& thA, mstreal di, 
   return true;
 }
 
+void Atom::write(ostream& _os) const {
+  MstUtils::writeBin(_os, x); MstUtils::writeBin(_os, y); MstUtils::writeBin(_os, z);
+  MstUtils::writeBin(_os, occ); MstUtils::writeBin(_os, B);
+  MstUtils::writeBin(_os, getName()); MstUtils::writeBin(_os, alt);
+  MstUtils::writeBin(_os, het); MstUtils::writeBin(_os, index);
+  if (alternatives == NULL) {
+    MstUtils::writeBin(_os, false);
+  } else {
+    MstUtils::writeBin(_os, true);
+    MstUtils::writeBin(_os, (int) alternatives->size());
+    for (int i = 0; i < alternatives->size(); i++) {
+      Atom::altInfo& I = (*(alternatives))[i];
+      MstUtils::writeBin(_os, I.x); MstUtils::writeBin(_os, I.y); MstUtils::writeBin(_os, I.z);
+      MstUtils::writeBin(_os, I.occ); MstUtils::writeBin(_os, I.B); MstUtils::writeBin(_os, I.alt);
+    }
+  }
+}
+
+void Atom::read(istream& _os) {
+  MstUtils::readBin(_os, x); MstUtils::readBin(_os, y); MstUtils::readBin(_os, z);
+  MstUtils::readBin(_os, occ); MstUtils::readBin(_os, B);
+  string _name; MstUtils::readBin(_os, _name); setName(_name); MstUtils::readBin(_os, alt);
+  MstUtils::readBin(_os, het); MstUtils::readBin(_os, index);
+  bool hasAlt; MstUtils::readBin(_os, hasAlt);
+  clearAlternatives();
+  if (hasAlt) {
+    int nAlts; MstUtils::readBin(_os, nAlts);
+    alternatives = new vector<altInfo>(nAlts);
+    for (int i = 0; i < alternatives->size(); i++) {
+      mstreal aX, aY, aZ, aO, aB, aA;
+      MstUtils::readBin(_os, aX); MstUtils::readBin(_os, aY); MstUtils::readBin(_os, aZ);
+      MstUtils::readBin(_os, aO); MstUtils::readBin(_os, aB); MstUtils::readBin(_os, aA);
+      addAlternative(aX, aY, aZ, aB, aO, aA);
+    }
+  }
+}
+
+ostream& MST::operator<<(ostream &_os, const Atom& _atom) {
+  _os << _atom.getName() << _atom.getAlt() << " " << _atom.index << " " << (_atom.isHetero() ? "HETERO" : "");
+  _os << _atom.x << " " << _atom.y << " " << _atom.z << " : " << _atom.occ << " " << _atom.B;
+  return _os;
+}
+
 /* --------- AtomPointerVector --------- */
 
 void AtomPointerVector::push_back(const Residue& R) {
@@ -1252,7 +1300,7 @@ void AtomPointerVector::deletePointers() {
   resize(0);
 }
 
-AtomPointerVector AtomPointerVector::clone() {
+AtomPointerVector AtomPointerVector::clone() const {
   AtomPointerVector into;
   clone(into);
   return into;
@@ -1270,6 +1318,26 @@ void AtomPointerVector::clone(AtomPointerVector& into) const {
     newAtom->setParent(NULL);
     into[L + i] = newAtom;
   }
+}
+
+void AtomPointerVector::write(ostream &_os) const {
+  MstUtils::writeBin(_os, (int) size());
+  for (int i = 0; i < size(); i++) (*this)[i]->write(_os);
+}
+
+void AtomPointerVector::read(istream &_is) {
+  int len; MstUtils::readBin(_is, len); resize(len, NULL);
+  for (int i = 0; i < size(); i++) {
+    (*this)[i] = new Atom();
+    (*this)[i]->read(_is);
+  }
+}
+
+ostream& MST::operator<<(ostream &_os, const AtomPointerVector& _atoms) {
+  for (int i = 0; i < _atoms.size(); i++) {
+    _os << _atoms[i]->pdbLine() << endl;
+  }
+  return _os;
 }
 
 /* --------- CartesianPoint --------- */

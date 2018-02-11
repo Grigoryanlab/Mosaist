@@ -12,6 +12,7 @@ class Sequence {
     // allows one to mixes of 3- and 1-letter codes, with a delimiter
     Sequence(const string& _seq, const string& _name = "", const string& delim = "");
     Sequence(const Sequence& S);
+    Sequence(const vector<int> _seq, const string& _name = "") { seq = _seq; name = _name; }
 
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }
@@ -25,6 +26,9 @@ class Sequence {
     void appendResidue(const string& aa);
     void appendResidue(int aai) { seq.push_back(aai); }
     void resize(int newLen, int newIdx = -1);
+    void write(ostream& _os) const; // write Sequence to a binary stream
+    void read(istream& _is);  // read Sequence from a binary stream
+
     friend ostream & operator<<(ostream &_os, const Sequence& _seq);
 
   private:

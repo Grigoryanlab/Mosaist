@@ -1025,6 +1025,37 @@ void fasstSolution::setStructContext(const vector<AtomPointerVector>& _segStr, c
   context->segStr = _segStr; context->nStr = _nStr; context->cStr = _cStr;
 }
 
+void fasstSolution::write(ostream& _os) const {
+  MstUtils::writeBin(_os, rmsd);
+  MstUtils::writeBin(_os, targetIndex);
+  MstUtils::writeBin(_os, (int) alignment.size());
+  for (int i = 0; i < alignment.size(); i++) {
+    MstUtils::writeBin(_os, alignment[i]);
+    MstUtils::writeBin(_os, segLengths[i]);
+  }
+  tr.write(_os);
+  if (context == NULL) MstUtils::writeBin(_os, false);
+  else { MstUtils::writeBin(_os, true); context->write(_os); }
+}
+
+void fasstSolution::read(istream& _is) {
+  MstUtils::readBin(_is, rmsd);
+  MstUtils::readBin(_is, targetIndex);
+  int len; MstUtils::readBin(_is, len);
+  alignment.resize(len); segLengths.resize(len);
+  for (int i = 0; i < alignment.size(); i++) {
+    MstUtils::readBin(_is, alignment[i]);
+    MstUtils::readBin(_is, segLengths[i]);
+  }
+  tr.read(_is);
+  bool hasCont; MstUtils::readBin(_is, hasCont);
+  if (context != NULL) { delete(context); context = NULL; }
+  if (hasCont) {
+    context = new solContext();
+    context->read(_is);
+  }
+}
+
 /* --------- fasstSolutionSet --------- */
 fasstSolutionSet::fasstSolutionSet(const fasstSolutionSet& sols) {
   *this = sols;
@@ -1136,4 +1167,20 @@ vector<fasstSolution*> fasstSolutionSet::orderByDiscovery() {
   }
   sort(sols.begin(), sols.end(), fasstSolution::foundBefore);
   return sols;
+}
+
+void fasstSolutionSet::write(ostream &_os) const {
+  MstUtils::writeBin(_os, (int) solsSet.size());
+  for (auto it = solsSet.begin(); it != solsSet.end(); ++it) it->write(_os);
+}
+
+void fasstSolutionSet::read(istream &_is) {
+  updated = true;
+  int len; MstUtils::readBin(_is, len);
+  solsSet.clear();
+  for (int i = 0; i < len; i++) {
+    fasstSolution sol;
+    sol.read(_is);
+    insert(sol);
+  }
 }

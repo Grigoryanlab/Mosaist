@@ -82,6 +82,10 @@ class Transform {
     void apply(Structure* S);
     void apply(const AtomPointerVector& vec);
 
+    void write(ostream& _os) const; // write Tansform to a binary stream
+    void read(istream& _is);  // read Tansform from a binary stream
+
+
     friend ostream & operator<<(ostream &_os, const Transform& _T) {
       for (int i = 0; i < 4; i++) {
         _os << endl;
@@ -91,6 +95,7 @@ class Transform {
       }
       return _os;
     }
+
   private:
     mstreal M[4][4];         // transformation matrix in homogeneous coordinates
 };
