@@ -197,9 +197,12 @@ mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool c
   if (!cloudA->overlaps(*cloudB)) return 0;
 
   // if so, find rotamer pairs that clash
+  // NOTE: this is the slow part of contact finding; could perhaps speed up by
+  // storing smaller ProximitySearch object (not decorated) for each rotamer
   fastmap<rotamerID*, fastmap<rotamerID*, bool> > clashing;
+  vector<rotamerID*> p;
   for (int ai = 0; ai < cloudA->pointSize(); ai++) {
-    vector<rotamerID*> p = cloudB->getPointsWithin(cloudA->getPoint(ai), 0, contDist);
+    cloudB->getPointsWithin(cloudA->getPoint(ai), 0, contDist, &p);
     if (p.size() == 0) continue;
     rotamerID* rID = cloudA->getPointTag(ai);
     for (int i = 0; i < p.size(); i++) clashing[rID][p[i]] = true;

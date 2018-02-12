@@ -737,11 +737,20 @@ class DecoratedProximitySearch : public ProximitySearch {
     }
 
     vector<T> getPointsWithin(const CartesianPoint& c, mstreal dmin, mstreal dmax) {
-      vector<int> inds = this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
+      vector<int> inds;
+      this->ProximitySearch::pointsWithin(c, dmin, dmax, &inds, true);
       vector<T> ret(inds.size());
       for (int i = 0; i < inds.size(); i++) ret[i] = tags[inds[i]];
       return ret;
     }
+
+    void getPointsWithin(const CartesianPoint& c, mstreal dmin, mstreal dmax, vector<T>* list) {
+      vector<int> inds;
+      this->ProximitySearch::pointsWithin(c, dmin, dmax, &inds, true);
+      list->resize(inds.size());
+      for (int i = 0; i < inds.size(); i++) (*list)[i] = tags[inds[i]];
+    }
+
     vector<int> getPointsWithinIndices(const CartesianPoint& c, mstreal dmin, mstreal dmax) {
       return this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
     }
@@ -819,6 +828,7 @@ class MstUtils {
     static string join(const string& delim, const vector<string>& words);
     static string readNullTerminatedString(fstream& ifs);
     static string getDate();
+    static vector<pair<int, int> > splitTasks(int numTasks, int numJobs);
 
     // returns a random number in the range [lower, upper]
     static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
@@ -836,7 +846,7 @@ class MstUtils {
     template <class T>
     static vector<int> sortIndices(vector<T>& vec, bool descending = false);
     template <class T1, class T2>
-    static vector<T1> keys(map<T1, T2>& _map);
+    static vector<T1> keys(const map<T1, T2>& _map);
     template <class T1, class T2>
     static vector<T2> values(map<T1, T2>& _map);
     template <class T>
@@ -895,10 +905,10 @@ vector<int> MstUtils::sortIndices(vector<T>& vec, bool descending) {
 }
 
 template <class T1, class T2>
-vector<T1> MstUtils::keys(map<T1, T2>& _map) {
+vector<T1> MstUtils::keys(const map<T1, T2>& _map) {
   vector<T1> K(_map.size());
   int k = 0;
-  for (typename map<T1, T2>::iterator it = _map.begin(); it != _map.end(); ++it, ++k) {
+  for (auto it = _map.begin(); it != _map.end(); ++it, ++k) {
     K[k] = it->first;
   }
   return K;

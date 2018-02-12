@@ -38,6 +38,8 @@ class MstOptions {
     string getString(const string& opt, string defVal = "");
     bool getBool(const string& opt) { return isGiven(opt); }
     bool isGiven(const string& opt);
+    string getExecName() const { return execName; }
+    vector<string> getAllGivenOptions() const { return MstUtils::keys(givenOptions); }
 
   private:
     int w, p1, p2;

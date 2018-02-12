@@ -85,7 +85,7 @@ findTERMs_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 renumber_DEPS			:= mstsystem msttypes
 TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
-fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence
+fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg
 
 # MST library dependencies
 libmst_DEPS				:= mstoptions mstsequence mstsystem msttypes

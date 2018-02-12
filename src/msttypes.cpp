@@ -3424,3 +3424,18 @@ string MstUtils::getDate() {
   time (&rawtime);
   return string(ctime(&rawtime));
 }
+
+vector<pair<int, int> > MstUtils::splitTasks(int numTasks, int numJobs) {
+  int numPerJob = numTasks / numJobs;
+  int remTasks = numTasks % numJobs;
+  vector<pair<int, int> > division(numJobs);
+  int k = 0;
+  for (int i = 0; i < numJobs; i++) {
+    division[i].first = k;
+    division[i].second = k + numPerJob - 1;
+    if (i < remTasks) division[i].second++;
+    k = division[i].second + 1;
+  }
+  if (k != numTasks) MstUtils::error("something went very wrong!", "MstUtils::splitTasks(int, int)");
+  return division;
+}
