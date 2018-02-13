@@ -57,9 +57,11 @@ LIB_DIRS :=
 # armadillo-dependent stuff
 ifdef INCLUDE_ARMA
   CPP_FLAGS := $(CPP_FLAGS) -DARMA
-  LDLIBS := -larmadillo
+  uname := $(shell uname -s)
   ifeq ($(uname),Linux)
-    LDLIBS := $(LDLIBS) -llapack -lcblas
+    LDLIBS := -larmadillo -llapack -lcblas
+  else
+    LDLIBS := -larmadillo
   endif
   ARMA_PROGRAMS			:= chainGrow
   chainGrow_DEPS		:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
