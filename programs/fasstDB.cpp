@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
     }
     dblf.close();
     fstream fin; MstUtils::openFile(fin, MstSys::pathBase(op.getString("o")) + ".fin.sh", ios::out);
-    fin << op.getExecName() << " --dL " << dbListFile << " --o" << op.getString("o") << endl;
+    fin << op.getExecName() << " --dL " << dbListFile << " --o " << op.getString("o") << endl;
     for (int k = 0; k < toClean.size(); k++) {
       fin << "rm " << toClean[k] << endl;
     }

@@ -58,6 +58,9 @@ LIB_DIRS :=
 ifdef INCLUDE_ARMA
   CPP_FLAGS := $(CPP_FLAGS) -DARMA
   LDLIBS := -larmadillo
+  ifeq ($(uname),Linux)
+    LDLIBS := $(LDLIBS) -llapack -lcblas
+  endif
   ARMA_PROGRAMS			:= chainGrow
   chainGrow_DEPS		:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
 endif
