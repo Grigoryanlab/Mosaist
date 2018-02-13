@@ -373,7 +373,7 @@ void FASST::writeDatabase(const string& dbFile) {
 
 void FASST::readDatabase(const string& dbFile) {
   fstream ifs; MstUtils::openFile(ifs, dbFile, fstream::in | fstream::binary, "FASST::readDatabase");
-  char sect; string name; mstreal val; int ti = 0;
+  char sect; string name; mstreal val; int ti = numTargets();
   MstUtils::readBin(ifs, sect);
   if (sect != 'S') MstUtils::error("first section must be a structure one, while reading database file " + dbFile, "FASST::readDatabase(const string&)");
   while (ifs.peek() != EOF) {
