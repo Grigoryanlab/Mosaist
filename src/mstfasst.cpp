@@ -490,8 +490,10 @@ void FASST::prepForSearch(int ti) {
       for (int k = 0; k < query[i].size(); k++) targSeg[k] = target[off + k];
       // AtomPointerVector targSeg = target.subvector(resToAtomIdx(j), resToAtomIdx(j) + query[i].size());
       segmentResiduals[i][j] = RC.bestResidual(query[i], targSeg);
-      targSeg.getGeometricCenter(xc, yc, zc);
-      if (query.size() > 1) ps[i]->addPoint(xc, yc, zc, j);
+      if (query.size() > 1) {
+        targSeg.getGeometricCenter(xc, yc, zc);
+        ps[i]->addPoint(xc, yc, zc, j);
+      }
     }
   }
 
