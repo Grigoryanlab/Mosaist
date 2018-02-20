@@ -796,6 +796,62 @@ class Clusterer {
 
 }
 
+/* A simple and accurate timer class built on top of chrono::high_resolution_clock */
+class MstTimer {
+  public:
+    enum timeUnits { sec = 0, msec, usec, nsec };
+
+    MstTimer() {
+      running = false;
+      begin = chrono::high_resolution_clock::now();
+      end = begin;
+      elapsed = end - begin;
+    }
+    bool isRunning() { return running; }
+    bool start(bool resume = false) {
+      if (!running) {
+        running = true;
+        if (!resume) elapsed = begin - begin; // simulate a zero
+        begin = chrono::high_resolution_clock::now();
+        return true;
+      }
+      return false;
+    }
+    bool stop() {
+      if (running) {
+        running = false;
+        end = chrono::high_resolution_clock::now();
+        elapsed += (end - begin);
+        return true;
+      }
+      return false;
+    }
+    int getDuration(timeUnits units = timeUnits::sec) {
+      chrono::high_resolution_clock::duration dt;
+      if (!running) {
+        dt = elapsed;
+      } else {
+        dt = chrono::high_resolution_clock::now() - begin;
+      }
+      switch (units) {
+        case timeUnits::sec:
+          return chrono::duration_cast<std::chrono::seconds>(dt).count();
+        case timeUnits::msec:
+          return chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+        case timeUnits::usec:
+          return chrono::duration_cast<std::chrono::microseconds>(dt).count();
+        case timeUnits::nsec:
+          return chrono::duration_cast<std::chrono::nanoseconds>(dt).count();
+      }
+      return 0; // ERROR: should never occur
+    }
+
+  private:
+    bool running;
+    chrono::high_resolution_clock::time_point begin, end;
+    chrono::high_resolution_clock::duration elapsed;
+};
+
 /* Utilities class, with a bunch of useful static functions, is defined outside of the MST namespace because:
  * 1) it really represents a different beast, not an MST type
  * 2) some of its functions (like assert) are likely to clash with function names in other project

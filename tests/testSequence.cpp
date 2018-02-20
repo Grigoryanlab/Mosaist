@@ -29,10 +29,10 @@ int main(int argc, char *argv[]) {
     int N = op.getInt("n");
     int L = op.getInt("L");
     mstreal idCut = op.getReal("id", 0.5);
-    mstreal b = op.getReal("b", 1.0);
+    mstreal b = op.getReal("b", 1.5);
 
     // build some biased random amino-acid sequences
-    vector<Sequence> seqs(N, Sequence(vector<int>(L)));
+    vector<Sequence> seqs(N, Sequence(vector<res_t>(L)));
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < L; j++) {
         mstreal r = pow(MstUtils::randUnit(), b);
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     }
     int searchTime = chrono::duration_cast<std::chrono::seconds>(end-begin).count();
     cout << "\trSearch took " << searchTime << " s" << std::endl;
-exit(0);
+
     // a brute-force search
     cout << "doing a brute-force search..." << endl;
     begin = chrono::high_resolution_clock::now();

@@ -5,12 +5,12 @@ using namespace MST;
 
 // statics must be defined in the cpp file
 vector<string> SeqTools::aa1, SeqTools::aa3;
-map<string, int> SeqTools::aa3ToIdx, SeqTools::aa1ToIdx;
+map<string, res_t> SeqTools::aa3ToIdx, SeqTools::aa1ToIdx;
 vector<string> SeqTools::idxToAA3, SeqTools::idxToAA1;
-int SeqTools::_unkIdx, SeqTools::_gapIdx;
+res_t SeqTools::_unkIdx, SeqTools::_gapIdx;
 bool initialized = SeqTools::initConstants();
 
-int SeqTools::aaToIdx(const string aa) {
+res_t SeqTools::aaToIdx(const string aa) {
   if (aa.length() == 1) {
     if (aa1ToIdx.find(aa) == aa1ToIdx.end()) SeqTools::unknownIdx();
     return aa1ToIdx[aa];
@@ -22,12 +22,12 @@ int SeqTools::aaToIdx(const string aa) {
   return 0; // for the compiler to be happy
 }
 
-string SeqTools::idxToTriple(int idx) {
+string SeqTools::idxToTriple(res_t idx) {
   MstUtils::assert((idx >= 0) && (idx < idxToAA3.size()), "unknown amino-acid index '" + MstUtils::toString(idx) + "'", "SeqTools::idxToTriple");
   return idxToAA3[idx];
 }
 
-string SeqTools::idxToSingle(int idx) {
+string SeqTools::idxToSingle(res_t idx) {
   MstUtils::assert((idx >= 0) && (idx < idxToAA1.size()), "unknown amino-acid index '" + MstUtils::toString(idx) + "'", "SeqTools::idxToSingle");
   return idxToAA1[idx];
 }
@@ -59,9 +59,9 @@ string SeqTools::singleToTriple(const string single, string del) {
   return triple;
 }
 
-vector<int> SeqTools::seqToIdx(const string seqstr, string del) {
+vector<res_t> SeqTools::seqToIdx(const string seqstr, string del) {
   vector<string> seq = MstUtils::split(seqstr, del);
-  vector<int> indices(seq.size());
+  vector<res_t> indices(seq.size());
   for (int i = 0; i < seq.size(); i++) {
     indices[i] = SeqTools::aaToIdx(seq[i]);
   }
@@ -108,7 +108,7 @@ bool SeqTools::initConstants() {
   idxToAA3.resize(aa3.size());
   idxToAA1.resize(aa1.size());
   for (int i = 0; i < aa3.size(); i++) {
-    aa3ToIdx[aa3[i]] = i;
+    aa3ToIdx[aa3[i]] = (res_t) i;
     // single-letter code is ambiguous, take the first amino acid
     // when going from single-letter code to index
     if (aa1ToIdx.find(aa1[i]) == aa1ToIdx.end()) aa1ToIdx[aa1[i]] = i;
@@ -158,14 +158,22 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
   vector<vector<int> > result(N);
   if (N == 0) return result;
   int L = seqs[0].length();
-  int S = (int) ceil(1.0*L*idCut); // number of identities necessary to pass the cutoff
+  int S = (int) ceil(1.0*L*idCut); // number of identities necessary to pass the cutoff  int P = N*L; // number
 
   // --- pick word length based on the problem
-  int d = 1; /* this parameter controls the cost of finding all sequences with
-              * a common word with a given sequence relative to the cost of
-              * comparing two sequences. Note, that because we do the former in
-              * one go for all sequences, this cost is amortized. But still, the
-              * actual (best) value to use will depend on the implementation. */
+  // get bias in the sequence set to know how to compute word match expectations
+  vector<int> hist(SeqTools::maxIndex(), 0);
+  for (int i = 0; i < N; i++) {
+    const Sequence& S = seqs[i];
+    for (int j = 0; j < S.length(); j++) hist[S[j]]++;
+  }
+  mstreal pe; // expected probability of two randomly picked amino acids from this set matching
+  for (int i = 0; i < hist.size(); i++) pe += pow(hist[i]*1.0/(N*L), 2);
+  mstreal d = 1; /* this parameter controls the cost of finding all sequences with
+                  * a common word with a given sequence relative to the cost of
+                  * comparing two sequences. Note, that because we do the former in
+                  * one go for all sequences, this cost is amortized. But still, the
+                  * actual (best) value to use will depend on the implementation. */
   vector<mstreal> cost(S, 0.0); // estimated search costs for each possible word length
   vector<int> Niters(S, 0.0);   // corresponding number of cycles needed
   for (int w = 1; w <= S; w++) {
@@ -175,7 +183,7 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
       p *= (S - k)*1.0/(L - k);
     }
     Niters[w-1] = ceil(log(1 - a)/log(1 - p));
-    cost[w-1] = Niters[w-1]*(d + N*1.0/(pow(20, w)));
+    cost[w-1] = Niters[w-1]*(d + N*pow(pe, w));
 printf("w = %d, p = %f, n = %d, cost = %f\n", w, p, Niters[w-1], cost[w-1]);
   }
   int minIdx; MstUtils::min(cost, 0, cost.size() - 1, &minIdx);
@@ -185,6 +193,7 @@ printf("w = %d, p = %f, n = %d, cost = %f\n", w, p, Niters[w-1], cost[w-1]);
 
   // --- do repeated word-based lookups
   vector<set<int> > resultSets(N);
+MstTimer sortT, compareT;
   for (int c = 0; c < n; c++) {
     // pick random sub-set of positions
     vector<int> pos(L), wordPos(w);
@@ -193,24 +202,28 @@ printf("w = %d, p = %f, n = %d, cost = %f\n", w, p, Niters[w-1], cost[w-1]);
     for (int i = 0; i < w; i++) wordPos[i] = pos[i];
 
     // sort sequences by matching words
-    unordered_map<Sequence, unordered_set<int> > seqsByWord;
-cout << "sorting by word..." << endl;
+    unordered_map<Sequence, vector<int> > seqsByWord;
+sortT.start();
     sortByCommonWords(seqs, wordPos, seqsByWord);
-cout << "done sorting by word..." << endl;
+sortT.stop();
+cout << "sorting by word took " << sortT.getDuration(MstTimer::sec) << " s" << endl;
 
     // for each sequence, look through other sequences with matching word
-    Sequence word(vector<int>(w, 0));
+compareT.start();
+    Sequence word(vector<res_t>(w, 0));
     for (int i = 0; i < N; i++) {
       const Sequence& seqI = seqs[i];
       extractWord(seqI, wordPos, word);
-      const unordered_set<int>& matchInds = seqsByWord[word];
-      for (auto it = matchInds.begin(); it != matchInds.end(); ++it) {
-        if (*it == i) continue;
-        if (areSequencesWithinID(seqI, seqs[*it], S)) {
-          resultSets[i].insert(*it);
+      const vector<int>& matchInds = seqsByWord[word];
+      for (int j = 0; j < matchInds.size(); j++) {
+        if (matchInds[j] == i) continue;
+        if (areSequencesWithinID(seqI, seqs[matchInds[j]], S)) {
+          resultSets[i].insert(matchInds[j]);
         }
       }
     }
+compareT.stop();
+cout << "comparing took " << compareT.getDuration(MstTimer::sec) << " s" << endl;
   }
 
   // --- extract/return results
@@ -222,12 +235,16 @@ cout << "done sorting by word..." << endl;
   return result;
 }
 
-void SeqTools::sortByCommonWords(const vector<Sequence>& seqs, const vector<int>& wordPos, unordered_map<Sequence, unordered_set<int> >& seqsByWord) {
+void SeqTools::sortByCommonWords(const vector<Sequence>& seqs, const vector<int>& wordPos, unordered_map<Sequence, vector<int> >& seqsByWord) {
   int w = wordPos.size();
-  Sequence word(vector<int>(w, 0));
+  Sequence word(vector<res_t>(w, 0));
   for (int i = 0; i < seqs.size(); i++) {
     extractWord(seqs[i], wordPos, word);
-    seqsByWord[word].insert(i);
+    seqsByWord[word].push_back(i);
+  }
+  vector<int> dummy;
+  for (auto it = seqsByWord.begin(); it != seqsByWord.end(); ++it) {
+    it->second = MstUtils::setdiff(it->second, dummy);
   }
 }
 
@@ -304,7 +321,7 @@ string Sequence::getResidue(int i, bool triple) {
   return SeqTools::idxToSingle(seq[i]);
 }
 
-void Sequence::resize(int newLen, int newIdx) {
+void Sequence::resize(int newLen, res_t newIdx) {
   if (newIdx == -1) seq.resize(newLen, SeqTools::gapIdx());
   else seq.resize(newLen, newIdx);
 }

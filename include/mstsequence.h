@@ -7,6 +7,7 @@
 
 namespace MST {
 
+typedef short res_t;
 class Sequence {
   public:
     Sequence() {}
@@ -14,20 +15,20 @@ class Sequence {
     // allows one to mixes of 3- and 1-letter codes, with a delimiter
     Sequence(const string& _seq, const string& _name = "", const string& delim = "");
     Sequence(const Sequence& S);
-    Sequence(const vector<int> _seq, const string& _name = "") { seq = _seq; name = _name; }
+    Sequence(const vector<res_t> _seq, const string& _name = "") { seq = _seq; name = _name; }
 
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }
     string toString(bool triple = false, const string& delim = "");
     vector<string> toStringVector(bool triple = false);
     string getResidue(int i, bool triple = false);
-    int& operator[] (int i) { return seq[i]; }
-    int operator[] (int i) const { return seq[i]; }
+    res_t& operator[] (int i) { return seq[i]; }
+    res_t operator[] (int i) const { return seq[i]; }
     int length() const { return seq.size(); }
     int size() const { return seq.size(); }
     void appendResidue(const string& aa);
-    void appendResidue(int aai) { seq.push_back(aai); }
-    void resize(int newLen, int newIdx = -1);
+    void appendResidue(res_t aai) { seq.push_back(aai); }
+    void resize(int newLen, res_t newIdx = -1);
     void write(ostream& _os) const; // write Sequence to a binary stream
     void read(istream& _is);  // read Sequence from a binary stream
 
@@ -44,7 +45,7 @@ class Sequence {
     bool operator==(const Sequence& other) const;
 
   private:
-    vector<int> seq;
+    vector<res_t> seq;
     string name;
 };
 
@@ -56,12 +57,13 @@ class SeqTools {
 
     static string tripleToSingle(const string triple, string del = " ");
     static string singleToTriple(const string single, string del = "");
-    static vector<int> seqToIdx(const string single, string del = "");
-    static int aaToIdx(const string aa);
-    static int unknownIdx() { return _unkIdx; }
-    static int gapIdx() { return _gapIdx; }
-    static string idxToTriple(int idx);
-    static string idxToSingle(int idx);
+    static vector<res_t> seqToIdx(const string single, string del = "");
+    static res_t aaToIdx(const string aa);
+    static res_t unknownIdx() { return _unkIdx; }
+    static res_t gapIdx() { return _gapIdx; }
+    static string idxToTriple(res_t idx);
+    static string idxToSingle(res_t idx);
+    static res_t maxIndex() { return idxToAA1.size() - 1; }
     static string toTriple(const string aa);
     static string toSingle(const string aa);
     static vector<Sequence> readFasta(const string& fastaFile);
@@ -93,16 +95,16 @@ class SeqTools {
     static vector<vector<int> > rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a = 0.99);
 
   protected:
-    static void sortByCommonWords(const vector<Sequence>& seqs, const vector<int>& wordPos, unordered_map<Sequence, unordered_set<int> >& seqsByWord);
+    static void sortByCommonWords(const vector<Sequence>& seqs, const vector<int>& wordPos, unordered_map<Sequence, vector<int> >& seqsByWord);
     // word has to already be allocated to be (at least) of length wordPos.size()
     static void extractWord(const Sequence& seq, const vector<int>& wordPos, Sequence& word);
 
   private:
     static vector<string> aa1, aa3;
-    static map<string, int> aa3ToIdx, aa1ToIdx;
+    static map<string, res_t> aa3ToIdx, aa1ToIdx;
     static vector<string> idxToAA3, idxToAA1;
     static bool initialized;
-    static int _unkIdx, _gapIdx;
+    static res_t _unkIdx, _gapIdx;
 };
 
 
