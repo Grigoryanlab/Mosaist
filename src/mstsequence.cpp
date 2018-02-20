@@ -89,6 +89,7 @@ bool SeqTools::initConstants() {
   aa3.push_back("VAL"); aa1.push_back("V");
   aa3.push_back("TRP"); aa1.push_back("W");
   aa3.push_back("TYR"); aa1.push_back("Y");
+
   aa3.push_back("HSD"); aa1.push_back("H");
   aa3.push_back("HSE"); aa1.push_back("H");
   aa3.push_back("HSC"); aa1.push_back("H");
@@ -150,6 +151,102 @@ vector<Sequence> SeqTools::readFasta(const string& fastaFile) {
   vector<Sequence> seqs;
   SeqTools::readFasta(fastaFile, seqs);
   return seqs;
+}
+
+vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a) {
+  int N = seqs.size();
+  vector<vector<int> > result(N);
+  if (N == 0) return result;
+  int L = seqs[0].length();
+  int S = (int) ceil(1.0*L*idCut); // number of identities necessary to pass the cutoff
+
+  // --- pick word length based on the problem
+  int d = 1; /* this parameter controls the cost of finding all sequences with
+              * a common word with a given sequence relative to the cost of
+              * comparing two sequences. Note, that because we do the former in
+              * one go for all sequences, this cost is amortized. But still, the
+              * actual (best) value to use will depend on the implementation. */
+  vector<mstreal> cost(S, 0.0); // estimated search costs for each possible word length
+  vector<int> Niters(S, 0.0);   // corresponding number of cycles needed
+  for (int w = 1; w <= S; w++) {
+    mstreal p = 1.0; // the probability of a hit being in the set of sequences
+                     // having a w-common with the query sequence.
+    for (int k = 0; k < w; k++) {
+      p *= (S - k)*1.0/(L - k);
+    }
+    Niters[w-1] = ceil(log(1 - a)/log(1 - p));
+    cost[w-1] = Niters[w-1]*(d + N*1.0/(pow(20, w)));
+printf("w = %d, p = %f, n = %d, cost = %f\n", w, p, Niters[w-1], cost[w-1]);
+  }
+  int minIdx; MstUtils::min(cost, 0, cost.size() - 1, &minIdx);
+  int w = minIdx + 1;     // best word length to use
+  int n = Niters[minIdx]; // number of repeated lookups needed to reach coverage a
+  cout << "chose word length " << w << ", and will do " << n << " cycles" << endl;
+
+  // --- do repeated word-based lookups
+  vector<set<int> > resultSets(N);
+  for (int c = 0; c < n; c++) {
+    // pick random sub-set of positions
+    vector<int> pos(L), wordPos(w);
+    for (int i = 0; i < L; i++) pos[i] = i;
+    MstUtils::shuffle(pos);
+    for (int i = 0; i < w; i++) wordPos[i] = pos[i];
+
+    // sort sequences by matching words
+    unordered_map<Sequence, unordered_set<int> > seqsByWord;
+cout << "sorting by word..." << endl;
+    sortByCommonWords(seqs, wordPos, seqsByWord);
+cout << "done sorting by word..." << endl;
+
+    // for each sequence, look through other sequences with matching word
+    Sequence word(vector<int>(w, 0));
+    for (int i = 0; i < N; i++) {
+      const Sequence& seqI = seqs[i];
+      extractWord(seqI, wordPos, word);
+      const unordered_set<int>& matchInds = seqsByWord[word];
+      for (auto it = matchInds.begin(); it != matchInds.end(); ++it) {
+        if (*it == i) continue;
+        if (areSequencesWithinID(seqI, seqs[*it], S)) {
+          resultSets[i].insert(*it);
+        }
+      }
+    }
+  }
+
+  // --- extract/return results
+  for (int i = 0; i < N; i++) {
+    int k = 0;
+    result[i].resize(resultSets[i].size());
+    for (auto it = resultSets[i].begin(); it != resultSets[i].end(); ++it, ++k) result[i][k] = *it;
+  }
+  return result;
+}
+
+void SeqTools::sortByCommonWords(const vector<Sequence>& seqs, const vector<int>& wordPos, unordered_map<Sequence, unordered_set<int> >& seqsByWord) {
+  int w = wordPos.size();
+  Sequence word(vector<int>(w, 0));
+  for (int i = 0; i < seqs.size(); i++) {
+    extractWord(seqs[i], wordPos, word);
+    seqsByWord[word].insert(i);
+  }
+}
+
+void SeqTools::extractWord(const Sequence& seq, const vector<int>& wordPos, Sequence& word) {
+  for (int k = 0; k < wordPos.size(); k++) {
+    word[k] = seq[wordPos[k]];
+  }
+}
+
+bool SeqTools::areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, int numID) {
+  int nRem = numID, L = seqA.size();
+  for (int i = 0; (i < L - nRem + 1) && (nRem > 0); i++) {
+    if (seqA[i] == seqB[i]) nRem--;
+  }
+  return nRem <= 0; // < 0 should never happen, but just in case
+}
+
+bool SeqTools::areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, mstreal idCut) {
+  return areSequencesWithinID(seqA, seqB, (int) ceil(seqA.size() * idCut));
 }
 
 
@@ -233,4 +330,12 @@ ostream& MST::operator<<(ostream &_os, const Sequence& _seq) {
     _os << SeqTools::idxToSingle(_seq[i]); k++;
   }
   return _os;
+}
+
+bool Sequence::operator==(const Sequence& other) const {
+  if (length() != other.length()) return false;
+  for (int i = 0; i < length(); i++) {
+    if ((*this)[i] != other[i]) return false;
+  }
+  return true;
 }
