@@ -158,7 +158,7 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
   vector<vector<int> > result(N);
   if (N == 0) return result;
   int L = seqs[0].length();
-  int S = (int) ceil(1.0*L*idCut); // number of identities necessary to pass the cutoff  int P = N*L; // number
+  int S = (int) ceil(1.0*L*idCut); // number of identities necessary to pass the cutoff
 
   // --- pick word length based on the problem
   // get bias in the sequence set to know how to compute word match expectations
@@ -184,7 +184,7 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
     }
     Niters[w-1] = ceil(log(1 - a)/log(1 - p));
     cost[w-1] = Niters[w-1]*(d + N*pow(pe, w));
-printf("w = %d, p = %f, n = %d, cost = %f\n", w, p, Niters[w-1], cost[w-1]);
+printf("pe = %f, w = %d, p = %f, n = %d, cost = %f\n", pe, w, p, Niters[w-1], cost[w-1]);
   }
   int minIdx; MstUtils::min(cost, 0, cost.size() - 1, &minIdx);
   int w = minIdx + 1;     // best word length to use
@@ -202,24 +202,35 @@ MstTimer sortT, compareT;
     for (int i = 0; i < w; i++) wordPos[i] = pos[i];
 
     // sort sequences by matching words
-    unordered_map<Sequence, vector<int> > seqsByWord;
 sortT.start();
-    sortByCommonWords(seqs, wordPos, seqsByWord);
+    Sequence word(vector<res_t>(w, 0));
+    vector<Sequence> words(N, word);
+    for (int i = 0; i < N; i++) {
+      extractWord(seqs[i], wordPos, words[i]);
+    }
+    vector<int> indices = MstUtils::sortIndices(words);
+    // vector<int> indices = SeqTools::sortSequences(words);
 sortT.stop();
-cout << "sorting by word took " << sortT.getDuration(MstTimer::sec) << " s" << endl;
+cout << "sorting took " << sortT.getDuration(MstTimer::sec) << " s" << endl;
 
     // for each sequence, look through other sequences with matching word
 compareT.start();
-    Sequence word(vector<res_t>(w, 0));
-    for (int i = 0; i < N; i++) {
-      const Sequence& seqI = seqs[i];
-      extractWord(seqI, wordPos, word);
-      const vector<int>& matchInds = seqsByWord[word];
-      for (int j = 0; j < matchInds.size(); j++) {
-        if (matchInds[j] == i) continue;
-        if (areSequencesWithinID(seqI, seqs[matchInds[j]], S)) {
-          resultSets[i].insert(matchInds[j]);
+    int beg = 0, end = beg;
+    for (int i = 1; i < N; i++) {
+      if (words[indices[i]] != words[indices[beg]]) {
+        end = i - 1;
+        // mutually compare set between beg and end
+        for (int j = beg; j <= end - 1; j++) {
+          const Sequence& seqI = seqs[indices[j]];
+          for (int k = j + 1; k <= end ; k++) {
+            if (areSequencesWithinID(seqI, seqs[indices[k]], S)) {
+              resultSets[indices[j]].insert(indices[k]);
+              resultSets[indices[k]].insert(indices[j]);
+            }
+          }
         }
+        beg = i;
+        end = i;
       }
     }
 compareT.stop();
@@ -235,23 +246,34 @@ cout << "comparing took " << compareT.getDuration(MstTimer::sec) << " s" << endl
   return result;
 }
 
-void SeqTools::sortByCommonWords(const vector<Sequence>& seqs, const vector<int>& wordPos, unordered_map<Sequence, vector<int> >& seqsByWord) {
-  int w = wordPos.size();
-  Sequence word(vector<res_t>(w, 0));
-  for (int i = 0; i < seqs.size(); i++) {
-    extractWord(seqs[i], wordPos, word);
-    seqsByWord[word].push_back(i);
-  }
-  vector<int> dummy;
-  for (auto it = seqsByWord.begin(); it != seqsByWord.end(); ++it) {
-    it->second = MstUtils::setdiff(it->second, dummy);
-  }
-}
-
 void SeqTools::extractWord(const Sequence& seq, const vector<int>& wordPos, Sequence& word) {
   for (int k = 0; k < wordPos.size(); k++) {
     word[k] = seq[wordPos[k]];
   }
+}
+
+vector<int> SeqTools::sortSequences(const vector<Sequence>& seqs) {
+  int N = seqs.size();
+  if (N == 0) return vector<int>();
+  int L = seqs[0].length();
+
+  vector<vector<int> > buckets(SeqTools::maxIndex());
+  vector<int> sortedIndices(N);
+  for (int i = 0; i < N; i++) sortedIndices[i] = i;
+  for (int k = L-1; k >= 0; k--) {
+    for (int i = 0; i < N; i++) {
+      buckets[seqs[sortedIndices[i]][k]].push_back(sortedIndices[i]);
+    }
+    int c = 0;
+    for (int i = 0; i < buckets.size(); i++) {
+      for (int j = 0; j < buckets[i].size(); j++) {
+        sortedIndices[c] = buckets[i][j];
+        c++;
+      }
+      buckets[i].resize(0); // should not change capacity, so futer push_back() will be fast
+    }
+  }
+  return sortedIndices;
 }
 
 bool SeqTools::areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, int numID) {
@@ -291,7 +313,7 @@ void Sequence::appendResidue(const string& aa) {
   seq.push_back(SeqTools::aaToIdx(aa));
 }
 
-string Sequence::toString(bool triple, const string& delim) {
+string Sequence::toString(bool triple, const string& delim) const {
 	string s;
 	for (int i = 0; i < seq.size(); i++) {
 		if (triple) {
@@ -304,7 +326,7 @@ string Sequence::toString(bool triple, const string& delim) {
 	return s;
 }
 
-vector<string> Sequence::toStringVector(bool triple) {
+vector<string> Sequence::toStringVector(bool triple) const {
 	vector<string> s(size());
 	for (int i = 0; i < seq.size(); i++) {
 		if (triple) {
@@ -355,4 +377,12 @@ bool Sequence::operator==(const Sequence& other) const {
     if ((*this)[i] != other[i]) return false;
   }
   return true;
+}
+
+bool Sequence::operator!=(const Sequence& other) const {
+  if (length() != other.length()) return true;
+  for (int i = 0; i < length(); i++) {
+    if ((*this)[i] != other[i]) return true;
+  }
+  return false;
 }

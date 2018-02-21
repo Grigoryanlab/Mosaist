@@ -19,8 +19,8 @@ class Sequence {
 
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }
-    string toString(bool triple = false, const string& delim = "");
-    vector<string> toStringVector(bool triple = false);
+    string toString(bool triple = false, const string& delim = "") const;
+    vector<string> toStringVector(bool triple = false) const;
     string getResidue(int i, bool triple = false);
     res_t& operator[] (int i) { return seq[i]; }
     res_t operator[] (int i) const { return seq[i]; }
@@ -43,6 +43,7 @@ class Sequence {
 
     friend ostream & operator<<(ostream &_os, const Sequence& _seq);
     bool operator==(const Sequence& other) const;
+    bool operator!=(const Sequence& other) const;
 
   private:
     vector<res_t> seq;
@@ -94,8 +95,14 @@ class SeqTools {
      * expected fracton of matches found) while minimizing the running time. */
     static vector<vector<int> > rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a = 0.99);
 
+    /* A fast sort algorithm specialized for sequence data. Uses radix sort,
+     * since residue values have an a priori known maximum value. Sorts in
+     * ascending order by residue, treating residues earlier in the sequence as
+     * more significant "digits". All sequences must be of the same length (not
+     * explicitly checked!) */
+    static vector<int> sortSequences(const vector<Sequence>& seqs);
+
   protected:
-    static void sortByCommonWords(const vector<Sequence>& seqs, const vector<int>& wordPos, unordered_map<Sequence, vector<int> >& seqsByWord);
     // word has to already be allocated to be (at least) of length wordPos.size()
     static void extractWord(const Sequence& seq, const vector<int>& wordPos, Sequence& word);
 
