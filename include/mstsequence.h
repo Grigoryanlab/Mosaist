@@ -100,11 +100,12 @@ class SeqTools {
      * ascending order by residue, treating residues earlier in the sequence as
      * more significant "digits". All sequences must be of the same length (not
      * explicitly checked!) */
-    static vector<int> sortSequences(const vector<Sequence>& seqs);
+    static vector<int> sortSequences(const vector<Sequence>& _seqs);
 
   protected:
     // word has to already be allocated to be (at least) of length wordPos.size()
     static void extractWord(const Sequence& seq, const vector<int>& wordPos, Sequence& word);
+    static bool sortSequencesTest(vector<Sequence> seqs);
 
   private:
     static vector<string> aa1, aa3;

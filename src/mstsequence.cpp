@@ -202,16 +202,16 @@ MstTimer sortT, compareT;
     for (int i = 0; i < w; i++) wordPos[i] = pos[i];
 
     // sort sequences by matching words
-sortT.start();
     Sequence word(vector<res_t>(w, 0));
     vector<Sequence> words(N, word);
     for (int i = 0; i < N; i++) {
       extractWord(seqs[i], wordPos, words[i]);
     }
-    vector<int> indices = MstUtils::sortIndices(words);
-    // vector<int> indices = SeqTools::sortSequences(words);
+sortT.start();
+    // vector<int> indices = MstUtils::sortIndices(words);
+    vector<int> indices = SeqTools::sortSequences(words);
 sortT.stop();
-cout << "sorting took " << sortT.getDuration(MstTimer::sec) << " s" << endl;
+cout << "sorting took " << sortT.getDuration(MstTimer::msec) << " ms" << endl;
 
     // for each sequence, look through other sequences with matching word
 compareT.start();
@@ -234,7 +234,7 @@ compareT.start();
       }
     }
 compareT.stop();
-cout << "comparing took " << compareT.getDuration(MstTimer::sec) << " s" << endl;
+cout << "comparing took " << compareT.getDuration(MstTimer::msec) << " s" << endl;
   }
 
   // --- extract/return results
@@ -252,28 +252,63 @@ void SeqTools::extractWord(const Sequence& seq, const vector<int>& wordPos, Sequ
   }
 }
 
-vector<int> SeqTools::sortSequences(const vector<Sequence>& seqs) {
-  int N = seqs.size();
+vector<int> SeqTools::sortSequences(const vector<Sequence>& _seqs) {
+  int N = _seqs.size();
   if (N == 0) return vector<int>();
-  int L = seqs[0].length();
+  int L = _seqs[0].length();
+  int i, j, k, c, idx, sz;
 
+  // take transpose of sequence list as we will need to access columns
+  // (this speeds things up A LOT)
+  res_t** seqs = new res_t*[L];
+  for (i = 0; i < L; i++) {
+    seqs[i] = new res_t[N];
+    for (j = 0; j < N; j++) seqs[i][j] = _seqs[j][i];
+  }
+
+  // radix sort
   vector<vector<int> > buckets(SeqTools::maxIndex());
   vector<int> sortedIndices(N);
-  for (int i = 0; i < N; i++) sortedIndices[i] = i;
-  for (int k = L-1; k >= 0; k--) {
-    for (int i = 0; i < N; i++) {
-      buckets[seqs[sortedIndices[i]][k]].push_back(sortedIndices[i]);
+  for (i = 0; i < N; i++) sortedIndices[i] = i;
+  for (k = L-1; k >= 0; k--) {
+    // sort list elements into buckets
+    res_t* col = seqs[k];
+    for (i = 0; i < N; i++) {
+      idx = sortedIndices[i];
+      buckets[col[idx]].push_back(idx);
     }
-    int c = 0;
-    for (int i = 0; i < buckets.size(); i++) {
-      for (int j = 0; j < buckets[i].size(); j++) {
-        sortedIndices[c] = buckets[i][j];
-        c++;
+
+    // rebuild list from buckets
+    c = 0;
+    for (i = 0; i < buckets.size(); i++) {
+      vector<int>& bucket = buckets[i];
+      int sz = bucket.size();
+      for (j = 0; j < sz; j++, c++) {
+        sortedIndices[c] = bucket[j];
       }
+    }
+
+    // empty buckets
+    for (i = 0; i < buckets.size(); i++) {
       buckets[i].resize(0); // should not change capacity, so futer push_back() will be fast
     }
   }
+
+  // cleanup
+  for (i = 0; i < L; i++) delete[] seqs[i];
+  delete[] seqs;
+
   return sortedIndices;
+}
+
+bool SeqTools::sortSequencesTest(vector<Sequence> seqs) {
+  vector<int> indsStd = MstUtils::sortIndices(seqs);
+  vector<int> inds = sortSequences(seqs);
+  if (indsStd.size() != inds.size()) return false;
+  for (int i = 0; i < inds.size(); i++) {
+    if (seqs[inds[i]] != seqs[indsStd[i]]) return false;
+  }
+  return true;
 }
 
 bool SeqTools::areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, int numID) {
