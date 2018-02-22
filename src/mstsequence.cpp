@@ -153,12 +153,13 @@ vector<Sequence> SeqTools::readFasta(const string& fastaFile) {
   return seqs;
 }
 
-vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a) {
+vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a, bool verb) {
   int N = seqs.size();
   vector<vector<int> > result(N);
   if (N == 0) return result;
   int L = seqs[0].length();
   int S = (int) ceil(1.0*L*idCut); // number of identities necessary to pass the cutoff
+  MstTimer tim;
 
   // --- pick word length based on the problem
   // get bias in the sequence set to know how to compute word match expectations
@@ -184,16 +185,22 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
     }
     Niters[w-1] = ceil(log(1 - a)/log(1 - p));
     cost[w-1] = Niters[w-1]*(d + N*pow(pe, w));
-printf("pe = %f, w = %d, p = %f, n = %d, cost = %f\n", pe, w, p, Niters[w-1], cost[w-1]);
+    if (verb) printf("pe = %f, w = %d, p = %f, n = %d, cost = %f\n", pe, w, p, Niters[w-1], cost[w-1]);
   }
   int minIdx; MstUtils::min(cost, 0, cost.size() - 1, &minIdx);
   int w = minIdx + 1;     // best word length to use
   int n = Niters[minIdx]; // number of repeated lookups needed to reach coverage a
-  cout << "chose word length " << w << ", and will do " << n << " cycles" << endl;
+  if (verb) cout << "chose word length " << w << ", and will do " << n << " cycles" << endl;
+
+  // -- prepare C-style arrays to store sorted indices, words and words transposes (for different accept patterns)
+  int* indices = new int[N];
+  res_t** wordsT = new res_t*[L];
+  for (int k = 0; k < w; k++) wordsT[k] = new res_t[N];
+  res_t** words = new res_t*[N];
+  for (int k = 0; k < N; k++) words[k] = new res_t[w];
 
   // --- do repeated word-based lookups
   vector<set<int> > resultSets(N);
-MstTimer sortT, compareT;
   for (int c = 0; c < n; c++) {
     // pick random sub-set of positions
     vector<int> pos(L), wordPos(w);
@@ -201,23 +208,27 @@ MstTimer sortT, compareT;
     MstUtils::shuffle(pos);
     for (int i = 0; i < w; i++) wordPos[i] = pos[i];
 
-    // sort sequences by matching words
-    Sequence word(vector<res_t>(w, 0));
-    vector<Sequence> words(N, word);
-    for (int i = 0; i < N; i++) {
-      extractWord(seqs[i], wordPos, words[i]);
+    if (verb) tim.start();
+    // extract words and their transposes
+    for (int k = 0; k < w; k++) {
+      for (int i = 0; i < N; i++) {
+        wordsT[k][i] = seqs[i][wordPos[k]];
+        words[i][k] = wordsT[k][i];
+      }
     }
-sortT.start();
-    // vector<int> indices = MstUtils::sortIndices(words);
-    vector<int> indices = SeqTools::sortSequences(words);
-sortT.stop();
-cout << "sorting took " << sortT.getDuration(MstTimer::msec) << " ms" << endl;
+
+    // sort sequences by word
+    SeqTools::sortSequences(wordsT, indices, N, w);
+    if (verb) {
+      tim.stop();
+      cout << "sorting took " << tim.getDuration(MstTimer::msec) << " msec" << endl;
+      tim.start();
+    }
 
     // for each sequence, look through other sequences with matching word
-compareT.start();
     int beg = 0, end = beg;
     for (int i = 1; i < N; i++) {
-      if (words[indices[i]] != words[indices[beg]]) {
+      if (!areWordsIdentical(words[indices[i]], words[indices[beg]], w)) {
         end = i - 1;
         // mutually compare set between beg and end
         for (int j = beg; j <= end - 1; j++) {
@@ -233,9 +244,18 @@ compareT.start();
         end = i;
       }
     }
-compareT.stop();
-cout << "comparing took " << compareT.getDuration(MstTimer::msec) << " s" << endl;
+    if (verb) {
+      tim.stop();
+      cout << "comparing took " << tim.getDuration(MstTimer::msec) << " msec" << endl;
+    }
   }
+
+  // -- clea up
+  delete[] indices;
+  for (int k = 0; k < w; k++) delete[] wordsT[k];
+  delete[] wordsT;
+  for (int k = 0; k < N; k++) delete[] words[k];
+  delete[] words;
 
   // --- extract/return results
   for (int i = 0; i < N; i++) {
@@ -246,17 +266,19 @@ cout << "comparing took " << compareT.getDuration(MstTimer::msec) << " s" << end
   return result;
 }
 
-void SeqTools::extractWord(const Sequence& seq, const vector<int>& wordPos, Sequence& word) {
-  for (int k = 0; k < wordPos.size(); k++) {
-    word[k] = seq[wordPos[k]];
+bool SeqTools::areWordsIdentical(res_t* wordA, res_t* wordB, int L) {
+  for (int i = 0; i < L; i++) {
+    if (wordA[i] != wordB[i]) return false;
   }
+  return true;
 }
+
 
 vector<int> SeqTools::sortSequences(const vector<Sequence>& _seqs) {
   int N = _seqs.size();
   if (N == 0) return vector<int>();
   int L = _seqs[0].length();
-  int i, j, k, c, idx, sz;
+  int i, j;
 
   // take transpose of sequence list as we will need to access columns
   // (this speeds things up A LOT)
@@ -266,9 +288,25 @@ vector<int> SeqTools::sortSequences(const vector<Sequence>& _seqs) {
     for (j = 0; j < N; j++) seqs[i][j] = _seqs[j][i];
   }
 
+  // sort
+  int* sortedIndicesArray = new int[N];
+  sortSequences(seqs, sortedIndicesArray, N, L);
+  vector<int> sortedIndices(N);
+  for (int i = 0; i < N; i++) sortedIndices[i] = sortedIndicesArray[i];
+  delete[] sortedIndicesArray;
+
+  // cleanup
+  for (i = 0; i < L; i++) delete[] seqs[i];
+  delete[] seqs;
+
+  return sortedIndices;
+}
+
+void SeqTools::sortSequences(res_t** seqs, int* sortedIndices, int N, int L) {
+  int i, j, k, c, idx, sz;
+
   // radix sort
   vector<vector<int> > buckets(SeqTools::maxIndex());
-  vector<int> sortedIndices(N);
   for (i = 0; i < N; i++) sortedIndices[i] = i;
   for (k = L-1; k >= 0; k--) {
     // sort list elements into buckets
@@ -293,12 +331,6 @@ vector<int> SeqTools::sortSequences(const vector<Sequence>& _seqs) {
       buckets[i].resize(0); // should not change capacity, so futer push_back() will be fast
     }
   }
-
-  // cleanup
-  for (i = 0; i < L; i++) delete[] seqs[i];
-  delete[] seqs;
-
-  return sortedIndices;
 }
 
 bool SeqTools::sortSequencesTest(vector<Sequence> seqs) {

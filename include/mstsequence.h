@@ -93,7 +93,7 @@ class SeqTools {
      * high chance of recovering all matches. This algorithm chooses a word size
      * and number of iterations to get to any desired level of accuracy a (i.e.,
      * expected fracton of matches found) while minimizing the running time. */
-    static vector<vector<int> > rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a = 0.99);
+    static vector<vector<int> > rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a = 0.99, bool verb = false);
 
     /* A fast sort algorithm specialized for sequence data. Uses radix sort,
      * since residue values have an a priori known maximum value. Sorts in
@@ -103,8 +103,15 @@ class SeqTools {
     static vector<int> sortSequences(const vector<Sequence>& _seqs);
 
   protected:
-    // word has to already be allocated to be (at least) of length wordPos.size()
-    static void extractWord(const Sequence& seq, const vector<int>& wordPos, Sequence& word);
+    // helper function for sequence sorting
+    static bool areWordsIdentical(res_t* wordA, res_t* wordB, int L);
+
+    // Sort helper function. Implements radix sort for sequences. Parameter seqs
+    // is expected to be an L x N 2D array, where L is sequence length and N is
+    // the number of sequences. Note that this is "transpose" of a typical array
+    // of sequences (this speeds things A LOT due to memory access patterns).
+    static void sortSequences(res_t** seqs, int* sortedIndices, int N, int L);
+
     static bool sortSequencesTest(vector<Sequence> seqs);
 
   private:
