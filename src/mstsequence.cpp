@@ -184,7 +184,7 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
       p *= (S - k)*1.0/(L - k);
     }
     Niters[w-1] = ceil(log(1 - a)/log(1 - p));
-    cost[w-1] = Niters[w-1]*(d + N*pow(pe, w));
+    cost[w-1] = Niters[w-1]*(d + (N - 1)*pow(pe, w));
     if (verb) printf("pe = %f, w = %d, p = %f, n = %d, cost = %f\n", pe, w, p, Niters[w-1], cost[w-1]);
   }
   int minIdx; MstUtils::min(cost, 0, cost.size() - 1, &minIdx);

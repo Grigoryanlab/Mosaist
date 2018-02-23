@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
     // apply rSearch
     cout << "doing rSearch..." << endl;
     begin = chrono::high_resolution_clock::now();
-    vector<vector<int> > result = SeqTools::rSearch(seqs, idCut);
+    vector<vector<int> > result = SeqTools::rSearch(seqs, idCut, 0.99, true);
     end = chrono::high_resolution_clock::now();
     for (int i = 0; i < N; i++) {
       if (result[i].empty()) continue;
