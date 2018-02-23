@@ -719,20 +719,31 @@ mstreal FASST::currentAlignmentResidual(bool compute, bool setTransform) {
       currResidual = segmentResiduals[0][currAlignment[0]];
     } else {
       // fill up sub-alignment with target atoms
-      int N = targetMasks[recLevel].size();
+      AtomPointerVector& queryMask = queryMasks[recLevel];
+      AtomPointerVector& targetMask = targetMasks[recLevel];
+      int N = targetMask.size();
       int n = query[recLevel].size();
-      int si = resToAtomIdx(currAlignment[recLevel]);
+      int dN = N - n;
+      int currPos = currAlignment[recLevel];
+      int si = resToAtomIdx(currPos);
       AtomPointerVector& target = targets[currentTarget];
       for (int i = 0; i < n; i++) {
-        targetMasks[recLevel][N - n + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
+        targetMask[dN + i]->setCoor(target[si + i]->getX(), target[si + i]->getY(), target[si + i]->getZ());
       }
-      currResidual = RC.bestResidual(targetMasks[recLevel], queryMasks[recLevel], setTransform);
+      currResidual = RC.bestResidual(targetMask, queryMask, setTransform);
       currResiduals[recLevel] = currResidual;
       if (query.size() > 1) {
         if (recLevel == 0) {
-          currCents[recLevel] = ps[recLevel]->getPoint(currAlignment[recLevel]);
+          currCents[recLevel] = ps[recLevel]->getPoint(currPos);
         } else {
-          currCents[recLevel] = (currCents[recLevel - 1] * (N - n) +  ps[recLevel]->getPoint(currAlignment[recLevel]) * n) / N;
+          /* The following is A LOT faster than the equivalent:
+           * currCents[recLevel] = (currCents[recLevel - 1] * (N - n) +  ps[recLevel]->getPoint(currAlignment[recLevel]) * n) / N;
+           * (the above causes a temporary creation of a CartesianPoint object) */
+          CartesianPoint& prevC = currCents[recLevel - 1];
+          CartesianPoint& currC = ps[recLevel]->getPoint(currPos);
+          for (int i = 0; i < 3; i++) {
+            currCents[recLevel][i] = (prevC[i] * dN +  currC[i] * n) / N;
+          }
         }
       }
     }

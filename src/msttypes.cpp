@@ -3018,14 +3018,6 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
     mstreal sr3 = sqrt(3);
     pointBucket(cx - dmin/sr3, cy - dmin/sr3, cz - dmin/sr3, &iInLo, &jInLo, &kInLo);
     pointBucket(cx + dmin/sr3, cy + dmin/sr3, cz + dmin/sr3, &iInHi, &jInHi, &kInHi);
-    // NOTE: I used to think this adjustment was necessary, but upon more thought, I don't think so
-    // // need to trim the internal box to make sure it is fully contained within the sphere of radius dmin from the central point
-    // if (iInLo != ci) iInLo++;
-    // if (jInLo != cj) jInLo++;
-    // if (kInLo != ck) kInLo++;
-    // if (iInHi != ci) iInHi--;
-    // if (jInHi != cj) jInHi--;
-    // if (kInHi != ck) kInHi--;
   } else {
     iInLo = iInHi = ci;
     jInLo = jInHi = cj;
@@ -3051,10 +3043,10 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
         // check all points in bucket i, j, k
         for (ii = 0; ii < Bijk.size(); ii++) {
           pi = Bijk[ii];
-          d2 = c.distance2nc(*(pointList[pi]));
+          d2 = c.distance2nc(pointList[pi]);
           if ((d2 >= dmin2) && (d2 <= dmax2)) {
             if (yesno) return true;
-            list->push_back(byTag ? pointTags[Bijk[ii]] : Bijk[ii]);
+            list->push_back(byTag ? pointTags[pi] : pi);
             found = true;
           }
         }

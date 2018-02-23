@@ -436,9 +436,11 @@ class CartesianPoint : public vector<mstreal> {
     mstreal distance(const CartesianPoint& another) const;
     mstreal distance(const CartesianPoint* another) const { return distance(*another); }
     mstreal distancenc(const CartesianPoint& another) const; // no size check (for speed)
+    mstreal distancenc(const CartesianPoint* another) const { return distancenc(*another); } // no size check (for speed)
     mstreal distance2(const CartesianPoint& another) const;
     mstreal distance2(const CartesianPoint* another) const { return distance2(*another); }
     mstreal distance2nc(const CartesianPoint& another) const; // no size check (for speed)
+    mstreal distance2nc(const CartesianPoint* another) const { return distance2nc(*another); } // no size check (for speed)
 
     friend ostream & operator<<(ostream &_os, const CartesianPoint& _p) {
       for (int i = 0; i < _p.size(); i++) {
