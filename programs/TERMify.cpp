@@ -378,7 +378,7 @@ mstreal getRadius(const Structure& S) {
   return rad;
 }
 
-void addMatches(fasstCache& C, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo, fstream& matchOut) {
+void addMatches(fasstCache& C, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo, fstream& matchOut, const MstOptions& op = MstOptions()) {
 //frag.writePDB("/tmp/pair.pdb"); cout << "fragment saved, RMSD = " << RMSDCalculator::rmsdCutoff(frag) << endl;
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
@@ -408,7 +408,9 @@ if (0) {
 
   fasstSolutionSet matches = C.search(true);
   cout << "found " << matches.size() << " matches" << endl;
-  for (auto it = matches.begin(); it != matches.end(); ++it) {
+  int ri = MstUtils::randInt(0, matches.size() - 1);
+  for (auto it = matches.begin(); it != matches.end(); ++it, ri--) {
+    if (op.isGiven("r") && ri) continue;
     allMatches.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
     Structure& match = *(allMatches.back());
     if (matchOut.is_open() && (it == matches.begin())) {
@@ -433,6 +435,7 @@ int main(int argc, char** argv) {
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
   op.addOption("o", "output base name.", true);
+  op.addOption("r", "pick a random match for each TERM in each iteration, rather than considering all matches simultaneously.");
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
   op.addOption("cyc", "number of iteration cycles (10 by default).");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
@@ -506,7 +509,7 @@ int main(int argc, char** argv) {
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
         F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-        addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut);
+        addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut, op);
       }
     }
 
@@ -523,7 +526,7 @@ int main(int argc, char** argv) {
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
       F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-      addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut);
+      addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut, op);
     }
 
     /* --- Fuse --- */

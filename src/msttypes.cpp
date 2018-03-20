@@ -1421,10 +1421,10 @@ const CartesianPoint CartesianPoint::operator/(const mstreal& s) const {
   return result;
 }
 
-CartesianPoint& CartesianPoint::operator=(const Atom& A) {
-  *this = CartesianPoint(A);
-  return *this;
-}
+// CartesianPoint& CartesianPoint::operator=(const Atom& A) {
+//   *this = CartesianPoint(A);
+//   return *this;
+// }
 
 mstreal CartesianPoint::norm() const {
   mstreal n = 0;

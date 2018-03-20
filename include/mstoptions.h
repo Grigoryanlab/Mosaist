@@ -37,7 +37,7 @@ class MstOptions {
     mstreal getReal(const string& opt, mstreal defVal = 0.0);
     string getString(const string& opt, string defVal = "");
     bool getBool(const string& opt) { return isGiven(opt); }
-    bool isGiven(const string& opt);
+    bool isGiven(const string& opt) const;
     string getExecName() const { return execName; }
     vector<string> getAllGivenOptions() const { return MstUtils::keys(givenOptions); }
 

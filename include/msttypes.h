@@ -414,7 +414,7 @@ class CartesianPoint : public vector<mstreal> {
     const CartesianPoint operator*(const mstreal& s) const;
     const CartesianPoint operator/(const mstreal& s) const;
     const CartesianPoint operator-() const;
-    CartesianPoint& operator=(const Atom& A);
+    // CartesianPoint& operator=(const Atom& A);
     const double operator*(const CartesianPoint& other) const { return this->dot(other); }
 
     mstreal norm() const;

@@ -93,7 +93,7 @@ string MstOptions::getString(const string& opt, string defVal) {
   return givenOptions[opt];
 }
 
-bool MstOptions::isGiven(const string& opt) {
+bool MstOptions::isGiven(const string& opt) const {
   if (givenOptions.find(opt) == givenOptions.end()) return false;
   return true;
 }
