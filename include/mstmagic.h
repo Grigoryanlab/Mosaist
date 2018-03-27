@@ -21,7 +21,13 @@ class TERMUtils {
      * up comprising the TERM (in the order they are inserted into the TERM).
      * Disjoint fragments are placed into separate chains within the TERM, with
      * chain topolpgy taken from the original structure that the specified
-     * residue(s) belong to.*/
+     * residue(s) belong to. NOTE: the following functions are meant to extract
+     * a sensible structure. So, if segments overlap, residues will only be listed
+     * once (and the overlapping segments will be part of a single chain). For
+     * this reason, the order in which central residues are specified does not
+     * influence the order of residues in the selected TERM, and the latter is
+     * dictated by the topology of the structure from which the TERM is excised.
+     * But this may not always be what one wants, so look at the function below. */
     /* case 1: single central residue */
     static void selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
     /* case 2: one or more central residues (given as a vector of Residue*) */
@@ -32,6 +38,13 @@ class TERMUtils {
     static Structure selectTERM(const vector<Residue*>& cenRes, ConFind& C, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
     /* case 5: all central residues + contacting residues are already specified */
     static void selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm = 2, vector<int>* fragResIdx = NULL);
+
+    /* The following function is a little different, in that it simply cuts out
+     * one segment at a time, and splices them together. It does not worry about
+     * any overlap between segments and the order of segments in the resulting
+     * TERM (i.e., the order of atoms) is according to the order in which the
+     * central residues are listed in the input. */
+    static void exciseTERM(const vector<Residue*>& cenRes, vector<Atom*>& frag, int pm = 2);
 };
 
 #endif
