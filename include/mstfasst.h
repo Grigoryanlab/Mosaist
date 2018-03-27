@@ -238,16 +238,6 @@ class FASST {
         int numIn;
     };
 
-    /* TODO: goal is to define redundancy as follows:
-     * 1. define the redundancy of each segment alignment separately
-     * 2. if a segment is shorter than L, expand it to L (L = 30)
-     * 3. compute RMSD between these L residues. If it is above 1.5 A, then the
-     *    two alignments are different, so done. If it is below, then do an
-     *    ungapped sequence alignment and judge by the score.
-     * 4. some windows will not be expandable (hit a chain terminus), in which
-     *    case we will compare the common portion of any two windows. Both the
-     *    RMSD cutoff and the sequence identity cutoff have to scale. */
-
     ~FASST();
     FASST();
     void setQuery(const string& pdbFile, bool autoSplitChains = true);
@@ -258,11 +248,21 @@ class FASST {
     void addTarget(const string& pdbFile);
     void addTargets(const vector<string>& pdbFiles);
     void stripSidechains(Structure& S);
+
     void addResidueProperties(int ti, const string& propType, const vector<mstreal>& propVals);
+    void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
+    mstreal isResiduePropertyPopulated(const string& propType);
+    bool hasResidueProperties(int ti, const string& propType, int ri);
+    mstreal getResidueProperty(int ti, const string& propType, int ri);
+    bool hasResiduePairProperties(int ti, const string& propType, int ri);
+    mstreal isResiduePairPropertyPopulated(const string& propType);
+    map<int, mstreal> getResiduePairProperties(int ti, const string& propType, int ri);
+
     bool isPropertyDefined(const string& propType);
     bool isPropertyDefined(const string& propType, int ti);
     int numTargets() const { return targetStructs.size(); }
-    Structure getTarget(int i) { return *(targetStructs[i]); }
+    Structure getTargetCopy(int i) const { return *(targetStructs[i]); }
+    Structure* getTarget(int i) { return targetStructs[i]; }
     void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
     void setSearchType(searchType _searchType);
     void setMemorySaveMode(bool _memSave) { memSave = _memSave; }
@@ -352,7 +352,15 @@ class FASST {
     vector<int> targChainBeg, targChainEnd;  // targChainBeg[i] and targChainEnd[i] contain the chain start and end indices for the chain
                                              // that contains the residue with index i (in the overal concatenated sequence). Residue indices
                                              // are based on just the portion of the structure to be searched over.
-    map<string, map<int, vector<mstreal> > > resProperties;  // resProperties["env"][ti][ri] is the value of the "env" property for residue ri in target with index ti
+
+    /* resProperties["env"][ti][ri] is the value of the "env" property for
+     * residue ri in target with index ti */
+    map<string, map<int, vector<mstreal> > > resProperties;
+
+    /* resPairProperties["cont"][ti][ri][rj] is the value of the "cont" property
+     * (e.g., contact degree) between residues ri and rj in target with index ti.
+     * NOTE: this property can be directional (i.e., pairs are not mirrored). */
+    map<string, map<int, map<int, map<int, mstreal> > > > resPairProperties;
 
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
     int currentTarget;                       // the index of the target currently being searched for

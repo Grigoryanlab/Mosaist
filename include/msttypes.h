@@ -318,6 +318,8 @@ class Atom {
     void setZ(mstreal _z) { z = _z; }
     void setCoor(mstreal _x, mstreal _y, mstreal _z) { x = _x; y = _y; z = _z; }
     void setCoor(const CartesianPoint& xyz);
+    void setCoor(const Atom& a);
+    void setCoor(const Atom* a) { setCoor(*a); }
     void setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z);
     void setOcc(mstreal _occ) { occ = _occ; }
     void setB(mstreal _B) { B = _B; }
@@ -507,6 +509,7 @@ class AtomPointerVector : public vector<Atom*> {
     AtomPointerVector(size_t sz, Atom* val = NULL) : vector<Atom*>(sz, val) { }
     AtomPointerVector(const AtomPointerVector& other) : vector<Atom*>(other) { }
     AtomPointerVector(const vector<Atom*>& other) : vector<Atom*>(other) { }
+    void copyCoordinates(const AtomPointerVector& other);
 
     using vector<Atom*>::push_back;    // base push_back of vector class
     void push_back(const Residue& R);  // overloaded push_back for Residues
@@ -524,6 +527,11 @@ class AtomPointerVector : public vector<Atom*> {
     AtomPointerVector clone() const;
     void clone(AtomPointerVector& into) const;
     AtomPointerVector subvector(int beg, int end); // returns the range [beg, end)
+
+    AtomPointerVector& operator+=(const AtomPointerVector& rhs);
+    AtomPointerVector& operator-=(const AtomPointerVector& rhs);
+    AtomPointerVector& operator/=(const mstreal& s);
+    AtomPointerVector& operator*=(const mstreal& s);
 
     void write(ostream& _os) const; // write AtomPointerVector to a binary stream (parent information will be lost)
     void read(istream& _is);  // read AtomPointerVector from a binary stream
@@ -769,7 +777,7 @@ class Clusterer {
     bool getOptimizeAlignments() { return optimAlign; }
 
     /* Will greedy cluster the given set of units (must all have the same number of atoms),
-     * using the given RMSD cutoff, while making sure that no more than Nmax x Nmax RMSD
+     * using the given RMSD cutoff, while making sure that no more than ~Nmax x Nmax RMSD
      * computations are done per iteration. So, if the number of units is below Nmax, a
      * normal greedy clustering will be performed. However, if above Nmax, then will try
      * be further greedy and find best centroids without ever doing all-by-all comparisons.
@@ -787,13 +795,14 @@ class Clusterer {
     // these functions are protected because they assume that the cache of pre-
     // computed RMSDs is in a good state (so don't want external calls)
     vector<vector<int> > greedyClusterBruteForce(const vector<vector<Atom*> >& units, set<int> remIndices, mstreal rmsdCut, int nClusts = -1);
-    vector<int> elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, int from, mstreal rmsdCut);
+    vector<int> elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, const vector<Atom*>& fromUnit, mstreal rmsdCut);
     set<int> randomSubsample(set<int>& indices, int N);
 
   private:
     // won't cache for now (need careful memory management)
     map<int, map<int, mstreal > > coputedRMSDs;
     bool optimAlign;
+    RMSDCalculator rCalc;
 };
 
 }

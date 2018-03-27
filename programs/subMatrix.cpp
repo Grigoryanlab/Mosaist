@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
   for (int c = 0; c < op.getInt("N"); c++) {
     // pick a random structure from the database
     int ti = MstUtils::randInt(0, F.numTargets() - 1);
-    Structure S(F.getTarget(ti));
+    Structure S(F.getTargetCopy(ti));
 
     for (int r = 0; r < op.getInt("n"); c++) {
       // pick a random residue
@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
       for (auto it = matchesByTarget.begin(); it != matchesByTarget.end(); ++it) {
         int idx = it->first;
         vector<fasstSolution>& sols = it->second;
-        Structure target = F.getTarget(idx);
+        Structure target = F.getTargetCopy(idx);
         ConFind C(&RL, target);
         for (int i = 0; i < sols.size(); i++) {
           vector<int> residues = F.getMatchResidueIndices(sols[i], FASST::matchType::REGION);

@@ -8,27 +8,13 @@
 
 #include "msttypes.h"
 #include "mstoptions.h"
+#include "mstfasst.h"
 
 using namespace std;
 using namespace MST;
 
-int main(int argc, char *argv[]) {
-  MstOptions op;
-  op.setTitle("Clusters all local windows in given structures by backbone RMSD. Options:");
-  op.addOption("w", "length of local window.", true);
-  op.addOption("r", "RMSD cutoff to use for the clustering (greedy clustering is done).", true);
-  op.addOption("i", "input PDB file.", true);
-  op.addOption("ob", "optional: output base name. If given, will write clusters as PDB files.");
-  op.setOptions(argc, argv);
-
-  Structure S(op.getString("i"));
-  int w = op.getInt("w");
-  double rmsdCut = op.getReal("r");
-  string obase = op.getString("ob", "");
-  vector<string> bba = {"N", "CA", "C", "O"};
-  fstream of;
-
-  vector<vector<Atom*> > windows;
+void extractWindows(vector<vector<Atom*> >& windows, int w, const Structure& S) {
+  const vector<string> bba = {"N", "CA", "C", "O"};
   for (int ci = 0; ci < S.chainSize(); ci++) {
     Chain& chain = S[ci];
     for (int ri = 0; ri < chain.residueSize() - w + 1; ri++) {
@@ -45,11 +31,43 @@ int main(int argc, char *argv[]) {
       windows.push_back(win);
     }
   }
+}
+
+int main(int argc, char *argv[]) {
+  MstOptions op;
+  op.setTitle("Clusters all local windows in given structures by backbone RMSD. Options:");
+  op.addOption("w", "length of local window.", true);
+  op.addOption("r", "RMSD cutoff to use for the clustering (greedy clustering is done).", true);
+  op.addOption("i", "input PDB file.");
+  op.addOption("db", "binary FASST database.");
+  op.addOption("ob", "optional: output base name. If given, will write clusters as PDB files.");
+  op.setOptions(argc, argv);
+
+  int w = op.getInt("w");
+  double rmsdCut = op.getReal("r");
+  string obase = op.getString("ob", "");
+  fstream of;
+  vector<Structure*> S;
+
+  vector<vector<Atom*> > windows;
+  if (op.isGiven("i")) {
+    S.push_back(new Structure(op.getString("i")));
+    extractWindows(windows, w, *(S.back()));
+  }
+
+  if (op.isGiven("db")) {
+    FASST F;
+    F.readDatabase(op.getString("db"));
+    for (int i = 0; i < F.numTargets(); i++) {
+      S.push_back(new Structure(F.getTargetCopy(i)));
+      extractWindows(windows, w, *(S.back()));
+    }
+  }
   cout << "extracted " << windows.size() << " windows. Clustering..." << endl;
 
   // cluster
   Clusterer C;
-  vector<vector<int> > clusters = C.greedyCluster(windows, rmsdCut);
+  vector<vector<int> > clusters = C.greedyCluster(windows, rmsdCut, 1000);
 
   // output clusters
   RMSDCalculator rc;

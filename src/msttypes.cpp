@@ -972,8 +972,12 @@ Atom::Atom() {
   parent = NULL;
   het = false;
   name = MstUtils::copyStringC("UNK");
-  setName("");
+  // setName("");
   alternatives = NULL;
+  alt = ' ';
+  x = y = z = 0;
+  index = 0;
+  occ = B = 0;
 }
 
 Atom::Atom(const Atom& A, bool copyAlt) {
@@ -1074,6 +1078,10 @@ char Atom::getAltLocID(int altInd) const {
 
 void Atom::setCoor(const CartesianPoint& xyz) {
   x = xyz[0]; y = xyz[1]; z = xyz[2];
+}
+
+void Atom::setCoor(const Atom& a) {
+  x = a.getX(); y = a.getY(); z = a.getZ();
 }
 
 void Atom::setName(const char* _name) {
@@ -1255,6 +1263,13 @@ ostream& MST::operator<<(ostream &_os, const Atom& _atom) {
 
 /* --------- AtomPointerVector --------- */
 
+void AtomPointerVector::copyCoordinates(const AtomPointerVector& other) {
+  if (size() != other.size()) MstUtils::error("vector sizes disagree", "AtomPointerVector::copyCoordinates");
+  for (int i = 0; i < size(); i++) {
+    (*this)[i]->setCoor(other[i]);
+  }
+}
+
 void AtomPointerVector::push_back(const Residue& R) {
   int sz = this->size();
   this->resize(sz + R.atomSize());
@@ -1334,6 +1349,41 @@ void AtomPointerVector::clone(AtomPointerVector& into) const {
   }
 }
 
+AtomPointerVector& AtomPointerVector::operator+=(const AtomPointerVector& rhs) {
+  if (size() != rhs.size()) MstUtils::error("vector sizes disagree", "AtomPointerVector::operator+=");
+  for (int i = 0; i < size(); i++) {
+    Atom& A = *((*this)[i]);
+    const Atom& B = *(rhs[i]);
+    A.setCoor(A.getX() + B.getX(), A.getY() + B.getY(), A.getZ() + B.getZ());
+  }
+  return *this;
+}
+
+AtomPointerVector& AtomPointerVector::operator-=(const AtomPointerVector& rhs) {
+  if (size() != rhs.size()) MstUtils::error("vector sizes disagree", "AtomPointerVector::operator+=");
+  for (int i = 0; i < size(); i++) {
+    Atom& A = *((*this)[i]);
+    Atom& B = *(rhs[i]);
+    A.setCoor(A.getX() - B.getX(), A.getY() - B.getY(), A.getZ() - B.getZ());
+  }
+  return *this;
+}
+
+AtomPointerVector& AtomPointerVector::operator/=(const mstreal& s) {
+  for (int i = 0; i < size(); i++) {
+    (*this)[i]->setCoor((*this)[i]->getX()/s, (*this)[i]->getY()/s, (*this)[i]->getZ()/s);
+  }
+  return *this;
+}
+
+AtomPointerVector& AtomPointerVector::operator*=(const mstreal& s) {
+  for (int i = 0; i < size(); i++) {
+    (*this)[i]->setCoor((*this)[i]->getX()*s, (*this)[i]->getY()*s, (*this)[i]->getZ()*s);
+  }
+  return *this;
+}
+
+
 void AtomPointerVector::write(ostream &_os) const {
   MstUtils::writeBin(_os, (int) size());
   for (int i = 0; i < size(); i++) (*this)[i]->write(_os);
@@ -1349,7 +1399,7 @@ void AtomPointerVector::read(istream &_is) {
 
 ostream& MST::operator<<(ostream &_os, const AtomPointerVector& _atoms) {
   for (int i = 0; i < _atoms.size(); i++) {
-    _os << _atoms[i]->pdbLine() << endl;
+    _os << *(_atoms[i]) << endl;
   }
   return _os;
 }
@@ -3073,31 +3123,59 @@ bool ProximitySearch::overlaps(ProximitySearch& other, mstreal pad) {
 
 /* --------- Clusterer --------- */
 vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax) {
-  coputedRMSDs.clear();
   vector<vector<int> > clusters;
+  if (units.empty()) return clusters;
   set<int> remIndices;
   for (int i = 0; i < units.size(); i++) remIndices.insert(i);
   if (remIndices.size() <= Nmax) return Clusterer::greedyClusterBruteForce(units, remIndices, rmsdCut);
 
+  // create some dummy storage vectors
+  int L = units[0].size();
+  AtomPointerVector mean(L, NULL), copy(L, NULL);
+  for (int i = 0; i < L; i++) { mean[i] = new Atom(); copy[i] = new Atom(); }
+
+  // iterate to find a new cluster each time
   while (remIndices.size() > Nmax) {
     // sub-sample Nmax elements
     set<int> subSample = Clusterer::randomSubsample(remIndices, Nmax);
 
     // get the top cluster from these and use its centroid
     vector<int> topClustSub = Clusterer::greedyClusterBruteForce(units, subSample, rmsdCut, 1)[0];
-    vector<int> topClust = Clusterer::elementsWithin(units, remIndices, topClustSub[0], rmsdCut);
+    vector<int> topClust = Clusterer::elementsWithin(units, remIndices, units[topClustSub[0]], rmsdCut);
+    cout << "picked initial cluster with " << topClust.size() << " points..." << endl;
 
-    // now try to grow the cluster by improving the centroid, if there are compute cycles left
-    int Ntry = int(round(Nmax * Nmax * 1.0 / remIndices.size()));
-    for (int i = 1; i <= MstUtils::min(Ntry, (int) topClust.size()-1); i++) {
-      vector<int> newTopClust = Clusterer::elementsWithin(units, remIndices, topClust[i], rmsdCut);
-      if (newTopClust.size() > topClust.size()) topClust = newTopClust;
+    // now try to improve the centroid by moving it closer to the average
+    while (1) {
+      cout << "\timproving..." << endl;
+      mean.copyCoordinates(units[topClust[0]]);
+      for (int i = 1; i < topClust.size(); i++) {
+        copy.copyCoordinates(units[topClust[i]]);
+        rCalc.align(copy, units[topClust[0]], copy);
+        mean *= (mstreal) i; mean += copy; mean /= (mstreal) (i + 1);
+      }
+      vector<int> topClustNew = Clusterer::elementsWithin(units, remIndices, mean, rmsdCut);
+      topClustNew = Clusterer::elementsWithin(units, remIndices, units[topClustNew[0]], rmsdCut);
+      if (topClustNew.size() <= topClust.size()) break;
+      topClust = topClustNew;
+      cout << "\timproved to " << topClust.size() << " points" << endl;
     }
+
+    // // now try to grow the cluster by improving the centroid, if there are compute cycles left
+    // int Ntry = int(round(Nmax * Nmax * 1.0 / remIndices.size()));
+    // for (int i = 1; i <= MstUtils::min(Ntry, (int) topClust.size()-1); i++) {
+    //   vector<int> newTopClust = Clusterer::elementsWithin(units, remIndices, units[topClust[i]], rmsdCut);
+    //   if (newTopClust.size() > topClust.size()) topClust = newTopClust;
+    // }
 
     // keep whatever cluster end up with, exclude its elements
     clusters.push_back(topClust);
     for (int i = 0; i < topClust.size(); i++) remIndices.erase(topClust[i]);
+    cout << remIndices.size() << " points remaining" << endl;
   }
+
+  // clean up
+  mean.deletePointers();
+  copy.deletePointers();
 
   // brute force through the rest
   vector<vector<int> > remClusters = greedyClusterBruteForce(units, remIndices, rmsdCut);
@@ -3111,7 +3189,7 @@ vector<vector<int> > Clusterer::greedyClusterBruteForce(const vector<vector<Atom
     // pick the best current centroid
     vector<int> bestClust;
     for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
-      vector<int> clust = elementsWithin(units, remIndices, *it, rmsdCut);
+      vector<int> clust = elementsWithin(units, remIndices, units[*it], rmsdCut);
       if (clust.size() > bestClust.size()) {
         bestClust = clust;
       }
@@ -3126,10 +3204,8 @@ vector<vector<int> > Clusterer::greedyClusterBruteForce(const vector<vector<Atom
   return clusters;
 }
 
-vector<int> Clusterer::elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, int from, mstreal rmsdCut) {
+vector<int> Clusterer::elementsWithin(const vector<vector<Atom*> >& units, set<int>& remIndices, const vector<Atom*>& fromUnit, mstreal rmsdCut) {
   vector<int> neigh; vector<mstreal> rmsds;
-  const vector<Atom*>& fromUnit = units[from];
-  RMSDCalculator rCalc;
   for (auto it = remIndices.begin(); it != remIndices.end(); ++it) {
     mstreal r = optimAlign ? rCalc.bestRMSD(fromUnit, units[*it]) : rCalc.rmsd(fromUnit, units[*it]);
     if (r <= rmsdCut) {

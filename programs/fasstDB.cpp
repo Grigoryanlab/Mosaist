@@ -10,21 +10,28 @@ int main(int argc, char *argv[]) {
   MstOptions op;
   op.setTitle("Creates a FASST database from input PDB files. Options:");
   op.addOption("pL", "a file with a list of PDB files.");
+  op.addOption("db", "a previously-written FASST database.");
   op.addOption("dL", "a file with a list of FASST databases (will consolidate into one).");
   op.addOption("o", "output database file name.", true);
   op.addOption("m", "memory save flag (will store backbone only).");
   op.addOption("c", "clean up PDB files, so that only protein residues with enough of a backbone to support rotamer building survive.");
   op.addOption("pp", "store phi/psi properties in the database.");
-  op.addOption("env", "store residue freedom property in the database (option value must be a path to an MST rotamer library file).");
+  op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
+  op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees below the specified limit). If this is given, --rLib must also be given.");
+  op.addOption("rLib", "path to an MST rotamer library file.");
   op.addOption("batch", "an integer. If specified, instead of building the database will spread all the work across this many "
                         "jobs, writing corresponding batch files for submission to the cluster. Will also produce a file called "
                         "<out>.fin.sh (where <out> is the base of the name specified in --o), which is to be run after all jobs "
                         "finish to complete the database building process.");
   op.setOptions(argc, argv);
-  if (!op.isGiven("pL") && !op.isGiven("dL")) MstUtils::error("either --pL or --dL must be given!");
-  if (op.isGiven("env")) MstUtils::assert(!op.getString("env").empty() && MstSys::fileExists(op.getString("env")), "--env must point to a rotamer library file");
   RotamerLibrary RL;
-  if (op.isGiven("env")) RL.readRotamerLibrary(op.getString("env"));
+  if (!op.isGiven("pL") && !op.isGiven("dL") && !op.isGiven("db")) MstUtils::error("either --pL, --dL, or --db must be given!");
+  if (op.isGiven("rLib")) MstUtils::assert(MstSys::fileExists(op.getString("rLib")), "--rLib is not a valid file path");
+  if (op.isGiven("cont") && (!op.isReal("cont") || (op.getReal("cont") < 0) || (op.getReal("cont") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
+  if ((op.isGiven("env") || op.isGiven("cont"))) {
+    if (!op.isGiven("rLib")) MstUtils::error("--rLib is needed, but not given");
+    RL.readRotamerLibrary(op.getString("rLib"));
+  }
 
   if (!op.isGiven("batch")) {
     FASST S;
@@ -44,16 +51,21 @@ int main(int argc, char *argv[]) {
         S.addTarget(P);
       }
     }
+    if (op.isGiven("db")) {
+      S.readDatabase(op.getString("db"));
+    }
     if (op.isGiven("dL")) {
       vector<string> dbFiles = MstUtils::fileToArray(op.getString("dL"));
       for (int i = 0; i < dbFiles.size(); i++) {
         S.readDatabase(dbFiles[i]);
       }
     }
-    if (op.isGiven("pp") || op.isGiven("env")) {
+    if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont")) {
+      cout << "Computing residue properties..." << endl;
       // compute and add some properties
       for (int ti = 0; ti < S.numTargets(); ti++) {
-        Structure P = S.getTarget(ti);
+        cout << "\ttarget " << ti+1 << "/" << S.numTargets() << "..." << endl;
+        Structure P = S.getTargetCopy(ti);
         if (op.isGiven("pp")) {
           vector<Residue*> residues = P.getResidues();
           vector<mstreal> phi(residues.size()), psi(residues.size());
@@ -64,11 +76,24 @@ int main(int argc, char *argv[]) {
           S.addResidueProperties(ti, "phi", phi);
           S.addResidueProperties(ti, "psi", psi);
         }
-        if (op.isGiven("env")) {
-          ConFind C(&RL, P);
+        if (op.isGiven("env") || op.isGiven("cont")) {
+          ConFind C(&RL, P); // both need the confind object
+          // environment
           vector<Residue*> residues = P.getResidues();
           vector<mstreal> freedoms = C.getFreedom(residues);
           S.addResidueProperties(ti, "env", freedoms);
+
+          // contacts
+          mstreal cdcut = op.getReal("cont");
+          contactList list = C.getContacts(P, cdcut);
+          map<int, map<int, mstreal> > conts;
+          for (int i = 0; i < list.size(); i++) {
+            int rA = list.residueA(i)->getResidueIndex();
+            int rB = list.residueB(i)->getResidueIndex();
+            conts[rA][rB] = list.degree(i);
+            conts[rB][rA] = list.degree(i);
+          }
+          S.addResiduePairProperties(ti, "conts", conts);
         }
       }
     }

@@ -348,9 +348,41 @@ void FASST::addResidueProperties(int ti, const string& propType, const vector<ms
   if ((ti < 0) || (ti >= targetStructs.size())) MstUtils::error("requested target out of range: " + MstUtils::toString(ti), "FASST::addResidueProperties");
   int N = targetStructs[ti]->residueSize();
   if (N != propVals.size()) MstUtils::error("size of properties vector inconsistent with number of residues for target: " + MstUtils::toString(ti), "FASST::addResidueProperties");
-  vector<mstreal>& vals = resProperties[propType][ti];
-  vals.resize(propVals.size());
-  for (int i = 0; i < propVals.size(); i++) vals[i] = propVals[i];
+  resProperties[propType][ti] = propVals;
+}
+
+void FASST::addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals) {
+  if ((ti < 0) || (ti >= targetStructs.size())) MstUtils::error("requested target out of range: " + MstUtils::toString(ti), "FASST::addResiduePairProperties");
+  int N = targetStructs[ti]->residueSize();
+  resPairProperties[propType][ti] = propVals;
+}
+
+mstreal FASST::isResiduePropertyPopulated(const string& propType) {
+  return (resProperties.find(propType) != resProperties.end());
+}
+
+bool FASST::hasResidueProperties(int ti, const string& propType, int ri) {
+  return ((resProperties.find(propType) != resProperties.end()) &&
+          (resProperties[propType].find(ti) != resProperties[propType].end()) &&
+          (resProperties[propType][ti].size() > ri) && (ri >= 0));
+}
+
+mstreal FASST::getResidueProperty(int ti, const string& propType, int ri) {
+  return hasResidueProperties(ti, propType, ri) ? resProperties[propType][ti][ri] : 0.0;
+}
+
+bool FASST::hasResiduePairProperties(int ti, const string& propType, int ri) {
+  return ((resPairProperties.find(propType) != resPairProperties.end()) &&
+          (resPairProperties[propType].find(ti) != resPairProperties[propType].end()) &&
+          (resPairProperties[propType][ti].find(ri) != resPairProperties[propType][ti].end()));
+}
+
+mstreal FASST::isResiduePairPropertyPopulated(const string& propType) {
+  return (resPairProperties.find(propType) != resPairProperties.end());
+}
+
+map<int, mstreal> FASST::getResiduePairProperties(int ti, const string& propType, int ri) {
+  return hasResiduePairProperties(ti, propType, ri) ? resPairProperties[propType][ti][ri] : map<int, mstreal>();
 }
 
 void FASST::writeDatabase(const string& dbFile) {
@@ -367,13 +399,30 @@ void FASST::writeDatabase(const string& dbFile) {
         for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
       }
     }
+    for (auto p = resPairProperties.begin(); p != resPairProperties.end(); ++p) {
+      if ((p->second).find(ti) != (p->second).end()) {
+        map<int, map<int, mstreal> >& vals = (p->second)[ti];
+        MstUtils::writeBin(ofs, 'I'); // marks the start of a residue pair interaction property section
+        MstUtils::writeBin(ofs, (string) p->first);
+        for (auto i = vals.begin(); i != vals.end(); ++i) {
+          MstUtils::writeBin(ofs, (int) i->first);
+          MstUtils::writeBin(ofs, (int) (i->second).size());
+          for (auto j = (i->second).begin(); j != (i->second).end(); ++j) {
+            MstUtils::writeBin(ofs, (int) j->first);
+            MstUtils::writeBin(ofs, (mstreal) j->second);
+          }
+        }
+        MstUtils::writeBin(ofs, (int) -1);
+      }
+    }
   }
   ofs.close();
 }
 
 void FASST::readDatabase(const string& dbFile) {
   fstream ifs; MstUtils::openFile(ifs, dbFile, fstream::in | fstream::binary, "FASST::readDatabase");
-  char sect; string name; mstreal val; int ti = numTargets();
+  char sect; string name; mstreal val;
+  int ti = numTargets();
   MstUtils::readBin(ifs, sect);
   if (sect != 'S') MstUtils::error("first section must be a structure one, while reading database file " + dbFile, "FASST::readDatabase(const string&)");
   while (ifs.peek() != EOF) {
@@ -392,6 +441,20 @@ void FASST::readDatabase(const string& dbFile) {
         for (int i = 0; i < vals.size(); i++) {
           MstUtils::readBin(ifs, val);
           vals[i] = val;
+        }
+      } else if (sect == 'I') {
+        MstUtils::readBin(ifs, name);
+        map<int, map<int, mstreal> >& vals = resPairProperties[name][ti];
+        int ri, rj, N; mstreal cd;
+        while (true) {
+          MstUtils::readBin(ifs, ri);
+          if (ri < 0) break;
+          MstUtils::readBin(ifs, N);
+          for (int i = 0; i < N; i++) {
+            MstUtils::readBin(ifs, rj);
+            MstUtils::readBin(ifs, cd);
+            vals[ri][rj] = cd;
+          }
         }
       } else if (sect == 'S') {
         break;
