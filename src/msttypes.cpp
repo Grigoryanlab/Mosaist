@@ -520,6 +520,7 @@ Structure Structure::reassignChainsByConnectivity(mstreal maxPeptideBond) {
 }
 
 void Structure::reassignChainsByConnectivity(Structure& dest, mstreal maxPeptideBond) {
+  if (this->residueSize() == 0) return;
   vector<Residue*> residues = this->getResidues();
 	Chain* chain = dest.appendChain("A");
 	for (int i = 0; i < residues.size() - 1; i++) {

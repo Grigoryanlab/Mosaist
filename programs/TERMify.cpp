@@ -378,7 +378,7 @@ mstreal getRadius(const Structure& S) {
   return rad;
 }
 
-void addMatches(fasstCache& C, Structure& frag, const vector<int>& fragResIdx, vector<Structure*>& allMatches, vector<vector<Residue*> >& resTopo, fstream& matchOut, const MstOptions& op = MstOptions()) {
+vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragResIdx) {
 //frag.writePDB("/tmp/pair.pdb"); cout << "fragment saved, RMSD = " << RMSDCalculator::rmsdCutoff(frag) << endl;
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
@@ -408,17 +408,29 @@ if (0) {
 
   fasstSolutionSet matches = C.search(true);
   cout << "found " << matches.size() << " matches" << endl;
-  int ri = MstUtils::randInt(0, matches.size() - 1);
-  for (auto it = matches.begin(); it != matches.end(); ++it, ri--) {
-    if (op.isGiven("r") && ri) continue;
-    allMatches.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
-    Structure& match = *(allMatches.back());
-    if (matchOut.is_open() && (it == matches.begin())) {
+  vector<Structure*> matchStructures;
+  for (auto it = matches.begin(); it != matches.end(); ++it) {
+    matchStructures.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
+    Structure& match = *(matchStructures.back());
+    MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
+    for (int k = 0; k < match.residueSize(); k++) {
+      match.getResidue(k).setNum(fragResIdx[k]); // make residue numbers store indices into the original structure
+    }
+  }
+  return matchStructures;
+}
+
+void addMatches(vector<Structure*>& matchStructures, vector<vector<Residue*> >& resTopo, fstream& matchOut, int ri = -1) {
+  for (int i = 0; i < matchStructures.size(); i++) {
+    if ((ri >= 0) && (i != ri)) continue;
+    Structure& match = *(matchStructures[i]);
+    if (matchOut.is_open()) {
       match.writePDB(matchOut);
       matchOut << "END" << endl;
     }
-    for (int k = 0; k < fragResIdx.size(); k++) {
-      resTopo[fragResIdx[k]].push_back(&(match.getResidue(k)));
+    for (int k = 0; k < match.residueSize(); k++) {
+      Residue& res = match.getResidue(k);
+      resTopo[res.getNum()].push_back(&res); // residue numbers store indices into the originating structure
     }
   }
 }
@@ -437,7 +449,8 @@ int main(int argc, char** argv) {
   op.addOption("o", "output base name.", true);
   op.addOption("r", "pick a random match for each TERM in each iteration, rather than considering all matches simultaneously.");
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
-  op.addOption("cyc", "number of iteration cycles (10 by default).");
+  op.addOption("cyc", "number of cycles--i.e., number of times freshh TERMs are searched for (10 by default).");
+  op.addOption("iter", "number of iterations per cycle (1 by default). At the start of each iteration, the overall structure is reinitialized to the current structure");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
   op.addOption("fs", "a selection string for residues to fix.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
@@ -477,6 +490,7 @@ int main(int argc, char** argv) {
   int Ni = 1000;
   fusionScores scores;
   fstream out, shellOut;
+  bool pickRand = op.isGiven("r") || op.isGiven("iter");
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
@@ -497,10 +511,7 @@ int main(int argc, char** argv) {
     // first self TERMs
     cout << "Searching for self TERMs..." << endl;
     vector<vector<Residue*> > resTopo(I.residueSize());
-    // by inserting the starting structure into the topology first, any fixed
-    // regions will be fixed to these starting coordinates
-    for (int ri = 0; ri < S.residueSize(); ri++) resTopo[ri].push_back(&(S.getResidue(ri)));
-    vector<Structure*> allMatches;
+    vector<vector<Structure*>> allMatches;
     for (int ci = 0; ci < S.chainSize(); ci++) {
       Chain& C = S[ci];
       for (int ri = 0; ri < C.residueSize(); ri++) {
@@ -509,7 +520,9 @@ int main(int argc, char** argv) {
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
         F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-        addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut, op);
+        vector<Structure*> matches = getMatches(cache, frag, fragResIdx);
+        allMatches.push_back(matches);
+        addMatches(matches, resTopo, shellOut, pickRand ? MstUtils::randInt(0, matches.size() - 1) : -1);
       }
     }
 
@@ -517,16 +530,18 @@ int main(int argc, char** argv) {
     cout << "Searching for pair TERMs..." << endl;
     ConFind cfd(&RL, S);
     contactList L = cfd.getContacts(S, 0.01);
-    vector<pair<Residue*, Residue*> > list = L.getOrderedContacts();
-    for (int k = 0; k < list.size(); k++) {
-      Residue* resA = list[k].first;
-      Residue* resB = list[k].second;
+    vector<pair<Residue*, Residue*> > contactList = L.getOrderedContacts();
+    for (int k = 0; k < contactList.size(); k++) {
+      Residue* resA = contactList[k].first;
+      Residue* resB = contactList[k].second;
       Structure frag; vector<int> fragResIdx;
       TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
       F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-      addMatches(cache, frag, fragResIdx, allMatches, resTopo, shellOut, op);
+      vector<Structure*> matches = getMatches(cache, frag, fragResIdx);
+      allMatches.push_back(matches);
+      addMatches(matches, resTopo, shellOut, pickRand ? MstUtils::randInt(0, matches.size() - 1) : -1);
     }
 
     /* --- Fuse --- */
@@ -538,14 +553,30 @@ int main(int argc, char** argv) {
     // (R0 - Rf)*exp(-c/10.0) + Rf; // exponential scaling
     // (Rf*(c + 1) + R0*(Ncyc - c - 1))/Ncyc; // linear scaling
 
+    // by inserting the starting structure into the topology first, any fixed
+    // regions will be fixed to these starting coordinates
+    // for (int ri = 0; ri < S.residueSize(); ri++) resTopo[ri].push_back(&(S.getResidue(ri)));
+
     opts.setCompRad(compactnessRadius);
     cout << "will be trying to combine structure to a radius of " << compactnessRadius << endl;
-    Structure fused = Fuser::fuse(resTopo, scores, fixed, opts);
-    cout << "\t" << scores << endl;
-    // opts.setStartingStructure(fused);
-    // opts.setGradientDescentFlag(false);
-    // fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);
-    // cout << "\t" << scores << endl;
+    Structure fused;
+    for (int it = 0; it < op.getInt("iter", 1); it++) {
+opts.setGradientDescentFlag(true); opts.setVerbose(true); opts.setOptimCartesian(false); //opts.setNumIters(10000);
+      fused = Fuser::fuse(resTopo, scores, fixed, opts);
+      cout << "\t" << scores << endl;
+opts.setStartingStructure(fused); opts.setOptimCartesian(true);
+fused = Fuser::fuse(resTopo, scores, fixed, opts);
+cout << "\t" << scores << endl;
+      // opts.setStartingStructure(fused);
+      // opts.setGradientDescentFlag(false);
+      // fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);
+      // cout << "\t" << scores << endl;
+      out << "MODEL " << c+1 << endl;
+      fused.writePDB(out);
+      out << "ENDMDL" << endl;
+
+      // for (int ri = 0; ri < S.residueSize(); ri++) resTopo[ri].back() = &(fused.getResidue(ri));
+    }
 
     // align based on the fixed part, if anything was fixed (for ease of visualization)
     if (fixed.size() > 0) {
@@ -555,11 +586,13 @@ int main(int argc, char** argv) {
     }
 
     /* --- write intermediate result and clean up--- */
-    out << "MODEL " << c+1 << endl;
-    fused.writePDB(out);
-    out << "ENDMDL" << endl;
-    S = fused.reassignChainsByConnectivity();
-    for (int mi = 0; mi < allMatches.size(); mi++) delete(allMatches[mi]);
+    for (int ii = 0; ii < fused[0].residueSize(); ii++) cout << fused[0][ii] << endl;
+    // S = fused.reassignChainsByConnectivity();
+    for (int si = 0; si < allMatches.size(); si++) {
+      for (int mi = 0; mi < allMatches[si].size(); mi++) {
+        delete(allMatches[si][mi]);
+      }
+    }
     if (shellOut.is_open()) shellOut.close();
   }
   out.close();

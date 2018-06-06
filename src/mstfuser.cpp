@@ -883,5 +883,6 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
 
   // call regular fuser to do all the work
   if (params.isVerbose()) cout << "Fuser::autofuse => fusing a structure of " << resTopo.size() << " residues, with " << fixedInTopo.size() << " positions fixed" << endl;
+  if (resTopo.size() <= fixedInTopo.size()) MstUtils::error("number of fixed residues >= than number of residues in topology!");
   return fuse(resTopo, fixedInTopo, params);
 }
