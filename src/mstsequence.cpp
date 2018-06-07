@@ -154,6 +154,7 @@ vector<Sequence> SeqTools::readFasta(const string& fastaFile) {
 }
 
 vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a, bool verb) {
+  MstUtils::assert((idCut >= 0) && (idCut <= 1.0), "ID cutoff value must be [0; 1]", "SeqTools::rSearch()");
   int N = seqs.size();
   vector<vector<int> > result(N);
   if (N == 0) return result;
@@ -168,7 +169,7 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
     const Sequence& S = seqs[i];
     for (int j = 0; j < S.length(); j++) hist[S[j]]++;
   }
-  mstreal pe; // expected probability of two randomly picked amino acids from this set matching
+  mstreal pe = 0; // expected probability of two randomly picked amino acids from this set matching
   for (int i = 0; i < hist.size(); i++) pe += pow(hist[i]*1.0/(N*L), 2);
   mstreal d = 1; /* this parameter controls the cost of finding all sequences with
                   * a common word with a given sequence relative to the cost of
@@ -178,8 +179,8 @@ vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idC
   vector<mstreal> cost(S, 0.0); // estimated search costs for each possible word length
   vector<int> Niters(S, 0.0);   // corresponding number of cycles needed
   for (int w = 1; w <= S; w++) {
-    mstreal p = 1.0; // the probability of a hit being in the set of sequences
-                     // having a w-common with the query sequence.
+    mstreal p = 1.0; // the probability of a hit with S identities being in the
+                     // set of sequences with a w-common with the query sequence.
     for (int k = 0; k < w; k++) {
       p *= (S - k)*1.0/(L - k);
     }
@@ -374,6 +375,11 @@ Sequence::Sequence(const string& _seq, const string& _name, const string& delim)
 Sequence::Sequence(const Sequence& S) {
   name = S.name;
   seq = S.seq;
+}
+
+Sequence::Sequence(int L, const string& _name) {
+  seq.resize(L, SeqTools::unknownIdx());
+  name = _name;
 }
 
 void Sequence::appendResidue(const string& aa) {

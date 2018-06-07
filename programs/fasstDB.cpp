@@ -4,6 +4,7 @@
 #include "mstrotlib.h"
 #include "mstsystem.h"
 #include "mstcondeg.h"
+#include "mstsequence.h"
 #include <chrono>
 
 int main(int argc, char *argv[]) {
@@ -18,6 +19,8 @@ int main(int argc, char *argv[]) {
   op.addOption("pp", "store phi/psi properties in the database.");
   op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
   op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees below the specified limit). If this is given, --rLib must also be given.");
+  op.addOption("sim", "percent sequence identity cutoff. If specified, will store local-window sequence similarity between all pairs of positions in the database, using this cutoff.");
+  op.addOption("win", "window size to use with the similarity searching with --sim; must be an odd integer. Default is 31 (i.e., +/- 15 from the residue in question).");
   op.addOption("rLib", "path to an MST rotamer library file.");
   op.addOption("batch", "an integer. If specified, instead of building the database will spread all the work across this many "
                         "jobs, writing corresponding batch files for submission to the cluster. Will also produce a file called "
@@ -32,6 +35,8 @@ int main(int argc, char *argv[]) {
     if (!op.isGiven("rLib")) MstUtils::error("--rLib is needed, but not given");
     RL.readRotamerLibrary(op.getString("rLib"));
   }
+  if (op.isGiven("sim") && (!op.isReal("sim") || (op.getReal("sim") < 0) || (op.getReal("sim") > 100))) MstUtils::error("--sim must be a non-negative value below 100.");
+  if (op.isGiven("win") && (!op.isInt("win") || (op.getInt("win") <= 0) || (op.getInt("win") % 2 == 0))) MstUtils::error("--win must be a positive odd integer.");
 
   if (!op.isGiven("batch")) {
     FASST S;
@@ -61,7 +66,7 @@ int main(int argc, char *argv[]) {
       }
     }
     if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont")) {
-      cout << "Computing residue properties..." << endl;
+      cout << "Computing per-target residue properties..." << endl;
       // compute and add some properties
       for (int ti = 0; ti < S.numTargets(); ti++) {
         cout << "\ttarget " << ti+1 << "/" << S.numTargets() << "..." << endl;
@@ -96,6 +101,60 @@ int main(int argc, char *argv[]) {
           S.addResiduePairProperties(ti, "conts", conts);
         }
       }
+    }
+    if (op.isGiven("sim")) {
+      cout << "Computing local-window sequence similarity..." << endl;
+      // first cluster all local windows
+      cout << "\tgathering local sequence windows..." << endl;
+      int L = op.getInt("win", 31);
+      int L2 = (L - 1)/2;
+      vector<Sequence> wins;
+      vector<int> winTarg, winStart;
+      vector<bool> nTerm, cTerm;
+      for (int ti = 0; ti < S.numTargets(); ti++) {
+        Structure P = S.getTargetCopy(ti);
+        int ri = 0;
+        for (int i = 0; i < P.chainSize(); i++) {
+          Chain& C = P[i];
+          for (int j = 0; j < C.residueSize() - L + 1; j++, ri++) {
+            Sequence win(L);
+            for (int k = 0; k < L; k++) win[k] = SeqTools::aaToIdx(C[j + k].getName());
+            wins.push_back(win);
+            winTarg.push_back(ti); winStart.push_back(ri);
+            nTerm.push_back(j == 0); cTerm.push_back(j == C.residueSize() - L);
+          }
+        }
+      }
+      cout << "\tclustering " << wins.size() << " windows at " << op.getInt("sim") << "\% sequence identity..." << endl;
+      vector<vector<int> > clusts = SeqTools::rSearch(wins, op.getInt("sim")/100.0, 0.999, true);
+      cout << "\tfound " << clusts.size() << " clusters..." << endl;
+
+      // then visit all similar pairs and mark what residues that makes similar
+      int symN = 0;
+      for (int i = 0; i < clusts.size(); i++) {
+        vector<int>& C = clusts[i];
+        int ti = winTarg[i];
+        int ri = winStart[i] + L2;
+        for (int k = 0; k < C.size(); k++) {
+          int j = C[k];
+          // windows i and j are similar
+          int tj = winTarg[j];
+          int rj = winStart[j] + L2;
+          S.addResidueRelationship(ti, "sim", ri, tj, rj);
+          symN++;
+          // if either window starts at the N-terminus, then the whole first half is redundant
+          if (nTerm[i] || nTerm[j]) {
+            for (rj = winStart[j]; rj < winStart[j] + L2 - 1; rj++) S.addResidueRelationship(ti, "sim", ri, tj, rj);
+            symN += L2;
+          }
+          // if either window ends at the C-terminus, then the whole second half is redundant
+          if (cTerm[i] || cTerm[j]) {
+            for (rj = winStart[j] + L2 + 1; rj < winStart[j] + L; rj++) S.addResidueRelationship(ti, "sim", ri, tj, rj);
+            symN += L2;
+          }
+        }
+      }
+      cout << "\trecorded " << symN << " similar windows" << endl;
     }
     S.writeDatabase(op.getString("o"));
   } else {

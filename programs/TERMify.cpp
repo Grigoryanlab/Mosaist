@@ -625,8 +625,6 @@ int main(int argc, char** argv) {
         bestTopo = currTopo;
         bestScore = currScore;
         bestPicks = currPicks;
-      } else {
-        cout << "\t\trejected" << endl;
       }
     }
     out << "MODEL " << c+1 << endl;

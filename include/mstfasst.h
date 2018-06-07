@@ -251,6 +251,8 @@ class FASST {
 
     void addResidueProperties(int ti, const string& propType, const vector<mstreal>& propVals);
     void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
+    // void addResidueRelationships(int ti, const string& propType, const map<int, map<int, map<int, set<int> > >& resRels);
+    void addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj);
     mstreal isResiduePropertyPopulated(const string& propType);
     bool hasResidueProperties(int ti, const string& propType, int ri);
     mstreal getResidueProperty(int ti, const string& propType, int ri);
@@ -353,14 +355,22 @@ class FASST {
                                              // that contains the residue with index i (in the overal concatenated sequence). Residue indices
                                              // are based on just the portion of the structure to be searched over.
 
-    /* resProperties["env"][ti][ri] is the value of the "env" property for
-     * residue ri in target with index ti */
+    /* Object for holding real-valued residue properties. Specifically,
+     * resProperties["env"][ti][ri] is the value of the "env" property for
+     * residue ri in target with index ti. */
     map<string, map<int, vector<mstreal> > > resProperties;
 
-    /* resPairProperties["cont"][ti][ri][rj] is the value of the "cont" property
+    /* Object for holding real-valued residue-pair properties. Specifically,
+     * resPairProperties["cont"][ti][ri][rj] is the value of the "cont" property
      * (e.g., contact degree) between residues ri and rj in target with index ti.
      * NOTE: this property can be directional (i.e., pairs are not mirrored). */
     map<string, map<int, map<int, map<int, mstreal> > > > resPairProperties;
+
+    /* Object for holding residue-pair relational graphs. Specifically,
+     * resRelProperties["sim"][ti][ri][tj] is the set of all residues in target
+     * tj that are related by the property "sim" to the residue ri in target ti.
+     * NOTE: this property can be directional (i.e., relationships are not mirrored). */
+    map<string, map<int, map<int, map<int, set<int> > > > > resRelProperties;
 
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
     int currentTarget;                       // the index of the target currently being searched for

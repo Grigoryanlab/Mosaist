@@ -828,6 +828,11 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
   return E.getAlignedStructure();
 }
 
+Structure Fuser::fuse(const fusionTopology& topo, const fusionParams& params) {
+  fusionScores scores;
+  return fuse(topo, scores, params);
+}
+
 Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed, const fusionParams& params) {
   fusionTopology topo(resTopo);
   topo.addFixedPositions(fixed);

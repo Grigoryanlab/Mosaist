@@ -420,6 +420,7 @@ class Fuser {
     static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
     static Structure fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
     static Structure fuse(const fusionTopology& topo, fusionScores& scores, const fusionParams& params = fusionParams());
+    static Structure fuse(const fusionTopology& topo, const fusionParams& params = fusionParams());
 
     /* This function is a simplified version of Fuser::fuse(), in that it guesses
      * the topology automatically. Argument residues is a flat vector of all the

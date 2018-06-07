@@ -16,6 +16,7 @@ class Sequence {
     Sequence(const string& _seq, const string& _name = "", const string& delim = "");
     Sequence(const Sequence& S);
     Sequence(const vector<res_t> _seq, const string& _name = "") { seq = _seq; name = _name; }
+    Sequence(int L, const string& _name = "");
 
     string getName() const { return name; }
     void setName(const string& _name) { name = _name; }
