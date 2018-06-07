@@ -109,11 +109,98 @@ struct fusionScores {
     double rmsdScore, rmsdTot, bondPenalty, anglPenalty, dihePenalty, score;
 };
 
+/* This class is a logical representation of the "topology" of a structure to be
+ * fused. The structure has a certain length, L, and each position is indexed 0
+ * through L-1. There is also a set of fragments that are to overlap this structure
+ * at various locations, with each fragment represented as an array of residues
+ * that "knows" which position indices it is supposed to overlap with. This also
+ * allows one to specify a weight factor for each fragment, specify fixed positions,
+ * and so on. */
+class fusionTopology {
+  friend class fusionEvaluator;
+
+  public:
+    /* Initializes an empty topology of a given length */
+    fusionTopology(int L = 0) { overlappingResidues.resize(L); fixed.resize(L, false); numMobAtoms = bba.size()*L; }
+
+    /* initialize a topology from the "old-style" resTopo array. resTopo is of
+     * length equal to the number of residues in the fused structure (i.e., the
+     * length of the topology) and resTopo[i] is a list of residues that map to
+     * the topology position with index i. This constructor identifies fragments
+     * by looking at what Structure object each Residue belongs to. */
+    fusionTopology(const vector<vector<Residue*> >& resTopo);
+
+    /* Copy constructor */
+    fusionTopology(const fusionTopology& topo);
+
+    /* These two functions allow one to add fragments to an existing topology,
+     * specifying which position indices residues of the fragment are to overlap
+     * with. This is specified either explicitly, via the second parameter, the
+     * indices are taken from resnum fields of the residues, by default. One can
+     * also specify a weight factor for the added fragment. */
+    void addFragment(Structure& S, const vector<int>& fragResIdx = vector<int>(), mstreal weight = 1.0);
+    void addFragment(vector<Residue*>& R, const vector<int>& fragResIdx = vector<int>(), mstreal weight = 1.0);
+
+    /* These function mark specified position(s) as fixed in the topology. */
+    void addFixedPositions(vector<int> fixedInds);
+    void addFixedPosition(int i) { fixed[i] = true; numMobAtoms -= bba.size(); }
+
+    /* Once a topology object is set up, this function finds pairings between the
+     * fragments to be overlapped and regions in the fused structure that they
+     * are to be overlapped with. Both are represented as AtomPointerVector, with
+     * a one-to-one correspondence between the atoms in each pairing for easy
+     * superposition and other analysis. To do this, the function accepts a reference
+     * to a Structure object that represents the structure to be fused. */
+    void setAlignedFrags(Structure& fused);
+
+    /* Getters and setters */
+    int numAlignedFrags() const { return alignedFrags.size(); }
+    int numFrags() const { return fragments.size(); }
+    AtomPointerVector& getAlignedFragFused(int fi) { return alignedFrags[fi].first; }
+    AtomPointerVector& getAlignedFragRef(int fi) { return alignedFrags[fi].second; }
+    pair<AtomPointerVector, AtomPointerVector>& getAlignedFragPair(int fi) { return alignedFrags[fi]; }
+    vector<Residue*>& getOverlappingResidues(int pi) { return overlappingResidues[pi]; }
+    Residue* getOverlappingResidue(int pi, int ri) { return overlappingResidues[pi][ri]; }
+    int numOverlappingResidues(int pi) { return overlappingResidues[pi].size(); }
+    vector<int> getFixedPositions();
+    int numFixedPositions();
+    bool isFixed(int i) { return fixed[i]; }
+    int length() { return overlappingResidues.size(); }
+    int numMobileAtoms() { return numMobAtoms; }
+    vector<mstreal> getFragWeights() const { return fragWeights; }
+
+    /* Assignment (copy constructor implemented using this) */
+    fusionTopology& operator=(const fusionTopology& topo);
+
+    friend ostream & operator<<(ostream &_os, const fusionTopology& _topo) {
+      for (int i = 0; i < _topo.overlappingResidues.size(); i++) {
+        cout << i << ": ";
+        for (int k = 0; k < _topo.overlappingResidues[i].size(); k++) {
+          cout << *(_topo.overlappingResidues[i][k]) << "[" << _topo.overlappingResidues[i][k]->getStructure() << "], ";
+        }
+        cout << endl;
+      }
+      return _os;
+    }
+
+  protected:
+    static vector<string> bba;
+
+  private:
+    vector<pair<AtomPointerVector, vector<int> > > fragments;
+    vector<mstreal> fragWeights;
+    vector<vector<Residue*> > overlappingResidues;
+    vector<bool> fixed;
+    vector<pair<AtomPointerVector, AtomPointerVector> > alignedFrags;
+    int numMobAtoms;
+};
+
 class fusionEvaluator: public optimizerEvaluator {
   public:
     // broken means across a chain break
     enum icType { icBond = 1, icAngle, icDihedral, icBrokenBond, icBrokenAngle, icBrokenDihedral, icDistRep, icDistComp };
 
+    fusionEvaluator(const fusionTopology& _topo, const fusionParams& _params = fusionParams());
     /* vector<vector<Residue*> >& resTopo simultaneously represents the various
      * aligned segments as well as which residues overlap in the alignment. It is
      * assumed that all residues from a give chain move together (i.e., are
@@ -122,6 +209,7 @@ class fusionEvaluator: public optimizerEvaluator {
      * length of resTopo is also the length of the fused structure and resTopo[i]
      * has to have at least one entry for all i. */
     fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> fixedResidues = vector<int>(), const fusionParams& _params = fusionParams());
+    void init();
 
     mstreal eval(const vector<mstreal>& point);
     mstreal eval(const vector<mstreal>& point, Vector& grad);
@@ -129,9 +217,9 @@ class fusionEvaluator: public optimizerEvaluator {
     void setGuessPoint(const vector<mstreal>& _initPoint) { initPoint = _initPoint; }
     void noisifyGuessPoint(mstreal _noise = 1.0) { params.setNoise(_noise); initPoint.resize(0); }
     int numResidues() { return overlappingResidues.size(); }
-    bool isAnchored() { return fixedResidues.size() > 0; }
+    bool isAnchored() { return (topo.numFixedPositions() > 0); }
     int numDF() {
-      int df = 3*numMobileAtoms - 6;
+      int df = 3*topo.numMobileAtoms() - 6;
       if (isAnchored()) df += 6;
       return df;
     }
@@ -140,10 +228,7 @@ class fusionEvaluator: public optimizerEvaluator {
     Structure getStructure() { return fused; }
     Structure getAlignedStructure();
     void setVerbose(bool _verbose) { params.setVerbose(_verbose); }
-    int randomizeBuildOrigin() {
-      buildOriginRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : MstUtils::randInt(0, numResidues() - 1);
-      return buildOriginRes;
-    }
+    int randomizeBuildOrigin();
     fusionScores getScores();
 
   class icBound {
@@ -229,13 +314,10 @@ class fusionEvaluator: public optimizerEvaluator {
 
   private:
     Structure fused, guess;
-    vector<bool> fixed; // marks whether each residue is to be fixed or not
-    vector<int> fixedResidues; // just a list of fixed residue indices. this is
-                               // redundant with the above, but helpful to have
-    int buildOriginRes;      // index one of the fixed residues, which will be used
-                        // to start placing all other atoms. If there are no
-                        // fixed residues, this index is set to -1;
-    int numMobileAtoms; // number of non-fixed atoms
+    int buildOriginRes;    // index one of the fixed residues, which will be used
+                           // to start placing all other atoms. If there are no
+                           // fixed residues, this index is set to -1;
+    fusionTopology topo;   // stores all information about the topology of the fusion
 
     /* Allowed ranges for internal degrees of freedom. Note that the number of
      * these bounds is equal to the number of internal coordinates used in
@@ -251,13 +333,6 @@ class fusionEvaluator: public optimizerEvaluator {
     /* For each residue index in the fused structure, this variable stores the
      * list of all overlapping fragment residues. */
     vector<vector<Residue*> > overlappingResidues;
-
-    /* A list of aligned bits between the fused structure and the overlapping
-     * fragments. alignedFrags[i] is a pair of AtomPointerVectors, representing
-     * atoms on the fused structure (in alignedFrags[i].first) and corresponding
-     * atoms on some relevant (in alignedFrags[i].secnond) fragment,
-     * respectively. */
-    vector<pair<AtomPointerVector, AtomPointerVector> > alignedFrags;
 
     vector<mstreal> initPoint;
     fusionParams params;
@@ -344,6 +419,7 @@ class Fuser {
      * starting with 0. Returns the the fused chain as a Structure object. */
     static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
     static Structure fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
+    static Structure fuse(const fusionTopology& topo, fusionScores& scores, const fusionParams& params = fusionParams());
 
     /* This function is a simplified version of Fuser::fuse(), in that it guesses
      * the topology automatically. Argument residues is a flat vector of all the

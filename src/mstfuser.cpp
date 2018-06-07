@@ -1,35 +1,127 @@
 #include "mstfuser.h"
 
-/* --------- fusionEvaluator ----------- */
+vector<string> fusionTopology::bba = {"N", "CA", "C", "O"};
 
-fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> _fixedResidues, const fusionParams& _params) {
-  params = _params;
-  vector<string> bba = {"N", "CA", "C", "O"};
-  // copy overlapping residues
+/* --------- fusionTopology ------------ */
+fusionTopology::fusionTopology(const vector<vector<Residue*> >& resTopo) {
   overlappingResidues = resTopo;
-
-  // mark fixed residues
-  fixedResidues = _fixedResidues;
   fixed.resize(resTopo.size(), false);
-  for (int i = 0; i < fixedResidues.size(); i++) {
-    if (fixedResidues[i] >= fixed.size())
-      MstUtils::error("expected fused structure with " + MstUtils::toString(resTopo.size()) +
-                      " residues, but index " + MstUtils::toString(fixedResidues[i]) +
-                      " is out of range", "fusionEvaluator::fusionEvaluator");
-      fixed[fixedResidues[i]] = true;
+  numMobAtoms = bba.size()*resTopo.size();
+
+  /* find fragments moving together based on the Structure they belong to. */
+  map<Structure*, vector<pair<Residue*, int> > > frags;
+  for (int i = 0; i < resTopo.size(); i++) {
+    for (int j = 0; j < resTopo[i].size(); j++) {
+      Structure* S = resTopo[i][j]->getStructure();
+      frags[S].push_back(pair<Residue*, int>(resTopo[i][j], i));
+    }
   }
-  numMobileAtoms = bba.size()*(resTopo.size() - fixedResidues.size());
+  for (auto it = frags.begin(); it != frags.end(); ++it) {
+    vector<pair<Residue*, int> >& residues = it->second;
+    AtomPointerVector fragAtoms; vector<int> fragResIdx;
+    for (int i = 0; i < residues.size(); i++) {
+      int ri = residues[i].second;
+      Residue& fragRes = *(residues[i].first);
+      fragResIdx.push_back(ri);
+      for (int j = 0; j < bba.size(); j++) {
+        fragAtoms.push_back(fragRes.findAtom(bba[j]));
+      }
+    }
+    fragments.push_back(pair<AtomPointerVector, vector<int> > (fragAtoms, fragResIdx));
+    fragWeights.push_back(1.0);
+  }
+}
+
+fusionTopology::fusionTopology(const fusionTopology& topo) {
+  *this = topo;
+}
+
+fusionTopology& fusionTopology::operator=(const fusionTopology& topo) {
+  this->fragments = topo.fragments;
+  this->fragWeights = topo.fragWeights;
+  this->overlappingResidues = topo.overlappingResidues;
+  this->fixed = topo.fixed;
+  this->alignedFrags = topo.alignedFrags;
+  this->numMobAtoms = topo.numMobAtoms;
+  return *this;
+}
+
+void fusionTopology::addFragment(vector<Residue*>& R, const vector<int>& fragResIdx, mstreal weight) {
+  if (fragResIdx.size() != 0) MstUtils::assert(R.size() == fragResIdx.size(), "fragment residue index vector not the same length as the number of residues in the fragment", "fusionTopology::addFragment(vector<Residue*>&, mstreal, const vector<int>&)");
+  AtomPointerVector fragAtoms; vector<int> fragRes = fragResIdx;
+  for (int i = 0; i < R.size(); i++) {
+    for (int j = 0; j < bba.size(); j++) {
+      fragAtoms.push_back(R[i]->findAtom(bba[j]));
+    }
+    if (fragResIdx.size() == 0) fragRes.push_back(R[i]->getNum());
+    overlappingResidues[fragRes[i]].push_back(R[i]);
+  }
+  fragments.push_back(pair<AtomPointerVector, vector<int> > (fragAtoms, fragRes));
+  fragWeights.push_back(weight);
+}
+
+void fusionTopology::addFragment(Structure& S, const vector<int>& fragResIdx, mstreal weight) {
+  vector<Residue*> residues = S.getResidues();
+  addFragment(residues, fragResIdx, weight);
+}
+
+void fusionTopology::setAlignedFrags(Structure& fused) {
+  alignedFrags.resize(0);
+  alignedFrags.resize(fragments.size());
+  for (int i = 0; i < fragments.size(); i++) {
+    AtomPointerVector& refFrag = fragments[i].first;
+    AtomPointerVector fusedFrag;
+    vector<int>& fragResIdx = fragments[i].second;
+    for (int j = 0; j < fragResIdx.size(); j++) {
+      Residue& fusedRes = fused.getResidue(fragResIdx[j]);
+      for (int k = 0; k < bba.size(); k++) {
+        fusedFrag.push_back(fusedRes.findAtom(bba[k]));
+      }
+    }
+    alignedFrags[i].first = fusedFrag;
+    alignedFrags[i].second = refFrag;
+  }
+}
+
+void fusionTopology::addFixedPositions(vector<int> fixedInds) {
+  for (int i = 0; i < fixedInds.size(); i++) addFixedPosition(fixedInds[i]);
+}
+
+vector<int> fusionTopology::getFixedPositions() {
+  vector<int> fixedPositions;
+  for (int i = 0; i < fixed.size(); i++) {
+    if (fixed[i]) fixedPositions.push_back(i);
+  }
+  return fixedPositions;
+}
+
+int fusionTopology::numFixedPositions() {
+  int num = 0;
+  for (int i = 0; i < fixed.size(); i++) {
+    if (fixed[i]) num++;
+  }
+  return num;
+}
+
+/* --------- fusionEvaluator ----------- */
+fusionEvaluator::fusionEvaluator(const fusionTopology& _topo, const fusionParams& _params) {
+  params = _params;
+  topo = _topo;
+  init();
+}
+
+void fusionEvaluator::init() {
+  vector<int> fixedResidues = topo.getFixedPositions();
   buildOriginRes = (fixedResidues.size() > 0) ? MstUtils::min(fixedResidues) : 0;
 
   // create room for fused structure (initialize with average coordinates)
   if (!params.isStartingStructureGiven()) {
     fused.appendChain("A", true);
-    for (int i = 0; i < resTopo.size(); i++) {
-      // if ((fixed[i]) && (resTopo[i].size() != 1)) MstUtils::error("position index " + MstUtils::toString(i) + " is marked as fixed, but appears to have more than one residue aligned onto it in the topology", "fusionEvaluator::fusionEvaluator");
-      if (resTopo[i].size() == 0) MstUtils::error("position index " + MstUtils::toString(i) + " has not overlapping residues in the specified topology", "fusionEvaluator::fusionEvaluator");
-      Residue* res = new Residue(resTopo[i][0]->getName(), 1);
+    for (int i = 0; i < topo.length(); i++) {
+      if (topo.numOverlappingResidues(i) == 0) MstUtils::error("position index " + MstUtils::toString(i) + " has no overlapping residues in the specified topology", "fusionEvaluator::fusionEvaluator");
+      Residue* res = new Residue(topo.getOverlappingResidue(i, 0)->getName(), 1);
       fused[0].appendResidue(res);
-      for (int j = 0; j < bba.size(); j++) {
+      for (int j = 0; j < fusionTopology::bba.size(); j++) {
         /* I previously disallowed multiple residues to be aligned in fixed
          * positions in the topology. BUT, it turns out this can be quite useful.
          * For example, if we have residues 3 and 4 fixed, we may still want to
@@ -48,8 +140,8 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
          * The first one always exists, even if only one residue is aligned. And
          * it is also relatively simple to use the first residue at fixed positions
          * as a way of communicating the fixed coordinates. */
-        CartesianPoint m = fixed[i] ? atomInstances(i, bba[j])[0] : atomInstances(i, bba[j]).getGeometricCenter();
-        res->appendAtom(new Atom(1, bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
+        CartesianPoint m = topo.isFixed(i) ? atomInstances(i, fusionTopology::bba[j])[0] : atomInstances(i, fusionTopology::bba[j]).getGeometricCenter();
+        res->appendAtom(new Atom(1, fusionTopology::bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
       }
     }
     fused.renumber();
@@ -57,33 +149,7 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
     fused = params.getStartingStructure();
   }
   guess = fused; // save initial "averaged" guess for later alignment (easier to visualize output)
-
-  /* Initialize alignedFrags. frags[C] designates a segment that moves
-   * together (i.e., part of Chain pointed to by C), by storing which
-   * Residues the segment has and which residue index, in the full fused
-   * structure, they correspond to. */
-  map<Structure*, vector<pair<Residue*, int> > > frags;
-  for (int i = 0; i < resTopo.size(); i++) {
-    for (int j = 0; j < resTopo[i].size(); j++) {
-      Structure* S = resTopo[i][j]->getStructure();
-      frags[S].push_back(pair<Residue*, int>(resTopo[i][j], i));
-    }
-  }
-  Chain& fusedChain = fused[0];
-  for (auto it = frags.begin(); it != frags.end(); ++it) {
-    vector<pair<Residue*, int> >& residues = it->second;
-    AtomPointerVector fusedAtoms, fragAtoms;
-    for (int i = 0; i < residues.size(); i++) {
-      int ri = residues[i].second;
-      Residue& fragRes = *(residues[i].first);
-      Residue& fusedRes = fusedChain[ri];
-      for (int j = 0; j < fusedRes.atomSize(); j++) {
-        fusedAtoms.push_back(&(fusedRes[j]));
-        fragAtoms.push_back(fragRes.findAtom(fusedRes[j].getName()));
-      }
-    }
-    alignedFrags.push_back(pair<AtomPointerVector, AtomPointerVector> (fusedAtoms, fragAtoms));
-  }
+  topo.setAlignedFrags(fused);
 
   // optionally, initialize the structure using average IC's of overlapping segments
   if (params.getCoorInitType() == fusionParams::coorInitType::meanIC) {
@@ -110,6 +176,19 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
   srand(x);
 }
 
+fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vector<int> _fixedResidues, const fusionParams& _params) {
+  params = _params;
+  topo = fusionTopology(resTopo);
+  topo.addFixedPositions(_fixedResidues);
+  init();
+}
+
+int fusionEvaluator::randomizeBuildOrigin() {
+  vector<int> fixedResidues = topo.getFixedPositions();
+  buildOriginRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : MstUtils::randInt(0, numResidues() - 1);
+  return buildOriginRes;
+}
+
 Structure fusionEvaluator::getAlignedStructure() {
   Structure aligned = fused;
   RMSDCalculator rc;
@@ -126,7 +205,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     bounds.clear();
   }
   mstreal bR = 0.01; mstreal aR = 1.0; mstreal dR = 1.0; mstreal xyzR = 0.01; // randomness scale factors
-  if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(numMobileAtoms) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
+  if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(topo.numMobileAtoms()) + " atoms, " + (isAnchored() ? "with" : "without") + " anchor, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
   int k = 0;
   Atom *pN = NULL, *pCA = NULL, *pC = NULL, *pO = NULL;
   mstreal noise = params.getNoise();
@@ -134,7 +213,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
   Chain& F = fused[0];
   if (params.getOptimCartesian()) {
     for (int i = 0; i < F.residueSize(); i++) {
-      if (fixed[i]) continue;
+      if (topo.isFixed(i)) continue;
       Residue& res = F[i];
       for (int j = 0; j < res.atomSize(); j++) {
         bool skipDFs = ((i == 0) && !isAnchored());
@@ -165,7 +244,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       Atom* CA = &(res[1]);
       Atom* C = &(res[2]);
       Atom* O = &(res[3]);
-      if (!fixed[i]) {
+      if (!topo.isFixed(i)) {
         if ((i == 0) && !isAnchored()) {
           if (init) {
             initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
@@ -241,7 +320,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         }
       }
       // place previous O relative to pCA, N, pC (an improper)
-      if ((i > startIdx) && !fixed[i-1]) {
+      if ((i > startIdx) && !topo.isFixed(i-1)) {
         if (init) {
           initPoint.push_back(bondInitValue(i-1, i-1, "C", "O") + bR * MstUtils::randUnit() * noise);
           initPoint.push_back(angleInitValue(i, i-1, i-1, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
@@ -261,7 +340,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       Atom* CA = &(res[1]);
       Atom* C = &(res[2]);
       Atom* O = &(res[3]);
-      if (!fixed[i]) {
+      if (!topo.isFixed(i)) {
         // place C relative to pC, pCA, pN
         if (init) {
           initPoint.push_back(bondInitValue(i+1, i, "N", "C") + bR * MstUtils::randUnit() * noise);
@@ -311,7 +390,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       Atom* C = &(res[2]);
       Atom* O = &(res[3]);
       // if residue not fixed, evaluate its internal coordinates
-      if (!fixed[i]) {
+      if (!topo.isFixed(i)) {
         bondInstances(i, N, CA);
         bondInstances(i, CA, C);
         bondInstances(i, C, O);
@@ -325,7 +404,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
 
       // if either the previous residue or the current one is not fixed, evaluate
       // the internal coordinates connecting the two
-      if ((i > 0) && (!fixed[i-1] || !fixed[i])) {
+      if ((i > 0) && (!topo.isFixed(i-1) || !topo.isFixed(i))) {
         bondInstances(i, pC, N);
         angleInstances(i, pCA, pC, N);
         dihedralInstances(i, pN, pCA, pC, N);
@@ -345,7 +424,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       for (int i = 0; i < F.residueSize(); i++) {
         Residue& resi = F[i];
         for (int j = i+2; j < F.residueSize(); j++) { // no interactions between atoms of adjacent residues
-          if (fixed[i] && fixed[j]) continue;
+          if (topo.isFixed(i) && topo.isFixed(j)) continue;
           Residue& resj = F[j];
           for (int ai = 0; ai < resi.atomSize(); ai++) {
             for (int aj = 0; aj < resj.atomSize(); aj++) {
@@ -474,46 +553,46 @@ void fusionEvaluator::scoreRMSD() {
   RMSDCalculator rms;
   rmsdScore = rmsdTot = 0; int N = 0;
   vector<mstreal> innerGradient;
-  vector<mstreal> weights(alignedFrags.size(), 1.0);
+  vector<mstreal> weights = topo.getFragWeights();
   if (params.fragRedundancyWeighting()) { // down-weight RMSD contributions from regions with many overlapped fragments
     map<Residue*, int> numOcc; // proportional to the number of times each residue is overlapped
-    for (int i = 0; i < alignedFrags.size(); i++) {
-      AtomPointerVector& atoms = alignedFrags[i].first;
+    mstreal Wo = 0, W = 0;
+    for (int i = 0; i < weights.size(); i++) Wo += fabs(weights[i]);
+    for (int i = 0; i < topo.numAlignedFrags(); i++) {
+      AtomPointerVector& atoms = topo.getAlignedFragFused(i);
       // easier to iterate over atoms, so numOcc[res] is not exactly the number
       // of res' occurances, but proportional to it
       for (int j = 0; j < atoms.size(); j++) numOcc[atoms[j]->getResidue()]++;
     }
-    mstreal C = 0; // normalization constant
-    for (int i = 0; i < alignedFrags.size(); i++) {
+    for (int i = 0; i < topo.numAlignedFrags(); i++) {
       int T = 0;
-      AtomPointerVector& atoms = alignedFrags[i].first;
+      AtomPointerVector& atoms = topo.getAlignedFragFused(i);
       for (int j = 0; j < atoms.size(); j++) T += numOcc[atoms[j]->getResidue()];
-      weights[i] = 1.0/T;
-      C += 1.0/T;
+      weights[i] *= 1.0/T;
     }
-    // the sum of the weights stays the same (alignedFrags.size()), but they get redistributed
-    for (int i = 0; i < alignedFrags.size(); i++) weights[i] = weights[i]*(alignedFrags.size())/C;
+    for (int i = 0; i < weights.size(); i++) W += fabs(weights[i]);
+    // the sum of the weights stays the same, but they get re-normalized based on number of occurances
+    for (int i = 0; i < topo.numAlignedFrags(); i++) weights[i] *= Wo/W;
   }
   if (params.normalizeRMSD()) { // score per-fragment residual, not total residual
     int N = 0;
-    for (int i = 0; i < alignedFrags.size(); i++) N += alignedFrags[i].first.size();
-    for (int i = 0; i < alignedFrags.size(); i++) weights[i] *= (1.0*numMobileAtoms)/N;
+    for (int i = 0; i < topo.numAlignedFrags(); i++) N += topo.getAlignedFragFused(i).size();
+    for (int i = 0; i < topo.numAlignedFrags(); i++) weights[i] *= (1.0*topo.numMobileAtoms())/N;
   }
-  for (int i = 0; i < alignedFrags.size(); i++) {
-    innerGradient.resize(alignedFrags[i].first.size()*3, 0.0);
-    mstreal r = rms.qcpRMSDGrad(alignedFrags[i].first, alignedFrags[i].second, innerGradient);
-    // mstreal r = rms.bestRMSD(alignedFrags[i].second, alignedFrags[i].first);
-    rmsdScore += weights[i] * r * r * alignedFrags[i].first.size();
-    rmsdTot += r * r * alignedFrags[i].first.size();
-    N += alignedFrags[i].first.size();
+  for (int i = 0; i < topo.numAlignedFrags(); i++) {
+    innerGradient.resize(topo.getAlignedFragFused(i).size()*3, 0.0);
+    mstreal r = rms.qcpRMSDGrad(topo.getAlignedFragFused(i), topo.getAlignedFragRef(i), innerGradient);
+    rmsdScore += weights[i] * r * r * topo.getAlignedFragFused(i).size();
+    rmsdTot += r * r * topo.getAlignedFragFused(i).size();
+    N += topo.getAlignedFragFused(i).size();
 
     // gradient of RMSD
     int j = 0;
-    for (int ai = 0; ai < alignedFrags[i].first.size(); ai++) {
+    for (int ai = 0; ai < topo.getAlignedFragFused(i).size(); ai++) {
       for (int d = 0; d < 3; d++) {
-        map<int, mstreal> parts = gradOfXYZ.getPartials(alignedFrags[i].first[ai], d);
+        map<int, mstreal> parts = gradOfXYZ.getPartials(topo.getAlignedFragFused(i)[ai], d);
         for (auto it = parts.begin(); it != parts.end(); ++it) {
-          gradient[it->first] += weights[i] * 2 * r * alignedFrags[i].first.size() * innerGradient[j] * it->second;
+          gradient[it->first] += weights[i] * 2 * r * topo.getAlignedFragFused(i).size() * innerGradient[j] * it->second;
         }
         j++;
       }
@@ -533,7 +612,7 @@ AtomPointerVector fusionEvaluator::atomInstances(int ri, const string& ai) {
   AtomPointerVector atoms;
 
   // find all instances of the necessary residue and the necessary atom in it
-  vector<Residue*>& resI = overlappingResidues[ri];
+  vector<Residue*>& resI = topo.getOverlappingResidues(ri);
   for (int i = 0; i < resI.size(); i++) {
     atoms.push_back(resI[i]->findAtom(ai));
   }
@@ -572,8 +651,8 @@ CartesianPoint fusionEvaluator::bondInstances(int rj, Atom* atomI, Atom* atomJ, 
   string ai = atomI->getName(); string aj = atomJ->getName();
 
   // find Chains that contain all necessary residues
-  vector<Residue*>& resI = overlappingResidues[ri];
-  vector<Residue*>& resJ = overlappingResidues[rj];
+  vector<Residue*>& resI = topo.getOverlappingResidues(ri);
+  vector<Residue*>& resJ = topo.getOverlappingResidues(rj);
   map<Structure*, vector<Residue*> > S;
   for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
   for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
@@ -611,9 +690,9 @@ CartesianPoint fusionEvaluator::angleInstances(int rk, Atom* atomI, Atom* atomJ,
   string ai = atomI->getName(); string aj = atomJ->getName(); string ak = atomK->getName();
 
   // find Chains that contain all necessary residues
-  vector<Residue*>& resI = overlappingResidues[ri];
-  vector<Residue*>& resJ = overlappingResidues[rj];
-  vector<Residue*>& resK = overlappingResidues[rk];
+  vector<Residue*>& resI = topo.getOverlappingResidues(ri);
+  vector<Residue*>& resJ = topo.getOverlappingResidues(rj);
+  vector<Residue*>& resK = topo.getOverlappingResidues(rk);
   map<Structure*, vector<Residue*> > S;
   for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
   for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
@@ -657,10 +736,10 @@ CartesianPoint fusionEvaluator::dihedralInstances(int rl, Atom* atomI, Atom* ato
   string ai = atomI->getName(); string aj = atomJ->getName(); string ak = atomK->getName(); string al = atomL->getName();
 
   // find Chains that contain all necessary residues
-  vector<Residue*>& resI = overlappingResidues[ri];
-  vector<Residue*>& resJ = overlappingResidues[rj];
-  vector<Residue*>& resK = overlappingResidues[rk];
-  vector<Residue*>& resL = overlappingResidues[rl];
+  vector<Residue*>& resI = topo.getOverlappingResidues(ri);
+  vector<Residue*>& resJ = topo.getOverlappingResidues(rj);
+  vector<Residue*>& resK = topo.getOverlappingResidues(rk);
+  vector<Residue*>& resL = topo.getOverlappingResidues(rl);
   map<Structure*, vector<Residue*> > S;
   for (int i = 0; i < resI.size(); i++) S[resI[i]->getStructure()].push_back(resI[i]);
   for (int i = 0; i < resJ.size(); i++) S[resJ[i]->getStructure()].push_back(resJ[i]);
@@ -717,8 +796,8 @@ mstreal fusionEvaluator::atomRadius(const Atom& a) {
 
 /* --------- Fuser ----------- */
 
-Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed, const fusionParams& params) {
-  fusionEvaluator E(resTopo, fixed, params); E.setVerbose(false);
+Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fusionParams& params) {
+  fusionEvaluator E(topo, params); E.setVerbose(false);
   vector<mstreal> bestSolution; mstreal score, bestScore;
   if (params.useGradientDescent()) {
     bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
@@ -747,6 +826,12 @@ Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& sc
   E.eval(bestSolution);
   scores = E.getScores();
   return E.getAlignedStructure();
+}
+
+Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed, const fusionParams& params) {
+  fusionTopology topo(resTopo);
+  topo.addFixedPositions(fixed);
+  return fuse(topo, scores, params);
 }
 
 Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, const fusionParams& params) {

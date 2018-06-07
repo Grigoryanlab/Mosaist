@@ -934,6 +934,8 @@ class MstUtils {
     static map<T, int> indexMap(const vector<T>& vec);
     template <class T>
     static vector<T> setdiff(const vector<T>& A, const vector<T>& B);
+    template <class T>
+    static vector<T> range(const T& from, const T& to);
 
     // randomly shuffle the array in place using the Fisher-Yates shuffle
     template <class T>
@@ -1109,6 +1111,13 @@ vector<T> MstUtils::setdiff(const vector<T>& A, const vector<T>& B) {
     if (setB.find(A[i]) == setB.end()) diff.push_back(A[i]);
   }
   return diff;
+}
+
+template <class T>
+vector<T> MstUtils::range(const T& from, const T& to) {
+  vector<T> r;
+  for (T v = from; v < to; v++) r.push_back(v);
+  return r;
 }
 
 #endif

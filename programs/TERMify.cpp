@@ -383,8 +383,8 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
   // F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
-  F->setMaxNumMatches(10);
-  F->setMinNumMatches(2);
+  F->setMaxNumMatches(200);
+  F->setMinNumMatches(100);
 // TODO: fix so that it _always_ reports the same results as regular searching (basically, up to removing duplicates in the right way)
 if (0) {
   fasstSolutionSet matchesOld = F->search();
@@ -433,6 +433,47 @@ void addMatches(vector<Structure*>& matchStructures, vector<vector<Residue*> >& 
       resTopo[res.getNum()].push_back(&res); // residue numbers store indices into the originating structure
     }
   }
+}
+
+bool mc(mstreal oldScore, mstreal newScore, mstreal kT) {
+  return ((newScore < oldScore) || (MstUtils::randUnit() < exp((oldScore - newScore)/kT)));
+}
+
+fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<int>& picks, fstream& matchOut, Structure* global = NULL) {
+  fusionTopology resTopo(L);
+  for (int si = 0; si < allMatches.size(); si++) {
+    Structure& match = *(allMatches[si][picks[si]]);
+    resTopo.addFragment(match);
+    if (matchOut.is_open()) { match.writePDB(matchOut); matchOut << "END" << endl; }
+  }
+  if (global != NULL) {
+    MstUtils::assert(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
+    resTopo.addFragment(*global, MstUtils::range(0, L), -10.0);
+  }
+  return resTopo;
+}
+
+AtomPointerVector getCorrespondingAtoms(Structure& from, Structure& like) {
+  MstUtils::assert(from.residueSize() == like.residueSize(), "the two structures must have the same number of residues", "getCorrespondingAtoms()");
+  AtomPointerVector atoms;
+  for (int ri = 0; ri < like.residueSize(); ri++) {
+    Residue& fromRes = from.getResidue(ri);
+    Residue& likeRes = like.getResidue(ri);
+    for (int ai = 0; ai < likeRes.atomSize(); ai++) {
+      atoms.push_back(fromRes.findAtom(likeRes[ai].getName()));
+    }
+  }
+  return atoms;
+}
+
+mstreal totalScore(fusionScores& scoreObj, Structure& fused, AtomPointerVector& init, bool report = false) {
+  RMSDCalculator rc;
+  // mstreal a = scoreObj.getScore()/10;
+  // mstreal a = scoreObj.getTotRMSDScore();
+  mstreal a = scoreObj.getScore();
+  mstreal b = rc.bestRMSD(init, fused.getAtoms());
+  if (report) cout << "fuser: " << scoreObj << "; total = " << a << " - " << b;
+  return a - b;
 }
 
 int main(int argc, char** argv) {
@@ -488,12 +529,13 @@ int main(int argc, char** argv) {
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000;
-  fusionScores scores;
-  fstream out, shellOut;
+  fusionScores bestScore, currScore;
+  fstream out, shellOut, dummy;
   bool pickRand = op.isGiven("r") || op.isGiven("iter");
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
+  RotamerLibrary::standardizeBackboneNames(S);
   mstreal R0 = getRadius(I);
   mstreal Rf = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
   int Ncyc = op.getInt("cyc", 10);
@@ -510,7 +552,6 @@ int main(int argc, char** argv) {
     /* --- Decorate the current conformation with TERMs --- */
     // first self TERMs
     cout << "Searching for self TERMs..." << endl;
-    vector<vector<Residue*> > resTopo(I.residueSize());
     vector<vector<Structure*>> allMatches;
     for (int ci = 0; ci < S.chainSize(); ci++) {
       Chain& C = S[ci];
@@ -522,7 +563,6 @@ int main(int argc, char** argv) {
         F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
         vector<Structure*> matches = getMatches(cache, frag, fragResIdx);
         allMatches.push_back(matches);
-        addMatches(matches, resTopo, shellOut, pickRand ? MstUtils::randInt(0, matches.size() - 1) : -1);
       }
     }
 
@@ -541,10 +581,9 @@ int main(int argc, char** argv) {
       F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
       vector<Structure*> matches = getMatches(cache, frag, fragResIdx);
       allMatches.push_back(matches);
-      addMatches(matches, resTopo, shellOut, pickRand ? MstUtils::randInt(0, matches.size() - 1) : -1);
     }
 
-    /* --- Fuse --- */
+    // fuser options
     fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
     opts.setGradientDescentFlag(true);
     opts.setRepFC(1);
@@ -556,38 +595,53 @@ int main(int argc, char** argv) {
     // by inserting the starting structure into the topology first, any fixed
     // regions will be fixed to these starting coordinates
     // for (int ri = 0; ri < S.residueSize(); ri++) resTopo[ri].push_back(&(S.getResidue(ri)));
-
     opts.setCompRad(compactnessRadius);
     cout << "will be trying to combine structure to a radius of " << compactnessRadius << endl;
-    Structure fused;
-    for (int it = 0; it < op.getInt("iter", 1); it++) {
-opts.setGradientDescentFlag(true); opts.setVerbose(true); opts.setOptimCartesian(false); //opts.setNumIters(10000);
-      fused = Fuser::fuse(resTopo, scores, fixed, opts);
-      cout << "\t" << scores << endl;
-opts.setStartingStructure(fused); opts.setOptimCartesian(true);
-fused = Fuser::fuse(resTopo, scores, fixed, opts);
-cout << "\t" << scores << endl;
-      // opts.setStartingStructure(fused);
-      // opts.setGradientDescentFlag(false);
-      // fused = Fuser::fuse(resTopo, scores, vector<int>(), opts);
-      // cout << "\t" << scores << endl;
-      out << "MODEL " << c+1 << endl;
-      fused.writePDB(out);
-      out << "ENDMDL" << endl;
 
-      // for (int ri = 0; ri < S.residueSize(); ri++) resTopo[ri].back() = &(fused.getResidue(ri));
+    /* --- pick a random combination of TERMs and fuse --- */
+    vector<int> bestPicks(allMatches.size(), 0);
+    vector<vector<Residue*> > resTopo(I.residueSize());
+    for (int si = 0; si < allMatches.size(); si++) bestPicks[si] = MstUtils::randInt(allMatches[si].size());
+    fusionTopology bestTopo = getTopo(I.residueSize(), allMatches, bestPicks, shellOut, &S);
+    bestTopo.addFixedPositions(fixed);
+    Structure bestFused = Fuser::fuse(bestTopo, bestScore, opts);
+    AtomPointerVector init = getCorrespondingAtoms(S, bestFused);
+    cout << "\tinitial fusion => "; totalScore(bestScore, bestFused, init, true); cout << endl;
+
+    /* --- if required, do an MC simulation to find a good combo of TERMs --- */
+    mstreal kT = 0.001;
+    for (int it = 1; it < op.getInt("iter", 1); it++) {
+      // make a "mutation"
+      vector<int> currPicks = bestPicks;
+      int si = MstUtils::randInt(allMatches.size());
+      currPicks[si] = MstUtils::randInt(allMatches[si].size());
+      fusionTopology currTopo = getTopo(I.residueSize(), allMatches, currPicks, dummy, &S);
+      currTopo.addFixedPositions(fixed);
+      Structure currFused = Fuser::fuse(currTopo, currScore, opts);
+      cout << "\titeration " << it << " => "; totalScore(currScore, currFused, init, true); cout << endl;
+      if (mc(totalScore(bestScore, bestFused, init), totalScore(currScore, currFused, init), kT)) {
+        cout << "\t\taccepted" << endl;
+        bestFused = currFused;
+        bestTopo = currTopo;
+        bestScore = currScore;
+        bestPicks = currPicks;
+      } else {
+        cout << "\t\trejected" << endl;
+      }
     }
+    out << "MODEL " << c+1 << endl;
+    bestFused.writePDB(out);
+    out << "ENDMDL" << endl;
 
     // align based on the fixed part, if anything was fixed (for ease of visualization)
     if (fixed.size() > 0) {
       AtomPointerVector before = getBackbone(S, fixed);
-      AtomPointerVector after = getBackbone(fused, fixed);
-      rc.align(after, before, fused);
+      AtomPointerVector after = getBackbone(bestFused, fixed);
+      rc.align(after, before, bestFused);
     }
 
     /* --- write intermediate result and clean up--- */
-    for (int ii = 0; ii < fused[0].residueSize(); ii++) cout << fused[0][ii] << endl;
-    // S = fused.reassignChainsByConnectivity();
+    S = bestFused.reassignChainsByConnectivity();
     for (int si = 0; si < allMatches.size(); si++) {
       for (int mi = 0; mi < allMatches[si].size(); mi++) {
         delete(allMatches[si][mi]);
