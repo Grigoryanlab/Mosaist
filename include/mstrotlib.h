@@ -68,6 +68,8 @@ class RotamerLibrary {
     static vector<Atom*> getBackbone(Residue* res, bool noHyd = true) { return getBackbone(*res, noHyd); }
     static void extractProtein(System& S, const System& So, const vector<string>& legalResNames = vector<string>(), bool skipMissingBB = true);
     static void standardizeBackboneNames(System& S);
+    static bool hasFullBackbone(System& S, bool noHyd = true);
+    static vector<Atom*> getBackbone(System& S, bool noHyd = true);
 
     int numberOfRotamers(string aa, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);
     mstreal rotamerProbability(string aa, int ri, mstreal phi = Residue::badDihedral, mstreal psi = Residue::badDihedral, bool strict = false);

@@ -202,7 +202,9 @@ int main(int argc, char *argv[]) {
     }
     dblf.close();
     fstream fin; MstUtils::openFile(fin, MstSys::pathBase(op.getString("o")) + ".fin.sh", ios::out);
-    fin << op.getExecName() << " --dL " << dbListFile << " --o " << op.getString("o") << endl;
+    fin << op.getExecName() << " --dL " << dbListFile << " --o " << op.getString("o");
+    if (op.isGiven("sim")) fin << " --sim " << op.getInt("sim");
+    fin << endl;
     fin << "if [ $? -eq 0 ]; then # only clean up if database creation was successful" << endl;
     for (int k = 0; k < toClean.size(); k++) {
       fin << "  rm " << toClean[k] << endl;

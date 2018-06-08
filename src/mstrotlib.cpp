@@ -303,10 +303,32 @@ vector<Atom*> RotamerLibrary::getBackbone(const Residue& res, bool noHyd) {
   return bb;
 }
 
+vector<Atom*> RotamerLibrary::getBackbone(System& S, bool noHyd) {
+  vector<Atom*> bbAll;
+  for (int ci = 0; ci < S.chainSize(); ci++) {
+    Chain& C = S[ci];
+    for (int ri = 0; ri < C.residueSize(); ri++) {
+      vector<Atom*> bb = RotamerLibrary::getBackbone(C[ri], noHyd);
+      bbAll.insert(bbAll.end(), bb.begin(), bb.end());
+    }
+  }
+  return bbAll;
+}
+
 bool RotamerLibrary::hasFullBackbone(const Residue& res, bool noHyd) {
   vector<Atom*> bb = RotamerLibrary::getBackbone(res, noHyd);
   for (int i = 0; i < bb.size(); i++) {
     if (bb[i] == NULL) return false;
+  }
+  return true;
+}
+
+bool RotamerLibrary::hasFullBackbone(System& S, bool noHyd) {
+  for (int ci = 0; ci < S.chainSize(); ci++) {
+    Chain& C = S[ci];
+    for (int ri = 0; ri < C.residueSize(); ri++) {
+      if (!RotamerLibrary::hasFullBackbone(C[ri], noHyd)) return false;
+    }
   }
   return true;
 }

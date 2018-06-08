@@ -69,7 +69,7 @@ endif
 
 # targets and MST libraries
 TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testRotlib testTERMUtils testTransforms
-PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB $(ARMA_PROGRAMS)
+PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans
