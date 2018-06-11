@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
       string dbFile = base + ".db";
       MstUtils::openFile(outf, batchFile, ios::out);
       outf << "#!/bin/bash\n" << "#$ -j y\n" << "#$ -cwd\n" << "#$ -V\n";
-      outf << "#$ -l vf=2G\n";
+      outf << "#$ -l vf=2G\n" << "#$ -l ironfs\n";
       int hrs = (int) ceil(5*(tasks[i].second - tasks[i].first + 1)/60.0); // five minutes per structure should be plenty
       outf << "#$ -l h_rt=" << hrs << ":00:00\n";
       outf << op.getExecName() << " --pL " << listFile << " --o " << dbFile;
@@ -201,7 +201,7 @@ int main(int argc, char *argv[]) {
       toClean.push_back(base + ".sh*"); toClean.push_back(base + ".db");
     }
     dblf.close();
-    fstream fin; MstUtils::openFile(fin, MstSys::pathBase(op.getString("o")) + ".fin.sh", ios::out);
+    fstream fin; MstUtils::openFile(fin, "fin." + MstSys::pathBase(op.getString("o")) + ".sh", ios::out);
     fin << op.getExecName() << " --dL " << dbListFile << " --o " << op.getString("o");
     if (op.isGiven("sim")) fin << " --sim " << op.getInt("sim");
     fin << endl;
