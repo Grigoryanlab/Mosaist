@@ -168,7 +168,7 @@ int main(int argc, char *argv[]) {
     fstream outf;
     string dbListFile = MstSys::pathBase(op.getString("o")) + ".dL";
     fstream dblf; MstUtils::openFile(dblf, dbListFile, ios::out);
-    vector<string> toClean;
+    vector<string> toClean; toClean.push_back(dbListFile);
     for (int i = 0; i < nJ; i++) {
       string base = MstSys::pathBase(op.getString("o")) + "." + MstUtils::toString(i);
 
@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
       outf << endl;
       outf.close();
       dblf << dbFile << endl;
-      toClean.push_back(base + ".sh*"); toClean.push_back(base + ".db");
+      toClean.push_back(base + ".sh*"); toClean.push_back(base + ".db"); toClean.push_back(base + ".list");
     }
     dblf.close();
     fstream fin; MstUtils::openFile(fin, "fin." + MstSys::pathBase(op.getString("o")) + ".sh", ios::out);
