@@ -34,7 +34,7 @@ class bindOptions {
     string getContSectName() const { return contSec; }
 
     void setDefaultRMSDCutoffs() {
-      rmsdCut = rc.rmsdCutoff({2*pm + 1});
+      rmsdCut = rc.rmsdCutoff((vector<int>) {2*pm + 1});
       rmsdCut2 = rc.rmsdCutoff({2*pm + 1, 2*pm + 1});
     }
     void setContextLen(int _pm) { pm = _pm; }
