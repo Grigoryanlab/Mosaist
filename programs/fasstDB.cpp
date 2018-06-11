@@ -192,7 +192,7 @@ int main(int argc, char *argv[]) {
       // keep all other options from the call to self
       vector<string> allOpts = op.getAllGivenOptions();
       for (int j = 0; j < allOpts.size(); j++) {
-        if ((allOpts[j].compare("batch") == 0) || (allOpts[j].compare("pL") == 0) || (allOpts[j].compare("o") == 0)) continue;
+        if ((allOpts[j].compare("batch") == 0) || (allOpts[j].compare("pL") == 0) || (allOpts[j].compare("o") == 0) || (allOpts[j].compare("sim") == 0)) continue;
         outf << " --" << allOpts[j] << " " << op.getString(allOpts[j]);
       }
       outf << endl;
