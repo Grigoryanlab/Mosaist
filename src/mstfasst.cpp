@@ -356,7 +356,7 @@ void FASST::addResiduePairProperties(int ti, const string& propType, const map<i
 }
 
 void FASST::addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj) {
-  resRelProperties[propType][ti][ri][tj].insert(rj);
+  resRelProperties[propType][ti][tj][ri].insert(rj);
 }
 
 mstreal FASST::isResiduePropertyPopulated(const string& propType) {
@@ -483,10 +483,10 @@ void FASST::readDatabase(const string& dbFile) {
         int ri, tj, rj, N, n1, n2;
         MstUtils::readBin(ifs, N);
         for (int i = 0; i < N; i++) {
-          MstUtils::readBin(ifs, ri);
+          MstUtils::readBin(ifs, tj);
           MstUtils::readBin(ifs, n1);
           for (int j = 0; j < n1; j++) {
-            MstUtils::readBin(ifs, tj);
+            MstUtils::readBin(ifs, ri);
             MstUtils::readBin(ifs, n2);
             for (int k = 0; k < n2; k++) {
               MstUtils::readBin(ifs, rj);
@@ -790,8 +790,18 @@ fasstSolutionSet FASST::search() {
       } else {
         // if at the lowest recursion level already, then record the solution
         fasstSolution sol(currAlignment, sqrt(currResidual/querySize), currentTarget, currentTransform(), segLen, qSegOrd);
-        if (redundancyCut != 1) addSequenceContext(sol);
-        solutions.insert(sol, redundancyCut);
+        if (isRedundancyCutSet()) {
+          addSequenceContext(sol);
+          solutions.insert(sol, getRedundancyCut());
+        } else if (isRedundancyPropertySet()) {
+          solutions.insert(sol, getRedundancyPropertyMap());
+        } else {
+          solutions.insert(sol);
+        }
+
+        // if (redundancyCut != 1) addSequenceContext(sol);
+        // solutions.insert(sol, redundancyCut);
+
         if (isSufficientNumMatchesSet() && solutions.size() == suffNumMatches) return solutions;
         if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
           solutions.erase(--solutions.end());
@@ -1240,6 +1250,40 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
             // sol is staying, but psol will need to be removed
             psol = solsSet.erase(psol); psolStays = false; break; // no need to check other segments
           }
+        }
+      }
+      if (psolStays) psol++;
+    }
+  }
+  solsSet.insert(sol);
+  updated = true;
+  return true;
+}
+
+bool fasstSolutionSet::insert(const fasstSolution& sol, map<int, map<int, map<int, set<int> > > >& relMap) {
+  // apply a redudancy filter based on a pre-computed map of inter-residue relationships
+  int ti = sol.getTargetIndex();
+  if (relMap.find(ti) != relMap.end()) {
+    map<int, map<int, set<int> > > relMapI = relMap[ti];
+    // compare this solution to each previously accepted solution
+    for (auto psol = solsSet.begin(); psol != solsSet.end(); ) {
+      int tj = psol->getTargetIndex();
+      if (relMapI.find(tj) == relMapI.end()) continue; // do the two targets have any related residues?
+      map<int, set<int> > relMapIJ = relMapI[tj];
+
+      // compare each segment
+      bool psolStays = true;
+      for (int i = 0; i < sol.numSegments(); i++) {
+        int ri = sol[i] + sol.segLength(i)/2;              // index of "central" residue of the segmet in the new solution
+        if (relMapIJ.find(ri) == relMapIJ.end()) continue; // does the residue have any related ones in the previous target?
+        int rj = (*psol)[i] + psol->segLength(i)/2;        // index of "central" residue of the segmet in the old solution
+        if (relMapIJ[ri].find(rj) == relMapIJ[ri].end()) continue; // are the two central residues related?
+
+        // psol and sol are redundant. Which should go?
+        if (psol->getRMSD() <= sol.getRMSD()) { return false; } // sol got trumped by a better previous solution
+        else {
+          // sol is staying, but psol will need to be removed
+          psol = solsSet.erase(psol); psolStays = false; break; // no need to check other segments
         }
       }
       if (psolStays) psol++;

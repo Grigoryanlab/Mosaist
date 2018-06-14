@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
   F.setMemorySaveMode(true); // backbone only
   F.readDatabase(op.getString("db"));
   if (!F.isResiduePairPropertyPopulated(contSec)) MstUtils::error("the FASST database does not appear to have a contact section");
-  F.pruneRedundancy(0.7);
+  F.pruneRedundancy(0.5);
   F.setMaxNumMatches(10000);
   opts.setFASST(&F);
   opts.setContSectName(contSec);

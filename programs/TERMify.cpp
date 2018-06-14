@@ -165,7 +165,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
   bool minSet = S->isMinNumMatchesSet();
   int maxN = S->getMaxNumMatches();
   int minN = S->getMinNumMatches();
-  mstreal redCut = S->getRedundancy();
+  mstreal redCut = S->getRedundancyCut();
   // for some of the logic below it is convenient to assume no funny business
   if (minSet && (minN <= 0)) MstUtils::error("min number of matches is set, but actual limit is not positive");
   if (maxSet && (maxN <= 0)) MstUtils::error("min number of matches is set, but actual limit is not positive");
@@ -223,7 +223,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
       // take all below the cutoff, but at least minN and at most maxN (if set)
       if ((rmsds[k] <= cut) || (minSet && (matches.size() < minN))) {
         rmsd = sols[k].getRMSD(); sols[k].setRMSD(rmsds[k]);      // overwrite with RMSD relative to current query
-        if (redSet) matches.insert(sols[k], S->getRedundancy());  // insert copies the solution
+        if (redSet) matches.insert(sols[k], S->getRedundancyCut());  // insert copies the solution
         else matches.insert(sols[k]);
         if (maxSet && (matches.size() > maxN)) matches.erase(--matches.end());
         sols[k].setRMSD(rmsd);                                    // set RMSD back to the old value

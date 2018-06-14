@@ -122,6 +122,7 @@ class fasstSolutionSet {
     fasstSolutionSet(const fasstSolutionSet& sols);
     fasstSolutionSet& operator=(const fasstSolutionSet& sols);
     bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
+    bool insert(const fasstSolution& sol, map<int, map<int, map<int, set<int> > > >& relMap); // returns whether the insert was performed
     set<fasstSolution>::iterator begin() const { return solsSet.begin(); }
     set<fasstSolution>::reverse_iterator rbegin() const { return solsSet.rbegin(); }
     set<fasstSolution>::iterator end() const { return solsSet.end(); }
@@ -316,9 +317,17 @@ class FASST {
      * will cause no redundancy cutoff to be applied, but will populate solution
      * objects with sequence context information, in case (for example) a filter
      * for redundancy will need to be applied later. */
-    void pruneRedundancy(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
+    void setRedundancyCut(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
+    void unsetRedundancyCut() { redundancyCut = 1; }
     bool isRedundancyCutSet() { return redundancyCut < 1; }
-    mstreal getRedundancy() { return redundancyCut; }
+    mstreal getRedundancyCut() { return redundancyCut; }
+    void setRedundancyProperty(const string& _redProp) { redundancyProp = _redProp; }
+    void unsetRedundancyProperty() { redundancyProp = ""; }
+    bool isRedundancyPropertySet() { return !redundancyProp.empty(); }
+    string getRedundancyProperty() { return redundancyProp; }
+    map<int, map<int, map<int, set<int> > > >& getRedundancyPropertyMap() { return resRelProperties[redundancyProp]; }
+
+    void pruneRedundancy(mstreal _redundancyCut = 0.5) { setRedundancyCut(_redundancyCut); } // NOTE: to be deprecated
 
   protected:
     void processQuery();
@@ -367,7 +376,7 @@ class FASST {
     map<string, map<int, map<int, map<int, mstreal> > > > resPairProperties;
 
     /* Object for holding residue-pair relational graphs. Specifically,
-     * resRelProperties["sim"][ti][ri][tj] is the set of all residues in target
+     * resRelProperties["sim"][ti][tj][ri] is the set of all residues in target
      * tj that are related by the property "sim" to the residue ri in target ti.
      * NOTE: this property can be directional (i.e., relationships are not mirrored). */
     map<string, map<int, map<int, map<int, set<int> > > > > resRelProperties;
@@ -389,6 +398,7 @@ class FASST {
     // redundancy options
     int contextLength;                       // how long of a local window to consider when comparing segment alingments between solutions
     mstreal redundancyCut;                   // maximum sequence identity (as a fraction), defined over contextLength-long windows
+    string redundancyProp;                   // residue relational property to use for checking redundancy of sequence windows
 
     // segmentResiduals[i][j] is the residual of the alignment of segment i, in which
     // its starting residue aligns with the residue index j in the target
