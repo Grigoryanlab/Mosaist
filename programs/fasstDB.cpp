@@ -187,7 +187,7 @@ int main(int argc, char *argv[]) {
       MstUtils::openFile(outf, batchFile, ios::out);
       outf << "#!/bin/bash\n" << "#$ -j y\n" << "#$ -cwd\n" << "#$ -V\n";
       outf << "#$ -l vf=2G\n" << "#$ -l ironfs\n";
-      int hrs = (int) ceil(5*(tasks[i].second - tasks[i].first + 1)/60.0); // five minutes per structure should be plenty
+      int hrs = (int) ceil(10*(tasks[i].second - tasks[i].first + 1)/60.0); // ten minutes per structure should be plenty
       outf << "#$ -l h_rt=" << hrs << ":00:00\n";
       outf << op.getExecName() << " --pL " << listFile << " --o " << dbFile;
       // keep all other options from the call to self
