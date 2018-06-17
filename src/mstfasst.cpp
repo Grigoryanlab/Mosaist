@@ -1278,9 +1278,13 @@ cout << "\t\tthe two targets do have related residues..." << endl;
 
       // compare each segment
       for (int i = 0; i < sol.numSegments(); i++) {
+cout << "\t\t\tchecking segment " << i << "..." << endl;
         int ri = sol[i] + sol.segLength(i)/2;              // index of "central" residue of the segmet in the new solution
         if (relMapIJ.find(ri) == relMapIJ.end()) continue; // does the residue have any related ones in the previous target?
+cout << "\t\t\tsegment " << i << " central residue " << ri << " does have similar things..." << endl;
+cout << "\t\t\t\t" << MstUtils::vecToString(MstUtils::keys(relMapIJ[ri])) << endl;
         int rj = (*psol)[i] + psol->segLength(i)/2;        // index of "central" residue of the segmet in the old solution
+cout << "\t\t\tprevious solution's segment " << i << " central residue is " << rj << endl;
         if (relMapIJ[ri].find(rj) == relMapIJ[ri].end()) continue; // are the two central residues related?
 
         // psol and sol are redundant. Which should go?

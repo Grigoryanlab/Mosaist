@@ -113,16 +113,17 @@ int main(int argc, char *argv[]) {
       vector<bool> nTerm, cTerm;
       for (int ti = 0; ti < S.numTargets(); ti++) {
         Structure P = S.getTargetCopy(ti);
-        int ri = 0;
+        int off = 0;
         for (int i = 0; i < P.chainSize(); i++) {
           Chain& C = P[i];
-          for (int j = 0; j < C.residueSize() - L + 1; j++, ri++) {
+          for (int j = 0; j < C.residueSize() - L + 1; j++) {
             Sequence win(L);
             for (int k = 0; k < L; k++) win[k] = SeqTools::aaToIdx(C[j + k].getName());
             wins.push_back(win);
-            winTarg.push_back(ti); winStart.push_back(ri);
+            winTarg.push_back(ti); winStart.push_back(off + j);
             nTerm.push_back(j == 0); cTerm.push_back(j == C.residueSize() - L);
           }
+          off += C.residueSize();
         }
       }
       cout << "\tclustering " << wins.size() << " windows at " << op.getInt("sim") << "\% sequence identity..." << endl;
@@ -140,6 +141,8 @@ int main(int argc, char *argv[]) {
           // windows i and j are similar
           int tj = winTarg[j];
           int rj = winStart[j] + L2;
+// cout << "target " << ti << ", residue " << ri << " is similar to target " << tj << " residue " << rj << endl;
+// cout << "\t" << wins[i].toString() << endl << "\t" << wins[j].toString() << endl << endl;
           S.addResidueRelationship(ti, "sim", ri, tj, rj); // adding in only one direction, because the list of clusters is bi-directional
           symN++;
           // if either window starts at the N-terminus, then the whole first half is redundant

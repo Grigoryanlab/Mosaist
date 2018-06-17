@@ -914,6 +914,8 @@ class MstUtils {
     static vector<int> sortIndices(vector<T>& vec, bool descending = false);
     template <class T1, class T2>
     static vector<T1> keys(const map<T1, T2>& _map);
+    template <class T>
+    static vector<T> keys(const set<T>& _set);
     template <class T1, class T2>
     static vector<T2> values(map<T1, T2>& _map);
     template <class T>
@@ -979,6 +981,16 @@ vector<T1> MstUtils::keys(const map<T1, T2>& _map) {
   int k = 0;
   for (auto it = _map.begin(); it != _map.end(); ++it, ++k) {
     K[k] = it->first;
+  }
+  return K;
+}
+
+template <class T>
+vector<T> MstUtils::keys(const set<T>& _set) {
+  vector<T> K(_set.size());
+  int k = 0;
+  for (auto it = _set.begin(); it != _set.end(); ++it, ++k) {
+    K[k] = *it;
   }
   return K;
 }

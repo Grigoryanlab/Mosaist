@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
   op.setTitle("Given some specific surface site(s) on a structure, binds the best binding poses. Options:");
   op.addOption("p", "target PDB structure.", true);
   op.addOption("s", "surface site selection (procedure will be repeated for each residue in the selection).", true);
-  op.addOption("db", "a binary FASST database file. This database needs to have the \"cont\" residue property section populated with contacts.", true);
+  op.addOption("db", "a binary FASST database file. This database needs to have the \"conts\" residue property section populated with contacts.", true);
   op.addOption("rLib", "rotamer library file path.", true);
   op.addOption("o", "output base name.", true);
   op.setOptions(argc, argv);
@@ -114,8 +114,8 @@ int main(int argc, char** argv) {
   F.setMemorySaveMode(true); // backbone only
   F.readDatabase(op.getString("db"));
   if (!F.isResiduePairPropertyPopulated(contSec)) MstUtils::error("the FASST database does not appear to have a contact section");
-  F.pruneRedundancy(0.5);
-  F.setMaxNumMatches(10000);
+  F.setRedundancyCut(0.5);
+  F.setMaxNumMatches(1000);
   opts.setFASST(&F);
   opts.setContSectName(contSec);
 
@@ -221,10 +221,12 @@ vector<attachment> getAttachments(Residue* sR, bindOptions& opts) {
   FASST& F = *(opts.getFASST());
   F.setRMSDCutoff(opts.getRMSDCut());
   F.setQuery(anchor);
+  cout << "\tsearching for a local " << anchor.chainSize() << "-segment TERM..." << endl;
   fasstSolutionSet sols = F.search();
   vector<Structure> matches; F.getMatchStructures(sols, matches);
   vector<vector<Atom*> > contactTERMs;
   int Ne = 0, Nc = 0;
+  cout << "\tfound " << matches.size() << " matches, excising local context..." << endl;
   for (int k = 0; k < matches.size(); k++) {
     Residue cR = matches[k].getResidue(opts.contextLen());
     if (!cR.isNamed(sR->getName())) continue;
@@ -238,6 +240,7 @@ vector<attachment> getAttachments(Residue* sR, bindOptions& opts) {
       for (auto rj = C.begin(); rj != C.end(); ++rj) {
         vector<Atom*> contactTERM;
         TERMUtils::exciseTERM({&(mT->getResidue(ri)), &(mT->getResidue(rj->first))}, contactTERM, opts.contextLen());
+cout << "number of atoms " << contactTERM.size() << endl;
         contactTERMs.push_back(contactTERM);
         Nc++;
       }
@@ -247,14 +250,14 @@ vector<attachment> getAttachments(Residue* sR, bindOptions& opts) {
   }
 
   // cluster contact TERMs
-  cout << "\tclustering " << contactTERMs.size() << " terms" << endl;
+  cout << "\tclustering " << contactTERMs.size() << " TERMs..." << endl;
   vector<vector<int> > cIs = clust.greedyCluster(contactTERMs, opts.getRMSDCut2(), 10000);
   for (int ci = 0; ci < cIs.size(); ci++) {
     printf("\t\tcluster %02d: %d out of %d + %d = %f\n", ci, (int) cIs[ci].size(), Nc, Ne, (cIs[ci].size()*1.0)/(Nc + Ne));
     mstreal p = (cIs[ci].size()*1.0)/(Nc + Ne);
     if (p > opts.minProb()) {
       AtomPointerVector cent(contactTERMs[cIs[ci][0]]);
-      Structure centS(cent);
+      Structure centS(cent); // TODO: this does not split segments into chains!
       rc.align(cent.subvector(0, cent.size()/2), F.getQuerySearchedAtoms(), centS);
       A.push_back(attachment(centS, log(p)));
     }
