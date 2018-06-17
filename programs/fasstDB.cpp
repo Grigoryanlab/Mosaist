@@ -140,8 +140,7 @@ int main(int argc, char *argv[]) {
           // windows i and j are similar
           int tj = winTarg[j];
           int rj = winStart[j] + L2;
-          S.addResidueRelationship(ti, "sim", ri, tj, rj);
-          S.addResidueRelationship(tj, "sim", rj, ti, ri);
+          S.addResidueRelationship(ti, "sim", ri, tj, rj); // adding in only one direction, because the list of clusters is bi-directional
           symN++;
           // if either window starts at the N-terminus, then the whole first half is redundant
           if (nTerm[i] || nTerm[j]) {
