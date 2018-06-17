@@ -141,6 +141,7 @@ int main(int argc, char *argv[]) {
           int tj = winTarg[j];
           int rj = winStart[j] + L2;
           S.addResidueRelationship(ti, "sim", ri, tj, rj);
+          S.addResidueRelationship(tj, "sim", rj, ti, ri);
           symN++;
           // if either window starts at the N-terminus, then the whole first half is redundant
           if (nTerm[i] || nTerm[j]) {

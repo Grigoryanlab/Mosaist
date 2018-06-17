@@ -490,7 +490,7 @@ void FASST::readDatabase(const string& dbFile) {
             MstUtils::readBin(ifs, n2);
             for (int k = 0; k < n2; k++) {
               MstUtils::readBin(ifs, rj);
-              vals[ri][tj].insert(rj);
+              vals[tj][ri].insert(rj);
             }
           }
         }
@@ -1263,16 +1263,20 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
 bool fasstSolutionSet::insert(const fasstSolution& sol, map<int, map<int, map<int, set<int> > > >& relMap) {
   // apply a redudancy filter based on a pre-computed map of inter-residue relationships
   int ti = sol.getTargetIndex();
+  bool advance = true;
+cout << "inserting solution from target " << ti << endl;
   if (relMap.find(ti) != relMap.end()) {
     map<int, map<int, set<int> > > relMapI = relMap[ti];
     // compare this solution to each previously accepted solution
-    for (auto psol = solsSet.begin(); psol != solsSet.end(); ) {
+    for (auto psol = solsSet.begin(); psol != solsSet.end(); (advance ? psol++ : psol)) {
+      advance = true;
       int tj = psol->getTargetIndex();
+cout << "\tcomparing with solution from target " << tj << endl;
       if (relMapI.find(tj) == relMapI.end()) continue; // do the two targets have any related residues?
+cout << "\t\tthe two targets do have related residues..." << endl;
       map<int, set<int> > relMapIJ = relMapI[tj];
 
       // compare each segment
-      bool psolStays = true;
       for (int i = 0; i < sol.numSegments(); i++) {
         int ri = sol[i] + sol.segLength(i)/2;              // index of "central" residue of the segmet in the new solution
         if (relMapIJ.find(ri) == relMapIJ.end()) continue; // does the residue have any related ones in the previous target?
@@ -1280,15 +1284,16 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, map<int, map<int, map<in
         if (relMapIJ[ri].find(rj) == relMapIJ[ri].end()) continue; // are the two central residues related?
 
         // psol and sol are redundant. Which should go?
-        if (psol->getRMSD() <= sol.getRMSD()) { return false; } // sol got trumped by a better previous solution
+        if (psol->getRMSD() <= sol.getRMSD()) { cout << "\tfailed" << endl; return false; } // sol got trumped by a better previous solution
         else {
           // sol is staying, but psol will need to be removed
-          psol = solsSet.erase(psol); psolStays = false; break; // no need to check other segments
+cout << "\tnew solution trumps the previous one..." << endl;
+          psol = solsSet.erase(psol); advance = false; break; // no need to check other segments
         }
       }
-      if (psolStays) psol++;
     }
   }
+cout << "\tsucceeded" << endl;
   solsSet.insert(sol);
   updated = true;
   return true;

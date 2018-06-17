@@ -57,6 +57,11 @@ class fasstSolution {
 
     friend ostream& operator<<(ostream &_os, const fasstSolution& _sol) {
       _os << std::setprecision(6) << std::fixed << _sol.rmsd << " " << _sol.targetIndex << " [" << MstUtils::vecToString(_sol.alignment, ", ") << "]";
+      if (_sol.seqContextDefined()) {
+        for (int i = 0; i < _sol.numSegments(); i++) {
+          _os << "\n\t" << "[" << _sol.nTermContext()[i].toString() << "] - [" << _sol.segmentSeqs()[i].toString() << "] - [" << _sol.cTermContext()[i].toString() << "]";
+        }
+      }
       return _os;
     }
 
@@ -327,7 +332,7 @@ class FASST {
     string getRedundancyProperty() { return redundancyProp; }
     map<int, map<int, map<int, set<int> > > >& getRedundancyPropertyMap() { return resRelProperties[redundancyProp]; }
 
-    void pruneRedundancy(mstreal _redundancyCut = 0.5) { setRedundancyCut(_redundancyCut); } // NOTE: to be deprecated
+    void pruneRedundancy(mstreal _redundancyCut = 0.5) { cout << "FASST::pruneRedundancy DEPRICATED; use FASST::setRedundancyCut" << endl; setRedundancyCut(_redundancyCut); } // NOTE: to be deprecated
 
   protected:
     void processQuery();

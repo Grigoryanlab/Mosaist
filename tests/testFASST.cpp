@@ -10,12 +10,14 @@ int main(int argc, char *argv[]) {
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
   op.addOption("r", "RMSD cutoff (takes the size-dependent cutoff by default).");
-  op.addOption("red", "set redundancy cutoff level (default is 1.0, so no redundancy filtering).");
+  op.addOption("red", "set redundancy cutoff level in percent (default is 100, so no redundancy filtering).");
+  op.addOption("redProp", "set redundancy property name. If defined, will assume the FASST database encodes this relational property and will define redundancy via it.");
   op.addOption("min", "min number of matches.");
   op.addOption("max", "max number of matches.");
   op.addOption("strOut", "dump structures into this directory.");
   op.addOption("pp", "store phi/psi properties in the database, if creating a new one from PDB files.");
   op.setOptions(argc, argv);
+  if (op.isGiven("redProp")) MstUtils::assert(!op.getString("redProp").empty(), "--redProp must specify a property name");
 
   FASST S;
   cout << "Reading the database..." << endl;
@@ -55,8 +57,9 @@ int main(int argc, char *argv[]) {
   }
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
-  S.setMaxGap(0, 1, 6); S.setMinGap(0, 1, 0);
-  S.pruneRedundancy(op.getReal("red", 1.0));
+  // S.setMaxGap(0, 1, 6); S.setMinGap(0, 1, 0);
+  S.setRedundancyCut(op.getReal("red", 100.0)/100.0);
+  if (op.isGiven("redProp")) S.setRedundancyProperty(op.getString("redProp"));
   auto end = chrono::high_resolution_clock::now();
   cout << "DB reading took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "Searching..." << endl;
@@ -69,6 +72,7 @@ int main(int argc, char *argv[]) {
   vector<vector<mstreal> > phi, psi;
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     cout << S.toString(*it) << endl;
+    cout << *it << endl;
     if (op.isGiven("pp")) {
       if (S.isPropertyDefined("phi")) cout << "\tphi: " << MstUtils::vecToString(S.getResidueProperties(*it, "phi")) << endl;
       if (S.isPropertyDefined("psi")) cout << "\tpsi: " << MstUtils::vecToString(S.getResidueProperties(*it, "psi")) << endl;
