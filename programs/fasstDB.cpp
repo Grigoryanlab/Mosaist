@@ -16,6 +16,7 @@ int main(int argc, char *argv[]) {
   op.addOption("o", "output database file name.", true);
   op.addOption("m", "memory save flag (will store backbone only).");
   op.addOption("c", "clean up PDB files, so that only protein residues with enough of a backbone to support rotamer building survive.");
+  op.addOption("s", "split final PDB files into chains by connectivity. Among other things, this avoids \"gaps\" within chains (where missing residues would go), which may simplify redundancy identification.");
   op.addOption("pp", "store phi/psi properties in the database.");
   op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
   op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees below the specified limit). If this is given, --rLib must also be given.");
@@ -52,6 +53,9 @@ int main(int argc, char *argv[]) {
             cout << pdbFiles[i] << ", had " << P.residueSize() << " residues, and " << C.residueSize() << " residues after cleaning..." << endl;
           }
           C.setName(P.getName()); P = C;
+        }
+        if (op.isGiven("s")) {
+          P = P.reassignChainsByConnectivity();
         }
         S.addTarget(P);
       }
