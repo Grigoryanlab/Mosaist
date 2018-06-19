@@ -213,7 +213,7 @@ mstreal Optim::lineSearch(optimizerEvaluator& E, const vector<mstreal>& point, v
   // seaerch in the bracketed range
   for (int i = 0; i < 10; i++) {
     v = E.eval(mid, midGrad);
-    if (midGrad.dot(dir) > 0) {
+    if (midGrad.dot(dir) < 0) {
       // sub-divide the right side
       curr = (mid + high)/2;
       if (E.eval(curr) < v) {
