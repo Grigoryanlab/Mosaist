@@ -18,7 +18,7 @@ class Matrix {
     ~Matrix();
 
     int size(int dim = 1) const;
-    int length() { return max(size(1), size(2)); }
+    int length() const { return MstUtils::max(size(1), size(2)); }
     int numRows() const { return size(1); }
     int numCols() const { return size(2); }
     mstreal& operator()(int i, int j) { return *(M[i][j]); }
@@ -57,6 +57,9 @@ class Matrix {
     Matrix mean(int dim = 1) { return sum(dim, true); }
     mstreal norm() const;   // Euclidean norm of the matrix
     mstreal norm2() const;  // Euclidean norm squared
+    mstreal max() const;
+    mstreal min() const;
+    Matrix abs() const;
 
     friend ostream & operator<<(ostream &_os, const Matrix& _M) {
       for (int i = 0; i < _M.numRows(); i++) {
@@ -85,7 +88,8 @@ class Vector : public Matrix {
     Vector(const vector<mstreal>& p, bool col = false) : Matrix(p, col) {}
     Vector(const Vector& V) : Matrix(V) {}
     Vector(const Matrix& _M) : Matrix(_M) { MstUtils::assert((_M.numRows() == 1) || (_M.numCols() == 1), "cannot construct a vector from a matrix with non-unitary dimensions", "Vector::Vector(const Matrix& _M)"); }
-    int size() { return length(); }
+    int size() const { return length(); }
+    mstreal dot(const Vector& v) const;
 };
 
 }

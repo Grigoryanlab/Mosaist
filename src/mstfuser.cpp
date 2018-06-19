@@ -801,6 +801,7 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
   vector<mstreal> bestSolution; mstreal score, bestScore;
   if (params.useGradientDescent()) {
     bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
+// bestScore = Optim::conjGradMin(E, bestSolution, params.numIters(), 10E-8, params.isVerbose());
   } else {
     mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution, params.isVerbose());
   }
@@ -812,6 +813,7 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
     int anchor = E.randomizeBuildOrigin();
     if (params.useGradientDescent()) {
       score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
+// score = Optim::conjGradMin(E, solution, params.numIters(), 10E-8, params.isVerbose());
     } else {
       score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
     }

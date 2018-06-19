@@ -207,20 +207,44 @@ Structure TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, int 
   return term;
 }
 
-void TERMUtils::exciseTERM(const vector<Residue*>& cenRes, vector<Atom*>& frag, int pm) {
-  frag.clear();
-  if (cenRes.size() == 0) return;
+bool TERMUtils::exciseTERM(const vector<Residue*>& cenRes, Structure& frag, int pm) {
+  frag.reset();
+  set<Residue*> copied;
+  bool overlap = false;
+  if (cenRes.size() == 0) return true;
   Structure* S = cenRes[0]->getChain()->getParent();
   for (int i = 0; i < cenRes.size(); i++) {
     Residue& res = *(cenRes[i]);
     Chain* C = res.getChain();
+    Chain* nC = frag.appendChain("A");
     int ri = res.getResidueIndex();
     int li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
     int fi = C->getResidue(0).getResidueIndex(); // first residue index in the chain
     for (int k = ri - pm; k <= ri + pm; k++) {
       if ((k < fi) || (k > li)) continue;
-      vector<Atom*> resAtoms = (S->getResidue(k)).getAtoms();
-      frag.insert(frag.end(), resAtoms.begin(), resAtoms.end());
+      Residue& res = S->getResidue(k);
+      nC->appendResidue(new Residue(res));
+      if (copied.find(&res) != copied.end()) overlap = true;
+      copied.insert(&res);
     }
   }
+  return !overlap;
 }
+
+// void TERMUtils::exciseTERM(const vector<Residue*>& cenRes, vector<Atom*>& frag, int pm) {
+//   frag.clear();
+//   if (cenRes.size() == 0) return;
+//   Structure* S = cenRes[0]->getChain()->getParent();
+//   for (int i = 0; i < cenRes.size(); i++) {
+//     Residue& res = *(cenRes[i]);
+//     Chain* C = res.getChain();
+//     int ri = res.getResidueIndex();
+//     int li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
+//     int fi = C->getResidue(0).getResidueIndex(); // first residue index in the chain
+//     for (int k = ri - pm; k <= ri + pm; k++) {
+//       if ((k < fi) || (k > li)) continue;
+//       vector<Atom*> resAtoms = (S->getResidue(k)).getAtoms();
+//       frag.insert(frag.end(), resAtoms.begin(), resAtoms.end());
+//     }
+//   }
+// }

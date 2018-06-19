@@ -345,6 +345,45 @@ mstreal Matrix::norm2() const {
   return n;
 }
 
+mstreal Matrix::min() const {
+  if (length() == 0) MstUtils::error("called on an empty matrix", "Matrix::min()");
+  mstreal m = *(M[0][0]);
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      if (*(M[i][j]) < m) m = *(M[i][j]);
+    }
+  }
+  return m;
+}
+
+mstreal Matrix::max() const {
+  if (length() == 0) MstUtils::error("called on an empty matrix", "Matrix::max()");
+  mstreal m = *(M[0][0]);
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      if (*(M[i][j]) > m) m = *(M[i][j]);
+    }
+  }
+  return m;
+}
+
+Matrix Matrix::abs() const {
+  Matrix Ma(*this);
+  for (int i = 0; i < M.size(); i++) {
+    for (int j = 0; j < M[i].size(); j++) {
+      Ma(i, j) = fabs(*(M[i][j]));
+    }
+  }
+  return Ma;
+}
+
+mstreal Vector::dot(const Vector& v) const {
+  if (size() != v.size()) MstUtils::error("mismatching vector lengths", "Vector::dot");
+  mstreal d = 0;
+  for (int i = 0; i < size(); i++) d += (*this)[i] * v[i];
+  return d;
+}
+
 #ifdef ARMA
   MST::Matrix MstLinAlg::getPrincipalAxes(const MST::AtomPointerVector& atoms) {
     // extract coordinates into a 3 x N matrix

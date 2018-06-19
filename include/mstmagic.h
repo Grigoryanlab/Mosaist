@@ -36,15 +36,24 @@ class TERMUtils {
     static Structure selectTERM(Residue& cenRes, ConFind& C, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
     /* case 4: same as case 2, but returns a Structure */
     static Structure selectTERM(const vector<Residue*>& cenRes, ConFind& C, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
-    /* case 5: all central residues + contacting residues are already specified */
+    /* case 5: all central residues + contacting residues (together referred to as source residues) are already specified */
     static void selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm = 2, vector<int>* fragResIdx = NULL);
 
+    // /* The following function is a little different, in that it simply cuts out
+    //  * one segment at a time, and splices them together. It does not worry about
+    //  * any overlap between segments and the order of segments in the resulting
+    //  * TERM (i.e., the order of atoms) is according to the order in which the
+    //  * central residues are listed in the input. */
+    // static void exciseTERM(const vector<Residue*>& cenRes, vector<Atom*>& frag, int pm = 2);
+
     /* The following function is a little different, in that it simply cuts out
-     * one segment at a time, and splices them together. It does not worry about
-     * any overlap between segments and the order of segments in the resulting
-     * TERM (i.e., the order of atoms) is according to the order in which the
-     * central residues are listed in the input. */
-    static void exciseTERM(const vector<Residue*>& cenRes, vector<Atom*>& frag, int pm = 2);
+     * one segment at a time, in the order corresponding to the given array out
+     * source residues, and places them in separate chains. This is done even
+     * if residues from different segments overlap! So that means one can end
+     * up with copies of the same residue(s) in different chains. The return
+     * value is true if no such overlap occurs (so the resultant TERM is a fine
+     * structure) and false if there is overlap. */
+    static bool exciseTERM(const vector<Residue*>& cenRes, Structure& frag, int pm = 2);
 };
 
 #endif
