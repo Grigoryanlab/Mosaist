@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
   cout << "Will fix residues: " << MstUtils::vecToString(fixed) << endl;
   cout << "Leaving " << L - fixed.size() << " mobile" << endl;
 
-  fusionParams opts; opts.setNumIters(1000); opts.setVerbose(true); opts.setMinimizerType(fusionParams::conjGrad);
+  fusionParams opts; opts.setNumIters(1000); opts.setVerbose(false); opts.setMinimizerType(fusionParams::conjGrad);
   fusionScores scores;
   Structure fused = Fuser::fuse(resTopo, scores, fixed, opts);
   cout << "best score is " << scores.getScore() << endl;

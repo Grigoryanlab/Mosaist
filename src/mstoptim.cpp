@@ -162,7 +162,7 @@ mstreal Optim::conjGradMin(optimizerEvaluator& E, vector<mstreal>& solution, int
   mstreal v = E.eval(curr, g); g = -g; g1 = g; h = g;
 
   for (int i = 0; i < numIters; i++) {
-    mstreal vNext = Optim::lineSearch(E, curr, next, h);
+    mstreal vNext = Optim::lineSearch(E, curr, next, h, 0.01, verbose);
     if (v - vNext < tol) break;
     curr = next;
 
@@ -178,61 +178,83 @@ mstreal Optim::conjGradMin(optimizerEvaluator& E, vector<mstreal>& solution, int
   return v;
 }
 
-mstreal Optim::lineSearch(optimizerEvaluator& E, const vector<mstreal>& point, vector<mstreal>& solution, const Vector& _dir, mstreal startStepSize, bool verbose) {
-  Vector x(point);
-  Vector midGrad(x.length());
-  Vector dir = _dir;
-  Vector curr = x, low = x, mid = x, high = x;
-  mstreal v;
-  if (dir.length() == 0) {
-    v = E.eval(x, dir); // set the line-search direction as the gradient
-  } else {
-    v = E.eval(x);
-  }
-  if (startStepSize <= 0) {
-    // startStepSize = MstUtils::min(0.1/(dir.abs()).max(), 1.0);
-    startStepSize = 0.1/(dir.abs()).max();
-  }
-  mstreal gamma = startStepSize;
-
-  // bracket the minimum between low and high
-  while (true) {
-    // make step
-    curr = x + gamma*dir;
-    if (E.eval(curr) < v) {
-      low = mid;
-      mid = curr;
-      gamma += startStepSize;
+mstreal Optim::lineSearch(optimizerEvaluator& E, const vector<mstreal>& point, vector<mstreal>& solution, const Vector& dir, mstreal startStepSize, bool verbose) {
+  Vector x0 = point, g0 = x0, x1 = x0, g1 = x0;
+  mstreal v0 = E.eval(x0, g0), v1; g0 = g0.getUnit();
+  mstreal gamma = startStepSize;      // initial step size
+  mstreal tol = 10E-8;
+  for (int i = 0; 100; i++) {
+    if (verbose) printf("line search %d: %e (gamma = %e)\n", i+1, v0, gamma);
+    x1 = x0 - gamma * dir.dot(g0) * dir;
+    v1 = E.eval(x1, g1);
+    if (fabs(v0 - v1) < tol) break;
+    // adaptively change the learning rate
+    if (v1 < v0) {
+      gamma *= 1.5;
+      x0 = x1; v0 = v1; g0 = g1.getUnit();
     } else {
-      high = curr;
-      break;
+      gamma /= 2;
+      if (MstUtils::closeEnough(gamma, 0.0)) break;
     }
   }
-
-  // seaerch in the bracketed range
-  for (int i = 0; i < 10; i++) {
-    v = E.eval(mid, midGrad);
-    if (midGrad.dot(dir) < 0) {
-      // sub-divide the right side
-      curr = (mid + high)/2;
-      if (E.eval(curr) < v) {
-        low = mid;
-        mid = curr;
-      } else {
-        high = curr;
-      }
-    } else {
-      // sub-divide the left side
-      curr = (low + mid)/2;
-      if (E.eval(curr) < v) {
-        high = mid;
-        mid = curr;
-      } else {
-        low = curr;
-      }
-    }
-  }
-
-  solution = mid;
-  return E.eval(mid);
+  solution = x0;
+  return v0;
 }
+
+// mstreal Optim::lineSearch(optimizerEvaluator& E, const vector<mstreal>& point, vector<mstreal>& solution, const Vector& _dir, mstreal startStepSize, bool verbose) {
+//   Vector x(point);
+//   Vector midGrad(x.length());
+//   Vector dir = _dir;
+//   Vector curr = x, low = x, mid = x, high = x;
+//   mstreal v;
+//   if (dir.length() == 0) {
+//     v = E.eval(x, dir); // set the line-search direction as the gradient
+//   } else {
+//     v = E.eval(x);
+//   }
+//   if (startStepSize <= 0) {
+//     // startStepSize = MstUtils::min(0.1/(dir.abs()).max(), 1.0);
+//     startStepSize = 0.1/(dir.abs()).max();
+//   }
+//   mstreal gamma = startStepSize;
+//
+//   // bracket the minimum between low and high
+//   while (true) {
+//     // make step
+//     curr = x + gamma*dir;
+//     if (E.eval(curr) < v) {
+//       low = mid;
+//       mid = curr;
+//       gamma += startStepSize;
+//     } else {
+//       high = curr;
+//       break;
+//     }
+//   }
+//
+//   // seaerch in the bracketed range
+//   for (int i = 0; i < 10; i++) {
+//     v = E.eval(mid, midGrad);
+//     if (midGrad.dot(dir) < 0) {
+//       // sub-divide the right side
+//       curr = (mid + high)/2;
+//       if (E.eval(curr) < v) {
+//         low = mid;
+//         mid = curr;
+//       } else {
+//         high = curr;
+//       }
+//     } else {
+//       // sub-divide the left side
+//       curr = (low + mid)/2;
+//       if (E.eval(curr) < v) {
+//         high = mid;
+//         mid = curr;
+//       } else {
+//         low = curr;
+//       }
+//     }
+//   }
+//   solution = mid;
+//   return E.eval(mid);
+// }
