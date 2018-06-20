@@ -799,9 +799,10 @@ mstreal fusionEvaluator::atomRadius(const Atom& a) {
 Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fusionParams& params) {
   fusionEvaluator E(topo, params); E.setVerbose(false);
   vector<mstreal> bestSolution; mstreal score, bestScore;
-  if (params.useGradientDescent()) {
+  if (params.setMinimizerType() == fusionParams::gradDescent) {
     bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
-// bestScore = Optim::conjGradMin(E, bestSolution, params.numIters(), 10E-8, params.isVerbose());
+  } else if (params.setMinimizerType() == fusionParams::conjGrad) {
+    bestScore = Optim::conjGradMin(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
   } else {
     mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution, params.isVerbose());
   }
@@ -811,9 +812,10 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
     E.noisifyGuessPoint(0.2);
     vector<mstreal> solution;
     int anchor = E.randomizeBuildOrigin();
-    if (params.useGradientDescent()) {
+    if (params.setMinimizerType() == fusionParams::gradDescent) {
       score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
-// score = Optim::conjGradMin(E, solution, params.numIters(), 10E-8, params.isVerbose());
+    } else if (params.setMinimizerType() == fusionParams::conjGrad) {
+      score = Optim::conjGradMin(E, solution, params.numIters(), params.errTol(), params.isVerbose());
     } else {
       score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
     }

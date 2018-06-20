@@ -158,22 +158,20 @@ mstreal Optim::gradDescent(optimizerEvaluator& E, vector<mstreal>& solution, int
 mstreal Optim::conjGradMin(optimizerEvaluator& E, vector<mstreal>& solution, int numIters, mstreal tol, bool verbose) {
   vector<mstreal> curr = E.guessPoint();
   vector<mstreal> next = curr;
-  Vector dir(curr.size()), grad(curr.size()), newDir(curr.size());
-  mstreal v = E.eval(curr, dir); dir = -dir;
-  grad = dir;
-  newDir = dir;
+  Vector h(curr.size()), g(curr.size()), g1(curr.size());
+  mstreal v = E.eval(curr, g); g = -g; g1 = g; h = g;
 
   for (int i = 0; i < numIters; i++) {
-    mstreal vNext = Optim::lineSearch(E, curr, next, dir);
+    mstreal vNext = Optim::lineSearch(E, curr, next, h);
     if (v - vNext < tol) break;
+    curr = next;
 
     // update direction
-    curr = next;
-    v = E.eval(curr, dir); dir = -dir;
-    mstreal gamma = dir.dot(dir)/grad.dot(grad);
-    grad = dir;
-    newDir = grad + gamma*newDir;
-    dir = newDir;
+    v = E.eval(curr, g1); g1 = -g1;
+    mstreal gamma = g1.norm2()/g.norm2(); // Fletcher–Reeves
+    // mstreal gamma = g1.dot(g1 - g)/g.norm2(); // Polak–Ribière
+    h = g1 + gamma*h;
+    g = g1;
   }
 
   solution = curr;
@@ -192,7 +190,8 @@ mstreal Optim::lineSearch(optimizerEvaluator& E, const vector<mstreal>& point, v
     v = E.eval(x);
   }
   if (startStepSize <= 0) {
-    startStepSize = MstUtils::min(0.01/(dir.abs()).max(), 0.1);
+    // startStepSize = MstUtils::min(0.1/(dir.abs()).max(), 1.0);
+    startStepSize = 0.1/(dir.abs()).max();
   }
   mstreal gamma = startStepSize;
 

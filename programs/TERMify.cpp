@@ -271,7 +271,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     }
     // set redundancy value to above 1 in order to accumulate sequence context,
     // regardless of current requirements (for any future needs)
-    S->pruneRedundancy(1.1);
+    S->setRedundancyCut(1.1);
     S->setRMSDCutoff(1.1*cut);
 
     /* The minimum number of matches limit is costly to include in the search,
@@ -325,7 +325,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     }
 
     // -- reset search setting to their old values
-    S->pruneRedundancy(redCut);
+    S->setRedundancyCut(redCut);
     S->setRMSDCutoff(cut);
     if (maxSet) S->setMaxNumMatches(maxN);
     if (minSet) S->setMinNumMatches(minN);
@@ -525,7 +525,7 @@ int main(int argc, char** argv) {
       fixed[i] = indices[fixedResidues[i]];
     }
   }
-  F.pruneRedundancy(0.5);
+  F.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000;
@@ -585,7 +585,7 @@ int main(int argc, char** argv) {
 
     // fuser options
     fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
-    opts.setGradientDescentFlag(true);
+    opts.setMinimizerType(fusionParams::gradDescent);
     opts.setRepFC(1);
     opts.setCompFC(0.1);
     mstreal compactnessRadius = Rf;

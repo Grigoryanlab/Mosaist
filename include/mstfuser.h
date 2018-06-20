@@ -12,16 +12,17 @@ using namespace MST;
 class fusionParams {
   public:
     enum coorInitType { meanCoor = 1, meanIC };
+    enum minimizerType { gradDescent = 1, conjGrad, NelderMead };
     fusionParams() { // default optimization params
       startType = fusionParams::coorInitType::meanCoor;
       verbose = false;
       optimCartesian = true;
-      gradDescent = true;
+      minMethod = fusionParams::gradDescent;
       normRMSD = true; fragRedWeighting = false;
       noise = 0;
       Ni = 100;
       Nc = 1;
-      tol = 0.0;
+      tol = 10E-8;
       kb = 10;
       ka =  0.02;
       kh = 0.001;
@@ -43,11 +44,11 @@ class fusionParams {
     mstreal getCompRad() { return Rcomp; }
     bool isRepOn() { return (krep != 0); }
     bool isCompOn() { return (kcomp != 0); }
-    bool useGradientDescent() const { return gradDescent; }
     Structure getStartingStructure() const { return startStruct; }
     bool isStartingStructureGiven() const { return (startStruct.chainSize() != 0); }
     bool normalizeRMSD() const { return normRMSD; }
     bool fragRedundancyWeighting() const { return fragRedWeighting; }
+    int setMinimizerType() const { return minMethod; }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }
@@ -62,18 +63,19 @@ class fusionParams {
     void setRepFC(mstreal _k) { krep = _k; }
     void setCompFC(mstreal _k) { kcomp = _k; }
     void setCompRad(mstreal _r) { Rcomp = _r; }
-    void setGradientDescentFlag(bool _f) { gradDescent = _f; }
     void setStartingStructure(const Structure& _S) { startStruct = _S; }
     void setNormalizeRMSD(bool flag) { normRMSD = flag; }
     void setFragRedundancyWeighting(bool flag) { fragRedWeighting = flag; }
+    void setMinimizerType(minimizerType _type) { minMethod = _type; }
 
   private:
     // start optimization from the averaged Cartesian structure or the structure
     // that results from average internal coordinates?
     fusionParams::coorInitType startType;
-    bool verbose, optimCartesian, gradDescent, normRMSD, fragRedWeighting;
+    bool verbose, optimCartesian, normRMSD, fragRedWeighting;
     mstreal noise; // noise level for initalizing the starting point
     int Ni, Nc;    // number of iterations per cycle and number of cycles
+    minimizerType minMethod; // optimization method to use
     mstreal tol;   // error tolerance stopping criterion for optimization
     mstreal kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     mstreal krep, kcomp; // force constants for repulsive and attractive "compactness" interactions
