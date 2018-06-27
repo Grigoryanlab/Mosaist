@@ -873,7 +873,8 @@ class MstUtils {
     static void fileToArray(string _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
     static vector<string> fileToArray(string _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
     static FILE* openFileC (const char* filename, const char* mode, string from = "");
-    static string trim(string str, string delimiters = " \t\n\v\f\r");
+    static vector<string> trim(const vector<string>& strings, string delimiters = " \t\n\v\f\r");
+    static string trim(const string& str, string delimiters = " \t\n\v\f\r");
     static void warn(string message, string from = "");
     static void error(string message, string from = "", int code = -1);
     static void assert(bool condition, string message = "error: assertion failed", string from = "", int exitCode = -1);
@@ -890,6 +891,7 @@ class MstUtils {
     static MST::mstreal sign(MST::mstreal val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
+    static string removeComment(const string& str, string commStart = "#");
     static vector<MST::mstreal> splitToReal(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = true);
     static vector<int> splitToInt(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = true);
     static string join(const string& delim, const vector<string>& words);

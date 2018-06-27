@@ -68,11 +68,11 @@ ifdef INCLUDE_ARMA
 endif
 
 # targets and MST libraries
-TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testRotlib testTERMUtils testTransforms
+TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testRotlib testTERMUtils testTransforms testdTERMen
 PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes
-LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans
+LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans libdtermen
 
 # target dependencies
 findBestFreedom_DEPS	:= mstcondeg mstrotlib mstsystem msttransforms msttypes
@@ -93,9 +93,10 @@ TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms m
 bind_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions mstmagic
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg
+testdTERMen_DEPS		:= msttypes mstfasst dtermen msttransforms mstsequence
 
 # MST library dependencies
-libmst_DEPS				:= mstoptions mstsequence mstsystem msttypes
+libmst_DEPS			:= mstoptions mstsequence mstsystem msttypes
 libmstcondeg_DEPS		:= mstcondeg mstrotlib msttransforms
 libmstfasst_DEPS		:= mstfasst mstsequence msttransforms msttypes
 libmstfuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
@@ -103,6 +104,7 @@ libmstlinalg_DEPS		:= mstlinalg
 libmstmagic_DEPS		:= msttypes mstmagic mstcondeg
 libmstoptim_DEPS		:= mstoptim mstlinalg
 libmsttrans_DEPS		:= msttransforms
+libdtermen_DEPS			:= mstsequence msttypes dtermen
 
 # stuff not meant to be regularly updated (that is, makefile magic that shouldn't have to be updated until a major change to the project structure is made):
 

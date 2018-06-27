@@ -3347,6 +3347,15 @@ vector<string> MstUtils::split(const string& str, string delimiters, bool skipTr
   return tokens;
 }
 
+string MstUtils::removeComment(const string& str, string commStart) {
+  for (int i = 0; i < str.length() - commStart.length() + 1; i++) {
+    if (str.substr(i, commStart.length()).compare(commStart) == 0) {
+      return str.substr(0, i);
+    }
+  }
+  return str;
+}
+
 vector<MST::mstreal> MstUtils::splitToReal(const string& str, string delimiters, bool skipTrailingDelims, bool strict) {
   vector<string> tokens = MstUtils::split(str, delimiters, skipTrailingDelims);
   vector<MST::mstreal> vec(tokens.size());
@@ -3400,12 +3409,18 @@ bool MstUtils::stringsEqual(const string& A, const string& B, bool caseInsensiti
   return (strcmp(A.c_str(), B.c_str()) == 0);
 }
 
-string MstUtils::trim(string str, string delimiters) {
+string MstUtils::trim(const string& str, string delimiters) {
   int i = str.find_first_not_of(delimiters);
   if (i == string::npos) return "";
   int j = str.find_last_not_of(delimiters);
   return str.substr(i, j - i + 1);
 }
+vector<string> MstUtils::trim(const vector<string>& strings, string delimiters) {
+  vector<string> ret = strings;
+  for (int i = 0; i < strings.size(); i++) ret[i] = MstUtils::trim(strings[i], delimiters);
+  return ret;
+}
+
 
 void MstUtils::warn(string message, string from) {
   string head = from.empty() ? "Warning: " : "Warning in " + from + ": ";
