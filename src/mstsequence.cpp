@@ -411,7 +411,7 @@ vector<string> Sequence::toStringVector(bool triple) const {
 	return s;
 }
 
-string Sequence::getResidue(int i, bool triple) {
+string Sequence::getResidue(int i, bool triple) const {
   if (triple) return SeqTools::idxToTriple(seq[i]);
   return SeqTools::idxToSingle(seq[i]);
 }

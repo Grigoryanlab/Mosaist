@@ -22,7 +22,7 @@ class Sequence {
     void setName(const string& _name) { name = _name; }
     string toString(bool triple = false, const string& delim = "") const;
     vector<string> toStringVector(bool triple = false) const;
-    string getResidue(int i, bool triple = false);
+    string getResidue(int i, bool triple = false) const;
     res_t& operator[] (int i) { return seq[i]; }
     res_t operator[] (int i) const { return seq[i]; }
     int length() const { return seq.size(); }
