@@ -2,7 +2,7 @@
 
 dTERMen::dTERMen(const string& configFile) {
   init(configFile);
-  // buildBackgroundPotentials(); // ??????????????
+  buildBackgroundPotentials();
 }
 
 void dTERMen::init(const string& configFile) {
@@ -21,6 +21,31 @@ void dTERMen::init(const string& configFile) {
 
   if (fasstdbPath.empty()) MstUtils::error("FASST database not defined in configuration file " + configFile, "dTERMen::dTERMen(const string&)");
   F.readDatabase(fasstdbPath);
+}
+
+void dTERMen::buildBackgroundPotentials() {
+  vector<string> propNames = {"phi", "psi", "omega", "env"};
+  map<string, vector<mstreal> > propVals;
+  for (int i = 0; i < propNames.size(); i++) MstUtils::assert(F.isResiduePropertyDefined(propNames[i]), "property " + propNames[i] + " is not defined in the FASST database", "dTERMen::buildBackgroundPotentials()");
+
+  for (int ti = 0; ti < F.numTargets(); ti++) {
+    int N = F.getTarget(ti)->residueSize();
+    for (int ri = 0; ri < N; ri++) {
+      for (int i = 0; i < propNames.size(); i++) {
+        propVals[propNames[i]].push_back(F.getResidueProperty(ti, propNames[i], ri));
+      }
+    }
+    map<int, map<int, set<int> > > simsToTarget = F.getResidueRelationships(ti, "sim");
+    vector<mstreal> vals(N, 1); // multiplicity of each residue in the database
+    for (auto it = simsToTarget.begin(); it != simsToTarget.end(); ++it) {
+      map<int, set<int> >& simsInTarget = it->second;
+      for (auto jt = simsInTarget.begin(); jt != simsInTarget.end(); ++jt) {
+        int ri = jt->first;
+        vals[ri] += (jt->second).size();
+      }
+    }
+    propVals["mult"].insert(propVals["mult"].end(), vals.begin(), vals.end());
+  }
 }
 
 
@@ -125,14 +150,7 @@ mstreal EnergyTable::scoreSolution(const vector<int>& sol) {
 }
 
 mstreal EnergyTable::scoreSequence(const Sequence& seq) {
-  if (seq.size() != selfE.size()) MstUtils::error("sequence of wrong length for table", "EnergyTable::scoreSequence(const Sequence&)");
-  vector<int> seqInts(seq.size());
-  for (int i = 0; i < seq.size(); i++) {
-    string aa3 = seq.getResidue(i, true);
-    if (aaIndices[i].find(aa3) == aaIndices[i].end()) MstUtils::error("sequence is not from table alphabet", "EnergyTable::scoreSequence(const Sequence&)");
-    seqInts[i] = aaIndices[i][aa3];
-  }
-  return scoreSolution(seqInts);
+  return scoreSolution(sequenceToSolution(seq));
 }
 
 mstreal EnergyTable::scoreMutation(const vector<int>& sol, int mutSite, int mutAA) {
@@ -240,6 +258,17 @@ Sequence EnergyTable::solutionToSequence(const vector<int>& sol) {
     seq[i] = SeqTools::aaToIdx(getResidueString(i, sol[i]));
   }
   return seq;
+}
+
+vector<int> EnergyTable::sequenceToSolution(const Sequence& seq) {
+  if (seq.size() != selfE.size()) MstUtils::error("sequence of wrong length for table", "EnergyTable::sequenceToSolution(const Sequence&)");
+  vector<int> seqInts(seq.size());
+  for (int i = 0; i < seq.size(); i++) {
+    string aa3 = seq.getResidue(i, true);
+    if (aaIndices[i].find(aa3) == aaIndices[i].end()) MstUtils::error("sequence is not from table alphabet", "EnergyTable::sequenceToSolution(const Sequence&)");
+    seqInts[i] = aaIndices[i][aa3];
+  }
+  return seqInts;
 }
 
 string EnergyTable::getResidueString(int si, int ri) {

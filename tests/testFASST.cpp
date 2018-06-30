@@ -74,8 +74,8 @@ int main(int argc, char *argv[]) {
     cout << S.toString(*it) << endl;
     cout << *it << endl;
     if (op.isGiven("pp")) {
-      if (S.isPropertyDefined("phi")) cout << "\tphi: " << MstUtils::vecToString(S.getResidueProperties(*it, "phi")) << endl;
-      if (S.isPropertyDefined("psi")) cout << "\tpsi: " << MstUtils::vecToString(S.getResidueProperties(*it, "psi")) << endl;
+      if (S.isResiduePropertyDefined("phi")) cout << "\tphi: " << MstUtils::vecToString(S.getResidueProperties(*it, "phi")) << endl;
+      if (S.isResiduePropertyDefined("psi")) cout << "\tpsi: " << MstUtils::vecToString(S.getResidueProperties(*it, "psi")) << endl;
     }
     if (op.isGiven("strOut")) {
       // Structure match = S.getMatchStructure(*it, true, FASST::matchType::FULL);

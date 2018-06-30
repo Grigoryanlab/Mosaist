@@ -259,15 +259,16 @@ class FASST {
     void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
     // void addResidueRelationships(int ti, const string& propType, const map<int, map<int, map<int, set<int> > >& resRels);
     void addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj);
-    mstreal isResiduePropertyPopulated(const string& propType);
-    bool hasResidueProperties(int ti, const string& propType, int ri);
+    map<int, map<int, set<int> > > getResidueRelationships(int ti, const string& propType) { return resRelProperties[propType][ti]; }
+
+    bool isResiduePropertyDefined(const string& propType);
+    bool isResiduePropertyDefined(const string& propType, int ti);
+    bool hasResidueProperty(int ti, const string& propType, int ri);
     mstreal getResidueProperty(int ti, const string& propType, int ri);
     bool hasResiduePairProperties(int ti, const string& propType, int ri);
     mstreal isResiduePairPropertyPopulated(const string& propType);
     map<int, mstreal> getResiduePairProperties(int ti, const string& propType, int ri);
 
-    bool isPropertyDefined(const string& propType);
-    bool isPropertyDefined(const string& propType, int ti);
     int numTargets() const { return targetStructs.size(); }
     Structure getTargetCopy(int i) const { return *(targetStructs[i]); }
     Structure* getTarget(int i) { return targetStructs[i]; }

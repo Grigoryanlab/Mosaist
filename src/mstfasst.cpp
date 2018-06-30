@@ -359,18 +359,14 @@ void FASST::addResidueRelationship(int ti, const string& propType, int ri, int t
   resRelProperties[propType][ti][tj][ri].insert(rj);
 }
 
-mstreal FASST::isResiduePropertyPopulated(const string& propType) {
-  return (resProperties.find(propType) != resProperties.end());
-}
-
-bool FASST::hasResidueProperties(int ti, const string& propType, int ri) {
+bool FASST::hasResidueProperty(int ti, const string& propType, int ri) {
   return ((resProperties.find(propType) != resProperties.end()) &&
           (resProperties[propType].find(ti) != resProperties[propType].end()) &&
           (resProperties[propType][ti].size() > ri) && (ri >= 0));
 }
 
 mstreal FASST::getResidueProperty(int ti, const string& propType, int ri) {
-  return hasResidueProperties(ti, propType, ri) ? resProperties[propType][ti][ri] : 0.0;
+  return hasResidueProperty(ti, propType, ri) ? resProperties[propType][ti][ri] : 0.0;
 }
 
 bool FASST::hasResiduePairProperties(int ti, const string& propType, int ri) {
@@ -984,7 +980,7 @@ vector<vector<mstreal> > FASST::getResidueProperties(fasstSolutionSet& sols, con
     int idx = sol.getTargetIndex();
     MstUtils::assert((idx >= 0) && (idx < targets.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
     AtomPointerVector& target = targets[idx];
-    if (!isPropertyDefined(propType, idx)) {
+    if (!isResiduePropertyDefined(propType, idx)) {
       MstUtils::error("target with index " + MstUtils::toString(idx) + " does not have property type " + propType, "FASST::getResidueProperties(fasstSolutionSet&, const string&, matchType)");
     }
     vector<mstreal>& propVals = resProperties[propType][idx];
@@ -999,11 +995,11 @@ vector<vector<mstreal> > FASST::getResidueProperties(fasstSolutionSet& sols, con
   return props;
 }
 
-bool FASST::isPropertyDefined(const string& propType, int ti) {
+bool FASST::isResiduePropertyDefined(const string& propType, int ti) {
   return ((resProperties.find(propType) != resProperties.end()) || (resProperties[propType].find(ti) != resProperties[propType].end()));
 }
 
-bool FASST::isPropertyDefined(const string& propType) {
+bool FASST::isResiduePropertyDefined(const string& propType) {
   return (resProperties.find(propType) != resProperties.end());
 }
 

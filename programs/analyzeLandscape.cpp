@@ -65,6 +65,7 @@ int main(int argc, char** argv) {
   op.addOption("s", "step in energy units for building \"contour lines\" in the energy landscape. Default is 1.0.");
   op.addOption("n", "number of intervals of this size to track. Default is 40.");
   op.addOption("k", "number of sequences to sub-sample in each interval at the end to compute an embedding. Default is 1000.");
+  op.addOption("nat", "native sequence, single-letter.");
   op.setOptions(argc, argv);
 
   mstreal dE = op.getReal("s", 1.0);
@@ -76,8 +77,15 @@ int main(int argc, char** argv) {
   EnergyTable Etab(op.getString("e"));
 
   // first, run a long-ish MC to try to get the best energy
-  mstreal lowE = Etab.scoreSolution(Etab.mc(100, 1000000, 1.0, 0.01));
+  Sequence natSeq;
+  if (op.isGiven("nat")) {
+    natSeq = Sequence(op.getString("nat"));
+    cout << "native sequence energy is " << Etab.scoreSequence(natSeq) << endl;
+  }
+  vector<int> bestSol = Etab.mc(100, 1000000, 1.0, 0.01);
+  mstreal lowE = Etab.scoreSolution(bestSol);
   cout << "lowest energy found is " << lowE << endl;
+  cout << "lowest-energy sequence: " << (Etab.solutionToSequence(bestSol)).toString() << endl;
   Landscape L(lowE, dE, N);
 
   // then run a series of MCs to discover sequences at various energy levels
@@ -90,6 +98,10 @@ int main(int argc, char** argv) {
 
   // sub-sample to get a smaller number of sequences per energy region
   map<vector<int>, mstreal> subLand;
+  if (op.isGiven("nat")) {
+    // add the native
+    subLand[Etab.sequenceToSolution(natSeq)] = Etab.scoreSequence(natSeq);
+  }
   int n = op.getInt("k", 1000);
   for (int i = 0; i < L.getNumLevels(); i++) {
     map<vector<int>, mstreal> seqsMap = L.getSeqsInLevel(i);

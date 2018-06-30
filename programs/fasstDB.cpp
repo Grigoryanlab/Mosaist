@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
   op.addOption("m", "memory save flag (will store backbone only).");
   op.addOption("c", "clean up PDB files, so that only protein residues with enough of a backbone to support rotamer building survive.");
   op.addOption("s", "split final PDB files into chains by connectivity. Among other things, this avoids \"gaps\" within chains (where missing residues would go), which may simplify redundancy identification.");
-  op.addOption("pp", "store phi/psi properties in the database.");
+  op.addOption("pp", "store phi/psi/omega properties in the database.");
   op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
   op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees below the specified limit). If this is given, --rLib must also be given.");
   op.addOption("sim", "percent sequence identity cutoff. If specified, will store local-window sequence similarity between all pairs of positions in the database, using this cutoff.");
@@ -77,13 +77,15 @@ int main(int argc, char *argv[]) {
         Structure P = S.getTargetCopy(ti);
         if (op.isGiven("pp")) {
           vector<Residue*> residues = P.getResidues();
-          vector<mstreal> phi(residues.size()), psi(residues.size());
+          vector<mstreal> phi(residues.size()), psi(residues.size()), omega(residues.size());
           for (int ri = 0; ri < residues.size(); ri++) {
             phi[ri] = residues[ri]->getPhi(false);
             psi[ri] = residues[ri]->getPsi(false);
+            omega[ri] = residues[ri]->getOmega(false);
           }
           S.addResidueProperties(ti, "phi", phi);
           S.addResidueProperties(ti, "psi", psi);
+          S.addResidueProperties(ti, "omega", omega);
         }
         if (op.isGiven("env") || op.isGiven("cont")) {
           ConFind C(&RL, P); // both need the confind object
