@@ -913,7 +913,7 @@ class MstUtils {
     template <class T>
     static string toString(const T* obj);
     template <class T>
-    static vector<int> sortIndices(vector<T>& vec, bool descending = false);
+    static vector<int> sortIndices(const vector<T>& vec, bool descending = false);
     template <class T1, class T2>
     static vector<T1> keys(const map<T1, T2>& _map);
     template <class T>
@@ -939,7 +939,7 @@ class MstUtils {
     template <class T>
     static vector<T> setdiff(const vector<T>& A, const vector<T>& B);
     template <class T>
-    static vector<T> range(const T& from, const T& to);
+    static vector<T> range(const T& from, const T& to, const T& step = 1);
 
     // randomly shuffle the array in place using the Fisher-Yates shuffle
     template <class T>
@@ -966,7 +966,7 @@ string MstUtils::toString(const T* obj) {
 }
 
 template <class T>
-vector<int> MstUtils::sortIndices(vector<T>& vec, bool descending) {
+vector<int> MstUtils::sortIndices(const vector<T>& vec, bool descending) {
   vector<int> sortedIndices(vec.size(), 0);
   for (int i = 0; i < vec.size(); i++) sortedIndices[i] = i;
   if (descending) {
@@ -1128,9 +1128,9 @@ vector<T> MstUtils::setdiff(const vector<T>& A, const vector<T>& B) {
 }
 
 template <class T>
-vector<T> MstUtils::range(const T& from, const T& to) {
+vector<T> MstUtils::range(const T& from, const T& to, const T& step) {
   vector<T> r;
-  for (T v = from; v < to; v++) r.push_back(v);
+  for (T v = from; v < to; v += step) r.push_back(v);
   return r;
 }
 

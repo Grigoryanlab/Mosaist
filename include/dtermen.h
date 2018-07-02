@@ -6,12 +6,6 @@
 #include "mstsequence.h"
 using namespace MST;
 
-class TERMen {
-  public:
-    string type;
-    mstreal value;
-};
-
 class dTERMen {
   public:
     // Implementation approach:
@@ -31,14 +25,35 @@ class dTERMen {
     // 1. get location of FASST database and initialize a built-in FASST object
     // 2. from data within FASST database, build phi, psi, omega, and environment potential lookup tables
     dTERMen(const string& configFile);
-    void init(const string& configFile);
+    dTERMen();
+    void readConfigFile(const string& configFile);
 
-    void buildBackgroundPotentials(); // TODO
-    vector<TERMen> selfEnergy(Residue* R, vector<Residue*> C);
+    mstreal getkT() const { return kT; }
+    void setAminoAcidMap();
+    res_t aaToIndex(const string& aa) const;
+
+    void buildBackgroundPotentials();
+    void buildOneDimPotential(const vector<mstreal>& x, int binSpecType, const vector<mstreal>& binSpec, const vector<res_t>& aa, bool isAngle = false, const vector<mstreal>& priorPot = vector<mstreal>(), const vector<mstreal>& mult = vector<mstreal>());
+    void buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<res_t>& aa, bool isAngle = false, const vector<mstreal>& priorPot = vector<mstreal>(), const vector<mstreal>& mult = vector<mstreal>());
+
+    void readBackgroundPotentials(const string& file); // TODO
+    void writeBackgroundPotentials(const string& file); // TODO
+    mstreal selfEnergy(Residue* R, vector<Residue*> C);
 
   private:
     FASST F;
-    string fasstdbPath;
+    string fasstdbPath, backPotFile;
+    mstreal kT;
+    vector<mstreal> ppPot, omPot, envPot;
+    /* Stores any mapping between natural amino acid names and "standard" amino
+     * acids. The idea is that we may want to interpret SEC (selenocysteine) (for
+     * example) as CYS (cysteine) in gathering sequence statistics. But we also
+     * may want to keep these as separate counts. This map stores any such
+     * correspondances we may want to use, while aaMapType reflects which mapping
+     * type is being used. The latter is interpreted by setAminoAcidMap(). */
+    map<string, string> aaMap;
+    int aaMapType;
+
 };
 
 class EnergyTable {
@@ -79,10 +94,13 @@ class EnergyTable {
      *         (*add)(rec, seq, ener), where sol is the current solution and ener
      *         is its energy, such that variable rec can keep track of the MC
      *         trajectory in an entirely customizable way.
+     * Ne   -- number of pre-equilibration steps to do in each cycle before
+     *         beginning to record encountered solutions.
      * Returns the lowest-energy sequence encountered. NOTE: each cycle will
-     * involve an initial equilibration phase, during which ceil(0.2*Ni)
-     * iterations are performed, but the trajectory is not recorded.*/
-    vector<int> mc(int Nc, int Ni, mstreal kTi, mstreal kTf = -1, int annealType = 1, void* rec = NULL, void (*add)(void*, const vector<int>&, mstreal) = NULL);
+     * involve an initial equilibration phase, during which iterations are
+     * are performed, but the trajectory is not recorded. If the number of pre-
+     * equilibration steps is not specified, it is defaulted to ceil(0.2*Ni). */
+    vector<int> mc(int Nc, int Ni, mstreal kTi, mstreal kTf = -1, int annealType = 1, void* rec = NULL, void (*add)(void*, const vector<int>&, mstreal) = NULL, int Ne = -1);
 
     Sequence solutionToSequence(const vector<int>& sol);
     vector<int> sequenceToSolution(const Sequence& seq);

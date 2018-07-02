@@ -57,17 +57,18 @@ class SeqTools {
     // an instance to exist. This will be called automatically.
     static bool initConstants();
 
-    static string tripleToSingle(const string triple, string del = " ");
-    static string singleToTriple(const string single, string del = "");
-    static vector<res_t> seqToIdx(const string single, string del = "");
-    static res_t aaToIdx(const string aa);
+    static string tripleToSingle(const string& triple, const string& del = " ");
+    static string singleToTriple(const string& single, const string& del = "");
+    static vector<res_t> seqToIdx(const string& single, const string& del = "");
+    static res_t aaToIdx(const string& aa);
     static res_t unknownIdx() { return _unkIdx; }
+    static bool isUnknown(const string& aa) { return aaToIdx(aa) == _unkIdx; }
     static res_t gapIdx() { return _gapIdx; }
     static string idxToTriple(res_t idx);
     static string idxToSingle(res_t idx);
     static res_t maxIndex() { return idxToAA1.size() - 1; }
-    static string toTriple(const string aa);
-    static string toSingle(const string aa);
+    static string toTriple(const string& aa);
+    static string toSingle(const string& aa);
     static vector<Sequence> readFasta(const string& fastaFile);
     static void readFasta(const string& fastaFile, vector<Sequence>& seqs);
 

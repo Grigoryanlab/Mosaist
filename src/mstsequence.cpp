@@ -10,7 +10,7 @@ vector<string> SeqTools::idxToAA3, SeqTools::idxToAA1;
 res_t SeqTools::_unkIdx, SeqTools::_gapIdx;
 bool initialized = SeqTools::initConstants();
 
-res_t SeqTools::aaToIdx(const string aa) {
+res_t SeqTools::aaToIdx(const string& aa) {
   if (aa.length() == 1) {
     if (aa1ToIdx.find(aa) == aa1ToIdx.end()) SeqTools::unknownIdx();
     return aa1ToIdx[aa];
@@ -32,15 +32,15 @@ string SeqTools::idxToSingle(res_t idx) {
   return idxToAA1[idx];
 }
 
-string SeqTools::toTriple(const string aa) {
+string SeqTools::toTriple(const string& aa) {
   return idxToTriple(aaToIdx(aa));
 }
 
-string SeqTools::toSingle(const string aa) {
+string SeqTools::toSingle(const string& aa) {
   return SeqTools::idxToSingle(SeqTools::aaToIdx(aa));
 }
 
-string SeqTools::tripleToSingle(const string triple, string del) {
+string SeqTools::tripleToSingle(const string& triple, const string& del) {
   vector<string> seq = MstUtils::split(triple, del);
   string single;
   for (int i = 0; i < seq.size(); i++) {
@@ -49,7 +49,7 @@ string SeqTools::tripleToSingle(const string triple, string del) {
   return single;
 }
 
-string SeqTools::singleToTriple(const string single, string del) {
+string SeqTools::singleToTriple(const string& single, const string& del) {
   vector<string> seq = MstUtils::split(single, del);
   string triple;
   for (int i = 0; i < seq.size(); i++) {
@@ -59,7 +59,7 @@ string SeqTools::singleToTriple(const string single, string del) {
   return triple;
 }
 
-vector<res_t> SeqTools::seqToIdx(const string seqstr, string del) {
+vector<res_t> SeqTools::seqToIdx(const string& seqstr, const string& del) {
   vector<string> seq = MstUtils::split(seqstr, del);
   vector<res_t> indices(seq.size());
   for (int i = 0; i < seq.size(); i++) {

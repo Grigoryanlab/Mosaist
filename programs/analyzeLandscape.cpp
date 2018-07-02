@@ -13,24 +13,86 @@ using namespace std;
 using namespace MST;
 
 class Landscape {
+  typedef vector<int> sol_t;
   public:
-    Landscape(mstreal _lowE = -20, mstreal _dE = 1, int _N = 40) {
+    Landscape(mstreal _lowE = -20, mstreal _dE = 1, int _N = 40, int _maxPerBin = -1) {
       lowE = _lowE; dE = _dE; N = _N;
       seqsByEnergy.resize(N);
+      visitedByEnergy.resize(N);
+      maxPerBin = _maxPerBin;
+      numHits.resize(N, 0);
+      resetMeans();
     }
+    void resetMeans() { runN = 0; meanEner = 0; }
     int getNumLevels() const { return N; }
     int getNumSeqsInLevel(int i) const { return seqsByEnergy[i].size(); }
-    map<vector<int>, mstreal> getSeqsInLevel(int i) const { return seqsByEnergy[i]; }
-    vector<map<vector<int>, mstreal> > getSeqsInAllLevels() const { return seqsByEnergy; }
+    vector<pair<sol_t, mstreal> > getSeqsInLevel(int i) const { return seqsByEnergy[i]; }
+    vector<vector<pair<sol_t, mstreal> > > getSeqsInAllLevels() const { return seqsByEnergy; }
+    vector<int> getNumHits() const { return numHits; }
+    int getTotalNeed(int cap) const {
+      int need = 0;
+      for (int i = 0; i < numHits.size(); i++) need += MstUtils::max(0, cap - numHits[i]);
+      return need;
+    }
+    int getNumLevelsInNeed(int cap) const {
+      int need = 0;
+      for (int i = 0; i < numHits.size(); i++) {
+        if ((cap - numHits[i]) > 0) need++;
+      }
+      return need;
+    }
+    mstreal getMeanDefitiency(int cap) const { // on average, where are we missing hits?
+      if (MstUtils::max(numHits) < cap) {
+        mstreal num = 0, den = 0;
+        for (int i = 0; i < numHits.size(); i++) {
+          num += MstUtils::max(0, cap - numHits[i])*(lowE + (i+ 0.5)*dE);
+          den += MstUtils::max(0, cap - numHits[i]);
+        }
+        if (den == 0) return lowE + (N/2.0)*dE;
+        return num/den;
+      }
 
-    void addSequence(const vector<int>& seq, mstreal ener) {
-      int levelIdx = (ener - lowE)/dE;
+      /* if we are dealing with a multi-modal distribution of deficiencies, then
+       * switch to finding the first peak of deficiency. That way, we won't move
+       * on until we clear that peak. */
+      int maxNeed = 0; int maxNeedLevel = numHits.size() - 1;
+      for (int i = numHits.size() - 1; i >= 0; i--) {
+        int need = MstUtils::max(0, cap - numHits[i]);
+        if (need > maxNeed) { maxNeed = need; maxNeedLevel = i; }
+        if (maxNeed > 0) break;
+      }
+      return lowE + (maxNeedLevel + 0.5)*dE;
+    }
+    mstreal getMeanEnergy() const { return meanEner; }
+    int energyLevelIndex(mstreal ener) const { return (ener - lowE)/dE; }
+
+    void addSequence(const sol_t& seq, mstreal ener) {
+      meanEner = (meanEner*runN + ener)/(runN + 1); runN++;
+      int levelIdx = energyLevelIndex(ener);
       if (levelIdx < 0) {
         cerr << "\tin Landscape::addSequence -> lowest energy is " << lowE << ", but trying to add a sequence with energy " << ener << ". Will ignore..." << endl;
         return;
       }
       if (levelIdx >= N) return;
-      seqsByEnergy[levelIdx][seq] = ener;
+
+      set<sol_t >& visitedInLevel = visitedByEnergy[levelIdx];
+      if (visitedInLevel.find(seq) == visitedInLevel.end()) {
+        numHits[levelIdx]++;
+        vector<pair<sol_t, mstreal> >& seqsInLevel = seqsByEnergy[levelIdx];
+        if ((maxPerBin > 0) && (seqsInLevel.size() >= maxPerBin)) {
+          // erase a random sequence
+          int ri = MstUtils::randInt(seqsInLevel.size());
+          visitedInLevel.erase(seqsInLevel[ri].first);
+          // replace it with the new sequence
+          visitedInLevel.insert(seq);
+          seqsInLevel[ri].first = seq;
+          seqsInLevel[ri].second = ener;
+        } else {
+          // insert a new sequence
+          visitedInLevel.insert(seq);
+          seqsInLevel.push_back(pair<sol_t, mstreal>(seq, ener));
+        }
+      }
     }
 
     vector<int> numberOfSeqsByEnergy() const {
@@ -39,14 +101,23 @@ class Landscape {
       return nums;
     }
 
-    static void recordSolution(void* land, const vector<int>& sol, mstreal ener) {
+    static void recordSolution(void* land, const sol_t& sol, mstreal ener) {
       ((Landscape*) land)->addSequence(sol, ener);
     }
 
   private:
-    mstreal lowE, dE;
-    int N;
-    vector<map<vector<int>, mstreal > > seqsByEnergy;
+    mstreal lowE, dE;    // low energy limit and bin energy width
+    int N;               // number of bins
+    int maxPerBin;       // max number of counts to keep per bin. Will randomly
+                         // replace an existing solution in the bin if this limit
+                         // is reached and a new unique solution is added
+    vector<vector<pair<sol_t, mstreal> > > seqsByEnergy;
+    vector<set<sol_t> > visitedByEnergy;
+    vector<int> numHits; // total number of unique solutions that was added to the bin
+
+    // counters for computing mean properties (over all solutions, no matter whether unique)
+    int runN;            // running total number of solutions added
+    mstreal meanEner;    // the running mean energy
 };
 
 int distance(const vector<int>& seqi, const vector<int>& seqj) {
@@ -76,6 +147,13 @@ int main(int argc, char** argv) {
 
   EnergyTable Etab(op.getString("e"));
 
+// TODO:
+// 1. DONE specify the number of equilibration steps in MC
+// 2. DONE set the number of sub-samples needed in Landscape and randomly replace once goes above that in each bin
+// 3. DONE track the total number observed in each bin
+// 4. modulate temperature such that in each bin the total number of observations is say 100x number of sub-samples needed
+// 5. enable double mutations in MC
+
   // first, run a long-ish MC to try to get the best energy
   Sequence natSeq;
   if (op.isGiven("nat")) {
@@ -86,35 +164,46 @@ int main(int argc, char** argv) {
   mstreal lowE = Etab.scoreSolution(bestSol);
   cout << "lowest energy found is " << lowE << endl;
   cout << "lowest-energy sequence: " << (Etab.solutionToSequence(bestSol)).toString() << endl;
-  Landscape L(lowE, dE, N);
+  int Nsub = op.getInt("k", 1000); // number of sub-sampled sequences we are looking for in each energy bin
+  Landscape L(lowE, dE, N, Nsub);
 
   // then run a series of MCs to discover sequences at various energy levels
-  Etab.mc(10, 1000000, 1.0, 0.01, 1, &L, &Landscape::recordSolution);
-  cout << "number of seqs by energy:\n" << MstUtils::vecToString(L.numberOfSeqsByEnergy(), "\n") << endl;
-  // vector<vector<int> > seqs = MstUtils::keys(L.getSeqsInLevel(0));
-  // for (int i = 0; i < seqs.size(); i++) {
-  //   cout << Etab.solutionToSequence(seqs[i]).toString() << endl;
-  // }
+  int Ni = 1000000, Ne = 1000000;
+  mstreal kT = 1.0;
+  int cap = 1000*Nsub; // we'd like to stop when the number of hits in each energy
+                       // level reaches many times the number of sub-sampled sequences per bin
+  int stuck = 0;       // for how many cycles have we been stuck? (no improvement)
+  int prevNeed = L.getTotalNeed(cap); int need = prevNeed;
+  while ((MstUtils::min(L.getNumHits()) < cap) || (stuck > 100)) {
+    Etab.mc(1, Ni, kT, kT, 1, &L, &Landscape::recordSolution, Ne);
+    mstreal Ed = L.getMeanDefitiency(cap);
+    mstreal Es = L.getMeanEnergy();
+    int need = L.getTotalNeed(cap);
+    cout << "need = " << need << " over " << L.getNumLevelsInNeed(cap) << " level(s); deficiency at " << Ed << ", while sampling with kT = " << kT << " was at " << Es << endl;
+    if (Ed < Es) kT /= 1.02;
+    else kT *= 1.05;
+    kT = MstUtils::max(kT, 1E-2);
+    L.resetMeans();
 
-  // sub-sample to get a smaller number of sequences per energy region
-  map<vector<int>, mstreal> subLand;
-  if (op.isGiven("nat")) {
-    // add the native
-    subLand[Etab.sequenceToSolution(natSeq)] = Etab.scoreSequence(natSeq);
+    // are we improving?
+    if (need == prevNeed) stuck++;
+    else stuck = 0;
+    prevNeed = need;
+    if (stuck > 100) break;
   }
-  int n = op.getInt("k", 1000);
+
+  // get all sequences sampled
+  vector<vector<int> > allSeqs;
+  vector<mstreal> allEnergies;
   for (int i = 0; i < L.getNumLevels(); i++) {
-    map<vector<int>, mstreal> seqsMap = L.getSeqsInLevel(i);
-    vector<vector<int> > seqs = MstUtils::keys(seqsMap);
-    vector<int> inds = MstUtils::range(0, (int) seqsMap.size());
-    MstUtils::shuffle(inds);
-    for (int j = 0; j < MstUtils::min((int) seqs.size(), n); j++) {
-      subLand[seqs[j]] = seqsMap[seqs[j]];
+    vector<pair<vector<int>, mstreal> > seqsInLevel = L.getSeqsInLevel(i);
+    for (int j = 0; j < seqsInLevel.size(); j++) {
+      allSeqs.push_back(seqsInLevel[j].first);
+      allEnergies.push_back(seqsInLevel[j].second);
     }
   }
 
   // output distances for Matlab analysis
-  vector<vector<int> > allSeqs = MstUtils::keys(subLand);
   cout << "calculating all-by-all for a subset of " << allSeqs.size() << " sequences..." << endl;
   fstream of; MstUtils::openFile(of, op.getString("o") + "_mat.dat", ios::out);
   for (int i = 0; i < allSeqs.size(); i++) {
@@ -125,6 +214,6 @@ int main(int argc, char** argv) {
   }
   of.close();
   MstUtils::openFile(of, op.getString("o") + "_ener.dat", ios::out);
-  for (int i = 0; i < allSeqs.size(); i++) of << subLand[allSeqs[i]] << endl;
+  for (int i = 0; i < allEnergies.size(); i++) of << allEnergies[i] << endl;
   of.close();
 }
