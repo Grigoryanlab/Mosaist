@@ -244,6 +244,7 @@ class Residue {
     mstreal getPhi(bool strict = true);
     mstreal getPsi(bool strict = true);
     mstreal getOmega(bool strict = true);
+    static bool isBadDihedral(mstreal dihe) { return dihe == Residue::badDihedral; }
 
     int getResidueIndex() const;
     int getResidueIndexInChain() const;

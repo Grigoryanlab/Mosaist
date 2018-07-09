@@ -30,11 +30,60 @@ class dTERMen {
 
     mstreal getkT() const { return kT; }
     void setAminoAcidMap();
-    res_t aaToIndex(const string& aa) const;
+    void printAminoAcidMap();
+    int globalAlphabetSize() const { return globAlph.size(); }
 
+    bool isInGlobalAlphabet(const string& aa) const;
+    bool isInGlobalAlphabet(res_t aa) const;
+    // the following four functions convert to and from the "internal" amino-acid index
+    int aaToIndex(const string& aa) const;
+    int aaToIndex(res_t aa) const;
+    string indexToResName(int idx) const;
+    res_t indexToAA(int idx) const;
+
+    struct histType {
+      vector<vector<int> > bins;
+      vector<mstreal> binEdges;
+      vector<mstreal> binMasses;
+      vector<mstreal> weights;
+    };
+    struct oneDimPotType {
+      vector<mstreal> binEdges;
+      vector<vector<mstreal> > aaEnergies;
+    };
+    struct twoDimPotType {
+      vector<mstreal> xBinEdges;
+      vector<mstreal> yBinEdges;
+      vector<vector<mstreal> > aaEnergies;
+    };
     void buildBackgroundPotentials();
-    void buildOneDimPotential(const vector<mstreal>& x, int binSpecType, const vector<mstreal>& binSpec, const vector<res_t>& aa, bool isAngle = false, const vector<mstreal>& priorPot = vector<mstreal>(), const vector<mstreal>& mult = vector<mstreal>());
-    void buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<res_t>& aa, bool isAngle = false, const vector<mstreal>& priorPot = vector<mstreal>(), const vector<mstreal>& mult = vector<mstreal>());
+    oneDimPotType buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot = false);
+    oneDimPotType buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc); // without specifying a background potential
+    void printOneDimPotential(const oneDimPotType& P);
+    twoDimPotType buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<int>& AA, bool isAngle = false, const vector<mstreal>& priorPot = vector<mstreal>(), const vector<mstreal>& mult = vector<mstreal>());
+
+    /* Bins the data in the input vector X according to the binning type and
+     * parameters. Outputs a struct with members bins and binEdges. The k-th bin
+     * (k being between 0 and n-1, where n is the number of bins) is defined as
+     * the interval [binEdges[k]; binEdges[k+1]), except for the last bin, which
+     * does include the right limit: [binEdges[k]; binEdges[k+1]]. Upon returning,
+     * bins[k] will contain the list of indices of data points that map into the
+     * k-th bin. Supported binning types are (values for binSpecType):
+     * 1 -- uniform binning. binSpec is expected to be {min value, max value,
+     *      and desired number of bins}.
+     * 2 -- non-uniform binning with some minimal number of elements per bin and
+     *      a minimal bin width. binSpec is expected to be {min value, max value,
+     *      minimum number of points per bin, minimal bin width}.
+     * NOTE: in all of these, it is assumed that the data fully fit within the
+     * range [min; max]. If this is not the case, the behavior is unpredicted.
+     * Optional argument M (must be the same size as X, if specified) supplies
+     * the multiplicity of each point. This is used in non-uniform binning to
+     * count data "mass" (i.e., sum of inverses of multiplicities) rather the
+     * pure number of points. If isAngle is set to true, will treat input data
+     * as angles in degrees, mapping them to the interval [-pi; pi), and ignores
+     * any bad angle values (defined via Residue::isBadDihedral). Thus, the above
+     * bin definitions will do the right thing of counting +/- pi just once. */
+    histType binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M = vector<mstreal>(), bool isAngle = false);
 
     void readBackgroundPotentials(const string& file); // TODO
     void writeBackgroundPotentials(const string& file); // TODO
@@ -44,14 +93,37 @@ class dTERMen {
     FASST F;
     string fasstdbPath, backPotFile;
     mstreal kT;
-    vector<mstreal> ppPot, omPot, envPot;
-    /* Stores any mapping between natural amino acid names and "standard" amino
-     * acids. The idea is that we may want to interpret SEC (selenocysteine) (for
-     * example) as CYS (cysteine) in gathering sequence statistics. But we also
-     * may want to keep these as separate counts. This map stores any such
-     * correspondances we may want to use, while aaMapType reflects which mapping
-     * type is being used. The latter is interpreted by setAminoAcidMap(). */
-    map<string, string> aaMap;
+    oneDimPotType omPot, envPot;
+    twoDimPotType ppPot;
+
+    /* We may want to deal with different "universal" alphabets (separate from
+     * the design alphabet). We may want to interpret SEC (selenocysteine), for
+     * example, as CYS (cysteine) in gathering sequence statistics. Or, we may
+     * want to keep these as separate counts. The following several variables
+     * support this capability by providing a mapping between all the possible
+     * amino acid names and indices defined in SeqTools to a smaller sub-set,
+     * defined over a contiguous set of indices starting with 0. In all cases
+     * residues are identified by their res_t index, and the classification
+     * between residue strings and res_t is left to SeqTools. But, for simplicity,
+     * in the comments below, I will refer to residues by their string.
+     * aaMap -- stores any mapping between any non-standard amino acid names and
+     *          standard ones. E.g., aaMap["SEC"] may contain "CYS", saying that
+     *          SEC is interpreted as a CYS, or it may not exist, which says that
+     *          we want to explicitly track the counts of SEC, separate from CYS.
+     * globAlph -- a list of all counted amino acids, referred to by their most
+     *             "standard" name. E.g., if aaMap["SEC"] == "CYS", then globAlph
+     *             will contain "CYS" but not "SEC". Further, amino-acid names
+     *             in globAlph are stored according to their contiguous index
+     *             (internal ones for dTERMen, not the same as SeqTools indices).
+     * aaIdx    -- effectively the opposite of globAlph. For every counted amino
+     *             acid, aaIdx will contain its corresponding internal index. E.g.,
+     *             aaIdx["SEC"] and aaIdx["CYS"] would have the same index, if
+     *             if aaMap["SEC"] == "CYS".
+     * aaMapType -- specifies the type of mapping between non-standard amino
+     *              acids and their standard counterparts. Used by setAminoAcidMap() */
+    map<res_t, res_t> aaMap;
+    vector<res_t> globAlph;
+    map<res_t, int> aaIdx;
     int aaMapType;
 
 };
@@ -72,6 +144,7 @@ class EnergyTable {
     mstreal scoreMutation(const vector<int>& seq, int mutSite, int mutAA);
     mstreal scoreMutation(const vector<int>& seq, const vector<int>& mutSites, const vector<int>& mutAAs);
     mstreal meanEnergy() const;
+    mstreal energyStdEst(int n = 1000);
 
     // -- optimization routines
     vector<int> randomSolution() const;
@@ -99,7 +172,10 @@ class EnergyTable {
      * Returns the lowest-energy sequence encountered. NOTE: each cycle will
      * involve an initial equilibration phase, during which iterations are
      * are performed, but the trajectory is not recorded. If the number of pre-
-     * equilibration steps is not specified, it is defaulted to ceil(0.2*Ni). */
+     * equilibration steps is not specified, it is defaulted to ceil(0.2*Ni).
+     * TODO: add a two-residue mutation step (for pairs that have pair energies)
+     * and choose that move some fraction of the time. Could choose the pair to
+     * mutate based on the variance of interaction strengths at the pair. */
     vector<int> mc(int Nc, int Ni, mstreal kTi, mstreal kTf = -1, int annealType = 1, void* rec = NULL, void (*add)(void*, const vector<int>&, mstreal) = NULL, int Ne = -1);
 
     Sequence solutionToSequence(const vector<int>& sol);

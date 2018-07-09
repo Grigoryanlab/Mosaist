@@ -38,7 +38,7 @@ void dTERMen::readConfigFile(const string& configFile) {
 
 void dTERMen::setAminoAcidMap() {
   /* Perfectly corresponding to standard residues. */
-  map<string, string> standard = {{"HSD", "HIS"}, {"HSE", "HIS"}, {"HSC", "HIS"}, {"HSP", "HIS"}, {"MSE", "MET"}};
+  map<string, string> standard = {{"HSD", "HIS"}, {"HSE", "HIS"}, {"HSC", "HIS"}, {"HSP", "HIS"}};
 
   /* Almost perfectly corresponding to standard residues:
    * MSE -- selenomethyonine; SEC -- selenocysteine */
@@ -49,39 +49,52 @@ void dTERMen::setAminoAcidMap() {
    * PTR -- o-phosphotyrosine. */
   map<string, string> lessStandard = {{"HIP", "HIS"}, {"SEP", "SER"}, {"TPO", "THR"}, {"PTR", "TYR"}};
 
-  for (res_t aaIdx = 0; aaIdx <= SeqTools::maxIndex(); aaIdx++) {
-    string aa = SeqTools::idxToTriple(aaIdx);
-    switch (aaMapType) {
-      if (aaIdx > 19) { // natural amino acids go as they are, of course (no mapping needed)
+  for (res_t aai = 0; aai <= SeqTools::maxIndex(); aai++) {
+    string aa = SeqTools::idxToTriple(aai);
+    if (aai <= 19) {
+      aaMap[aai] = aai; // natural amino acids go as they are, of course
+    } else {
+      switch (aaMapType) {
         case 1:
           // map frequent modifications to their closest standard amino acids
+          // discard amino acids not explicitly mentioned in the above sets
           if (standard.find(aa) != standard.end()) {
-            aaMap[aa] = standard[aa];
+            aaMap[aai] = SeqTools::aaToIdx(standard[aa]);
           } else if (almostStandard.find(aa) != almostStandard.end()) {
-            aaMap[aa] = almostStandard[aa];
+            aaMap[aai] = SeqTools::aaToIdx(almostStandard[aa]);
           } else if (lessStandard.find(aa) != lessStandard.end()) {
-            aaMap[aa] = lessStandard[aa];
-          } else {
-            aaMap[aa] = aa;
+            aaMap[aai] = SeqTools::aaToIdx(lessStandard[aa]);
           }
           break;
         case 2:
           // map only the obvious modifications to their closest standard amino acid,
           // but mostly preserve the modifications (good for designing with modifications)
+          // discard amino acids not explicitly mentioned in the above sets
           if (standard.find(aa) != standard.end()) {
-            aaMap[aa] = standard[aa];
+            aaMap[aai] = SeqTools::aaToIdx(standard[aa]);
           } else if (almostStandard.find(aa) != almostStandard.end()) {
-            aaMap[aa] = almostStandard[aa];
-          } else {
-            aaMap[aa] = aa;
+            aaMap[aai] = SeqTools::aaToIdx(almostStandard[aa]);
+          } else if (lessStandard.find(aa) != lessStandard.end()) {
+            aaMap[aai] = aai;
           }
           break;
         case 3:
-          // do not do any chemical mapping, interpret everything explicitly
+          // do no chemical mapping, interpret everything explicitly, BUT still
+          // discard amino acids not explicitly mentioned in the above sets
           if (standard.find(aa) != standard.end()) {
-            aaMap[aa] = standard[aa];
+            aaMap[aai] = SeqTools::aaToIdx(standard[aa]);
+          } else if (almostStandard.find(aa) != almostStandard.end()) {
+            aaMap[aai] = aai;
+          } else if (lessStandard.find(aa) != lessStandard.end()) {
+            aaMap[aai] = aai;
+          }
+          break;
+        case 4:
+          // do no chemical mapping, interpret everything explicitly
+          if (standard.find(aa) != standard.end()) {
+            aaMap[aai] = SeqTools::aaToIdx(standard[aa]);
           } else {
-            aaMap[aa] = aa;
+            aaMap[aai] = aai;
           }
           break;
         default:
@@ -89,19 +102,58 @@ void dTERMen::setAminoAcidMap() {
       }
     }
   }
+  for (res_t aai = 0; aai <= SeqTools::maxIndex(); aai++) {
+    if (aaMap.find(aai) == aaMap.end()) continue; // not an allowed amino acid
+    int i = aaMap[aai];
+    if (aaIdx.find(i) != aaIdx.end()) { aaIdx[i] = aaIdx[i]; }
+    else { aaIdx[i] = aaIdx.size(); }
+  }
+  globAlph.resize(aaIdx.size());
+  for (auto it = aaIdx.begin(); it != aaIdx.end(); ++it) {
+    globAlph[it->second] = it->first;
+  }
 }
 
-res_t dTERMen::aaToIndex(const string& aa) const {
-  if (aaMap.find(aa) != aaMap.end()) return SeqTools::aaToIdx(aaMap.at(aa)); // using at() instead of operator[] enables const
-  return SeqTools::aaToIdx(aa);
+void dTERMen::printAminoAcidMap() {
+  cout << "---- amino-acid map ----" << endl;
+  cout << "universal alphabet has " << globAlph.size() << " amino acids:\n\t";
+  for (int i = 0; i < globAlph.size(); i++) cout << SeqTools::idxToTriple(globAlph[i]) << " (" << aaIdx[globAlph[i]] << "); ";
+  cout << endl << "allowed mappings are:" << endl;
+  for (auto it = aaMap.begin(); it != aaMap.end(); ++it) {
+    cout << SeqTools::idxToTriple(it->first) << " -> " << SeqTools::idxToTriple(it->second) << endl;
+  }
 }
 
+bool dTERMen::isInGlobalAlphabet(const string& aa) const {
+  return (aaToIndex(aa) >= 0);
+}
+
+bool dTERMen::isInGlobalAlphabet(res_t aa) const {
+  return (aaToIndex(aa) >= 0);
+}
+
+int dTERMen::aaToIndex(const string& aa) const {
+  return aaToIndex(SeqTools::aaToIdx(aa));
+}
+
+int dTERMen::aaToIndex(res_t aa) const {
+  if (aaIdx.find(aa) != aaIdx.end()) return aaIdx.at(aa);
+  return -1;
+}
+
+string dTERMen::indexToResName(int idx) const {
+  return SeqTools::idxToTriple(globAlph[idx]);
+}
+
+res_t dTERMen::indexToAA(int idx) const {
+  return globAlph[idx];
+}
 
 void dTERMen::buildBackgroundPotentials() {
   // extract all necessary residue properties
   vector<string> propNames = {"phi", "psi", "omega", "env"};
   map<string, vector<mstreal> > propVals;
-  vector<res_t> aa;
+  vector<int> aa;
   for (int i = 0; i < propNames.size(); i++) MstUtils::assert(F.isResiduePropertyDefined(propNames[i]), "property " + propNames[i] + " is not defined in the FASST database", "dTERMen::buildBackgroundPotentials()");
 
   for (int ti = 0; ti < F.numTargets(); ti++) {
@@ -122,7 +174,7 @@ void dTERMen::buildBackgroundPotentials() {
     // store all properties
     for (int ri = 0; ri < N; ri++) {
       string aaName = (S->getResidue(ri)).getName();
-      if (SeqTools::isUnknown(aaName)) continue;
+      if (!isInGlobalAlphabet(aaName)) continue;
       aa.push_back(aaToIndex(aaName));
       for (int i = 0; i < propNames.size(); i++) {
         propVals[propNames[i]].push_back(F.getResidueProperty(ti, propNames[i], ri));
@@ -131,61 +183,98 @@ void dTERMen::buildBackgroundPotentials() {
     }
   }
 
-  vector<mstreal> back(aa.size(), 0); // existing background potential
-  buildTwoDimPotential(propVals["phi"], propVals["psi"], {-180, 180, 72}, {-180, 180, 72}, aa, true, back, propVals["mult"]);
-  buildOneDimPotential(propVals["omega"], 2, {-180, 180, 1000, 1}, aa, true, back, propVals["mult"]);
-  buildOneDimPotential(propVals["env"], 1, {0, 1, 75}, aa, false, back, propVals["mult"]);
+  vector<vector<mstreal> > back(aa.size(), vector<mstreal> (globalAlphabetSize(), 0.0)); // existing background potential
+  // TODO: implement potential lookup
+  // TODO: implement 2D potential building!
+  // ppPot = buildTwoDimPotential(propVals["phi"], propVals["psi"], {-180, 180, 72}, {-180, 180, 72}, aa, true, back);
+  omPot = buildOneDimPotential(binData(propVals["omega"], 2, {-180, 180, 1000, 1}, propVals["mult"], true), aa, 1.0, back, true);
+cout << "Omega potential:\n"; printOneDimPotential(omPot);
+  envPot = buildOneDimPotential(binData(propVals["env"], 1, {0, 1, 75}, propVals["mult"], false), aa, 1.0, back, true);
+cout << "Env potential:\n"; printOneDimPotential(envPot);
 }
 
-void dTERMen::buildOneDimPotential(const vector<mstreal>& x, int binSpecType, const vector<mstreal>& binSpec, const vector<res_t>& aa, bool isAngle, const vector<mstreal>& priorPot, const vector<mstreal>& mult) {
-  /* bin k (k \in [0; n-1], where n is the number of bins) is:
-   * [binEdges[k]; binEdges[k+1]). Except for the last bin, which does include
-   * the right limit: [binEdges[k]; binEdges[k+1]]. */
-  vector<mstreal> binEdges;
+dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M, bool isAngle) {
+  // transform data if using dihedral angles
+  vector<mstreal> X1, M1;
+  vector<int> origIndices = MstUtils::range(0, (int) X.size());
+  if (isAngle) {
+    vector<int> exclude;
+    for (int i = 0; i < X.size(); i++) {
+      if (Residue::isBadDihedral(X[i])) {
+        exclude.push_back(i);
+        continue;
+      }
+      mstreal an = CartesianGeometry::angleDiff(X[i], 0);
+      // represent +/- pi as -pi; then, thhe bin boundary definition always works
+      if (an >= 180) an = -180;
+      X1.push_back(an);
+      M1.push_back(M.empty() ? 1.0 : M[i]);
+    }
+    origIndices = MstUtils::setdiff(origIndices, exclude);
+  } else if (M.empty()) {
+    for (int i = 0; i < X.size(); i++) M1.push_back(1.0);
+  }
+  const vector<mstreal>& x = (isAngle ? X1 : X);
+  const vector<mstreal>& m = ((isAngle || M.empty()) ? M1 : M);
+  vector<int> sortedInds = MstUtils::sortIndices(x);
+
+  histType H;
   mstreal minVal, maxVal;
-  int nb;
   if (binSpecType == 1) {
     /* Uniform binning */
-    if (binSpec.size() != 3) MstUtils::error("expected three values for bin specification type 1", "dTERMen::buildOneDimPotential");
+    if (binSpec.size() != 3) MstUtils::error("expected three values for bin specification type 1", "dTERMen::binData");
     mstreal minVal = binSpec[0];
     mstreal maxVal = binSpec[1];
     int nb = (int) binSpec[2];
-    if ((nb <= 0) || (minVal >= maxVal)) MstUtils::error("inconsistent bin specification, type 1", "dTERMen::buildOneDimPotential");
+    if ((nb <= 0) || (minVal >= maxVal)) MstUtils::error("inconsistent bin specification, type 1", "dTERMen::binData");
     mstreal bw = (maxVal - minVal)/nb;
-    binEdges.resize(nb + 1, 0);
-    for (int i = 0; i < nb; i++) binEdges[i] = minVal + bw*i;
-    binEdges[nb] = maxVal;
-
+    H.binEdges.resize(nb + 1, 0);
+    for (int i = 0; i < nb; i++) H.binEdges[i] = minVal + bw*i;
+    H.binEdges[nb] = maxVal;
   } else if (binSpecType == 2) {
-// TODO: account for multiplicities when counting even bins!!! To do so, normalize
-// counts so that the total stays the same, but relative counts are inversly proportional
-// to multiplicities, if they are given. If not, all counts are 1.0.
     /* Non-uniform binning with some minimal number of elements per bin and a
      * minimal bin width. */
-    if (binSpec.size() != 4) MstUtils::error("expected four values for bin specification type 2", "dTERMen::buildOneDimPotential");
+    if (binSpec.size() != 4) MstUtils::error("expected four values for bin specification type 2", "dTERMen::binData");
     mstreal minVal = binSpec[0];
     mstreal maxVal = binSpec[1];
     int minNumPerBin = (int) binSpec[2];
     mstreal minBinWidth = binSpec[3];
-    if ((minNumPerBin <= 0) || (minVal >= maxVal) || (minBinWidth < 0)) MstUtils::error("inconsistent bin specification, type 2", "dTERMen::buildOneDimPotential");
-    if (minNumPerBin > x.size()) MstUtils::error("requested min number of elements per bin exceeds the total number of elements", "dTERMen::buildOneDimPotential");
-    if (minBinWidth > maxVal - minVal) MstUtils::error("requested min bin width exceeds specified range", "dTERMen::buildOneDimPotential");
-    vector<int> sortedInds = MstUtils::sortIndices(x);
+    if ((minNumPerBin <= 0) || (minVal >= maxVal) || (minBinWidth < 0)) MstUtils::error("inconsistent bin specification, type 2", "dTERMen::binData");
+    if (minNumPerBin > x.size()) MstUtils::error("requested min number of elements per bin exceeds the total number of elements", "dTERMen::binData");
+    if (minBinWidth > maxVal - minVal) MstUtils::error("requested min bin width exceeds specified range", "dTERMen::binData");
+    /* To account for multiplicities when counting bin sizes, create a vector of
+     * cumulative data "mass", whereby massI[k] stores the mass for the first k
+     * smallest elements (i.e., for indices in range sortedInds[0], sortedInds[1],
+     * ..., sortedInds[k]). massE[k] is the same, but it excludes the mass of
+     * the final point sortedInds[k] (having both arrays simplifies some counting
+     * later). The mass of each data point is 1 over its multiplicity (if it is
+     * defined). Thus, if multiplicity is 1 (i.e., the point is "unique"), then
+     * its mass is 1. But if multiplicity is 2, meaning there are two roughly
+     * equivalent positions in the dataset, then each will together count as 1
+     * (each counting as 1/2). If multiplicities are not given, then all counts
+     * are set to 1, which means data counts are interpreted explicitly. */
+    vector<mstreal> massI(x.size()), massE(x.size());
+    if (m.size() != x.size()) MstUtils::error("number of points and multiplicities specified is not consistent!", "dTERMen::binData");
+    massI[0] = (1/m[sortedInds[0]]); massE[0] = 0;
+    for (int i = 1; i < m.size(); i++) {
+      massI[i] = massI[i-1] + 1/m[sortedInds[i]];
+      massE[i] = massE[i-1] + 1/m[sortedInds[i-1]];
+    }
+
     vector<mstreal> binEdgesFromLeft, binEdgesFromRight;
     binEdgesFromLeft.push_back(minVal);
-    binEdgesFromRight.push_back(maxVal); //
+    binEdgesFromRight.push_back(maxVal);
     // leftInd and rightInd will always store the first index (from left or right,
     // respectively) that maps into the next bin. Thus, by setting rightIndex to
     // the last index, the right edge of the last bin will be inclusive
     int leftInd = 0, rightInd = x.size() - 1;
     while (true) {
-      int numRemaining = rightInd - leftInd + 1;
+      int numRemaining = massI[rightInd] - massE[leftInd];
       mstreal remWidth = x[sortedInds[rightInd]] - x[sortedInds[leftInd]];
-cout << "numRemaining = " << numRemaining << ", leftInd = " << leftInd << ", rightInd = " << rightInd << endl;
       if ((numRemaining >= 2*minNumPerBin) && (remWidth >= 2*minBinWidth)) { // if enough points left for at least two bins
         // add a bin on the left
-        for (int k = leftInd + minNumPerBin - 1; k < sortedInds.size(); k++) {
-          if (x[sortedInds[k]] - binEdgesFromLeft.back() > minBinWidth) {
+        for (int k = leftInd; k < sortedInds.size(); k++) {
+          if ((massE[k] - massI[leftInd] >= minNumPerBin) && (x[sortedInds[k]] - binEdgesFromLeft.back() > minBinWidth)) {
             binEdgesFromLeft.push_back(x[sortedInds[k]]);
             leftInd = k; // the left-most element in the next bin (left-to-right)
             break;
@@ -193,40 +282,156 @@ cout << "numRemaining = " << numRemaining << ", leftInd = " << leftInd << ", rig
         }
 
         // add a bin on the right
-        for (int k = rightInd - minNumPerBin + 1; k >= 0; k--) {
-          if (binEdgesFromRight.back() - x[sortedInds[k]] > minBinWidth) {
-            binEdgesFromRight.push_back(x[sortedInds[k + 1]]);
-            rightInd = k; // the right-most element in the next bin (right-to-left)
+        for (int k = rightInd; k >= 0; k--) {
+          if ((massI[rightInd] - massI[k] >= minNumPerBin) && (binEdgesFromRight.back() - x[sortedInds[k]] > minBinWidth)) {
+            binEdgesFromRight.push_back(x[sortedInds[k]]);
+            rightInd = k - 1; // the right-most element in the next bin (right-to-left)
             break;
           }
         }
 
-        if ((numRemaining < 3*minNumPerBin) || (remWidth < 3*minBinWidth)) { // if there are enough points left for no more than two bins
-          // split the remaining points in half between the two bins we just added
-          int k = (leftInd + rightInd)/2;
-cout << "splicing: " << endl << MstUtils::vecToString(binEdgesFromLeft) << endl << MstUtils::vecToString(binEdgesFromRight) << endl << "with k = " << x[sortedInds[k]] << endl;
-          binEdges = binEdgesFromLeft;
-          binEdges.back() = x[sortedInds[k]];
-          binEdges.insert(binEdges.end(), binEdgesFromRight.rbegin() + 1, binEdgesFromRight.rend());
-cout << "gives" << endl << MstUtils::vecToString(binEdges) << endl;
+        // if there are enough points left for no more than two bins, just split
+        // the rest between the two bins
+        if ((numRemaining < 3*minNumPerBin) || (remWidth < 3*minBinWidth)) {
+          if (rightInd < leftInd) {
+            /* Even though in this iteration there were initially enough points to fit three bins
+            * (by width and number), it is possible that to add a left and right bin (respecting
+            * minimal width and number of points) can move the terminal indices past each other.
+            * Example, sorted values between leftInd and rightInd are: [0.5, 0.51, 0.52, 0.53,
+            * 0.54, 0.55, 0.6, 0.7] minimum bin width is 0.1, and minimum number of points per bin
+            * is 3. Then, to satisfy all conditions going from the left we need to do [0.5 - 0.6),
+            * but to satisfy all conditions going from the right would require [0.54 - 0.7). The
+            * two segments overlap. If this happens, we will make just one bin between leftInd and
+            * rightInd, since it is not possible to make two while respecting all rules. */
+            binEdgesFromLeft.pop_back();
+            binEdgesFromRight.pop_back();
+            H.binEdges = binEdgesFromLeft;
+            H.binEdges.insert(H.binEdges.end(), binEdgesFromRight.rbegin(), binEdgesFromRight.rend());
+          } else {
+            int k = (leftInd + rightInd)/2;
+            H.binEdges = binEdgesFromLeft;
+            H.binEdges.back() = x[sortedInds[k]];
+            H.binEdges.insert(H.binEdges.end(), binEdgesFromRight.rbegin() + 1, binEdgesFromRight.rend());
+          }
           break;
         }
       } else if ((numRemaining >= minNumPerBin) && (remWidth >= minBinWidth)) { // if only enough points left for one bin
         // add the last bin to bridge the gap
-        binEdges = binEdgesFromLeft;
-        binEdges.insert(binEdges.end(), binEdgesFromRight.rbegin(), binEdgesFromRight.rend());
+        H.binEdges = binEdgesFromLeft;
+        H.binEdges.insert(H.binEdges.end(), binEdgesFromRight.rbegin(), binEdgesFromRight.rend());
         break;
       } else {
-        MstUtils::error("this should not have happened! Ran out of points/width for the middle bin.", "dTERMen::buildOneDimPotential");
+        MstUtils::error("this should not have happened! Ran out of points/width for the middle bin.", "dTERMen::binData");
       }
     }
   }
 
-cout << "binning of type " << binSpecType << " with parameters: [" << MstUtils::vecToString(binSpec) << "] produces edges: " << endl << MstUtils::vecToString(binEdges) << endl;
+  // classify points into bins
+  H.bins.resize(H.binEdges.size() - 1);
+  H.binMasses.resize(H.binEdges.size() - 1);
+  H.weights.resize(X.size(), 0.0);
+  int bi = 0; mstreal binMass = 0;
+  for (int i = 0; i < sortedInds.size(); i++) {
+    // the last bin includes the right-most end of the range
+    if ((x[sortedInds[i]] >= H.binEdges[bi+1]) && ((bi < H.bins.size() - 1) || (x[sortedInds[i]] > H.binEdges[bi+1]))) {
+      H.binMasses[bi] = binMass;
+      binMass = 0;
+      bi++;
+    }
+    H.bins[bi].push_back(origIndices[sortedInds[i]]);
+    binMass += 1/m[sortedInds[i]];
+    H.weights[origIndices[sortedInds[i]]] = 1/m[sortedInds[i]];
+  }
+
+  return H;
 }
 
-void dTERMen::buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<res_t>& aa, bool isAngle, const vector<mstreal>& priorPot, const vector<mstreal>& mult) {
+dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot) {
+  oneDimPotType pot;
+  pot.binEdges = H.binEdges;
+  int nb = pot.binEdges.size() - 1;
+  int naa = globalAlphabetSize();
+  pot.aaEnergies.resize(nb, vector<mstreal> (naa, 0.0));
 
+  // overall amino-acid frequencies
+  CartesianPoint fAA(naa);
+  for (int bi = 0; bi < nb; bi++) { // iterating over bin indices ignores any points excluded from binning
+    const vector<int>& binInds = H.bins[bi];
+    for (int i = 0; i < binInds.size(); i++) {
+      int k = binInds[i];
+      fAA[AA[k]] += H.weights[k];
+    }
+  }
+  fAA /= fAA.sum();
+
+  // add up the weighted counts of each amino acid in each bin
+  for (int bi = 0; bi < nb; bi++) {
+    vector<mstreal> expCounts = vector<mstreal> (naa, 0.0); // expectation of each amino acid in this bin
+    const vector<int>& binInds = H.bins[bi];
+    for (int i = 0; i < binInds.size(); i++) {
+      int k = binInds[i];
+      mstreal w = H.weights[k]; // position weight
+      int aa = AA[k];
+      pot.aaEnergies[bi][aa] += w;
+
+      // compute the expectation of each amino acid in this position
+      if (!backPot.empty()) {
+        mstreal Z = 0; // partition function for this position (over all amino acids)
+        for (int aai = 0; aai < naa; aai++) Z += exp(-backPot[k][aai]);
+        for (int aai = 0; aai < naa; aai++) expCounts[aai] += w*exp(-backPot[k][aai])/Z;
+      } else {
+        // if no prior potential given, assume uniform prior
+        for (int aai = 0; aai < naa; aai++) expCounts[aai] += w/naa;
+      }
+    }
+
+    // compute the potential using frequency-proportional pseudocounts
+    for (int aa = 0; aa < naa; aa++) {
+      pot.aaEnergies[bi][aa] = -log((pot.aaEnergies[bi][aa] + pc*fAA[aa]*naa)/(expCounts[aa] + pc*fAA[aa]*naa));
+    }
+  }
+
+  // update the prior potential
+  if (!backPot.empty() && updateBackPot) {
+    for (int bi = 0; bi < nb; bi++) {
+      const vector<int>& binInds = H.bins[bi];
+      for (int i = 0; i < binInds.size(); i++) {
+        int k = binInds[i];
+        for (int aai = 0; aai < naa; aai++) {
+          backPot[k][aai] += pot.aaEnergies[bi][aai];
+        }
+      }
+    }
+  }
+
+  return pot;
+}
+
+dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc) {
+  vector<vector<mstreal> > backPot;
+  return buildOneDimPotential(H, AA, pc, backPot, false);
+}
+
+void dTERMen::printOneDimPotential(const oneDimPotType& P) {
+  int nb = P.aaEnergies.size();
+  if (nb == 0) return;
+  int naa = P.aaEnergies[0].size();
+  for (int aa = 0; aa < naa; aa++) {
+    cout << indexToResName(aa) << " ";
+  }
+  cout << endl;
+  for (int bi = 0; bi < nb; bi++) {
+    printf("%f %f", P.binEdges[bi], P.binEdges[bi+1]);
+    for (int aa = 0; aa < naa; aa++) {
+      printf(" %5.3f", P.aaEnergies[bi][aa]);
+    }
+    printf("\n");
+  }
+}
+
+dTERMen::twoDimPotType dTERMen::buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<int>& aa, bool isAngle, const vector<mstreal>& priorPot, const vector<mstreal>& mult) {
+  twoDimPotType pot;
+  return pot;
 }
 
 void dTERMen::readBackgroundPotentials(const string& file) {
@@ -308,6 +513,13 @@ mstreal EnergyTable::meanEnergy() const {
     }
   }
   return mE;
+}
+
+mstreal EnergyTable::energyStdEst(int n) {
+  if (n <= 0) MstUtils::error("sample size must be positive", "EnergyTable::energyStdEst");
+  CartesianPoint energies(n, 0);
+  for (int i = 0; i < n; i++) energies[i] = scoreSolution(randomSolution());
+  return energies.stdev();
 }
 
 mstreal EnergyTable::selfEnergy(int s, int aa) {

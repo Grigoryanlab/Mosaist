@@ -147,13 +147,6 @@ int main(int argc, char** argv) {
 
   EnergyTable Etab(op.getString("e"));
 
-// TODO:
-// 1. DONE specify the number of equilibration steps in MC
-// 2. DONE set the number of sub-samples needed in Landscape and randomly replace once goes above that in each bin
-// 3. DONE track the total number observed in each bin
-// 4. modulate temperature such that in each bin the total number of observations is say 100x number of sub-samples needed
-// 5. enable double mutations in MC
-
   // first, run a long-ish MC to try to get the best energy
   Sequence natSeq;
   if (op.isGiven("nat")) {
@@ -164,6 +157,8 @@ int main(int argc, char** argv) {
   mstreal lowE = Etab.scoreSolution(bestSol);
   cout << "lowest energy found is " << lowE << endl;
   cout << "lowest-energy sequence: " << (Etab.solutionToSequence(bestSol)).toString() << endl;
+  cout << "mean energy is " << Etab.meanEnergy() << endl;
+  cout << "estimated energy standard deviation is " << Etab.energyStdEst() << endl;
   int Nsub = op.getInt("k", 1000); // number of sub-sampled sequences we are looking for in each energy bin
   Landscape L(lowE, dE, N, Nsub);
 
@@ -203,6 +198,12 @@ int main(int argc, char** argv) {
     }
   }
 
+  // add the native
+  if (op.isGiven("nat")) {
+    allSeqs.insert(allSeqs.begin(), Etab.sequenceToSolution(natSeq));
+    allEnergies.insert(allEnergies.begin(), Etab.scoreSequence(natSeq));
+  }
+
   // output distances for Matlab analysis
   cout << "calculating all-by-all for a subset of " << allSeqs.size() << " sequences..." << endl;
   fstream of; MstUtils::openFile(of, op.getString("o") + "_mat.dat", ios::out);
@@ -213,7 +214,14 @@ int main(int argc, char** argv) {
     of << endl;
   }
   of.close();
+
+  // output energies
   MstUtils::openFile(of, op.getString("o") + "_ener.dat", ios::out);
   for (int i = 0; i < allEnergies.size(); i++) of << allEnergies[i] << endl;
+  of.close();
+
+  // output sequences
+  MstUtils::openFile(of, op.getString("o") + "_seq.dat", ios::out);
+  for (int i = 0; i < allSeqs.size(); i++) of << (Etab.solutionToSequence(allSeqs[i])).toString() << endl;
   of.close();
 }

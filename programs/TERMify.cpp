@@ -490,7 +490,7 @@ int main(int argc, char** argv) {
   op.addOption("o", "output base name.", true);
   op.addOption("r", "pick a random match for each TERM in each iteration, rather than considering all matches simultaneously.");
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
-  op.addOption("cyc", "number of cycles--i.e., number of times freshh TERMs are searched for (10 by default).");
+  op.addOption("cyc", "number of cycles--i.e., number of times fresh TERMs are searched for (10 by default).");
   op.addOption("iter", "number of iterations per cycle (1 by default). At the start of each iteration, the overall structure is reinitialized to the current structure");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
   op.addOption("fs", "a selection string for residues to fix.");

@@ -388,7 +388,7 @@ int RotamerLibrary::getBackboneBin(string aa, mstreal phi, mstreal psi, bool ass
   if (binPhiCenters.find(aa) == binPhiCenters.end()) MstUtils::error("no PHI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
   if (binPsiCenters.find(aa) == binPsiCenters.end()) MstUtils::error("no PSI bin for amino acid '" + aa + "'", "RotamerLibrary::getBackboneBin");
 
-  if ((phi == Residue::badDihedral) || (psi == Residue::badDihedral)) {
+  if (Residue::isBadDihedral(phi) || Residue::isBadDihedral(psi)) {
     if (assumeDefault) {
       // if no valid phi/psi pair provided, find the most frequent bin for the given amino acid
       return defaultBin[aa];
