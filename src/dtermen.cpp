@@ -176,6 +176,8 @@ void dTERMen::buildBackgroundPotentials() {
       string aaName = (S->getResidue(ri)).getName();
       if (!isInGlobalAlphabet(aaName)) continue;
       aa.push_back(aaToIndex(aaName));
+// TODO: check to make sure dihedral values are not BAD. If so, skip the residue!
+// TODO: given the above, do we still need the complication of ignoring data in binData? My guess no.
       for (int i = 0; i < propNames.size(); i++) {
         propVals[propNames[i]].push_back(F.getResidueProperty(ti, propNames[i], ri));
       }

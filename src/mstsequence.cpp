@@ -12,10 +12,10 @@ bool initialized = SeqTools::initConstants();
 
 res_t SeqTools::aaToIdx(const string& aa) {
   if (aa.length() == 1) {
-    if (aa1ToIdx.find(aa) == aa1ToIdx.end()) SeqTools::unknownIdx();
+    if (aa1ToIdx.find(aa) == aa1ToIdx.end()) return SeqTools::unknownIdx();
     return aa1ToIdx[aa];
   } else if (aa.length() == 3) {
-    if (aa3ToIdx.find(aa) == aa3ToIdx.end()) SeqTools::unknownIdx();
+    if (aa3ToIdx.find(aa) == aa3ToIdx.end()) return SeqTools::unknownIdx();
     return aa3ToIdx[aa];
   }
   MstUtils::error("uknown amino acid '" + aa + "'", "SeqTools::aaToIdx");
