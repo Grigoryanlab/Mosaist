@@ -63,7 +63,7 @@ class fusionParams {
     void setRepFC(mstreal _k) { krep = _k; }
     void setCompFC(mstreal _k) { kcomp = _k; }
     void setCompRad(mstreal _r) { Rcomp = _r; }
-    void setStartingStructure(const Structure& _S) { startStruct = _S; }
+    void setStartingStructure(const Structure& _S);
     void setNormalizeRMSD(bool flag) { normRMSD = flag; }
     void setFragRedundancyWeighting(bool flag) { fragRedWeighting = flag; }
     void setMinimizerType(minimizerType _type) { minMethod = _type; }
@@ -120,6 +120,7 @@ struct fusionScores {
  * and so on. */
 class fusionTopology {
   friend class fusionEvaluator;
+  friend class fusionParams;
 
   public:
     /* Initializes an empty topology of a given length */

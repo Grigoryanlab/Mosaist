@@ -3430,7 +3430,27 @@ void MstUtils::warn(string message, string from) {
 void MstUtils::error(string message, string from, int code) {
   string head = from.empty() ? "Error: " : "Error in " + from + ": ";
   cerr << head << wrapText(message, 100, 0, head.length()) << endl;
+
+  // print backtrace
+  void *array[100];
+  size_t size = backtrace(array, 100);
+  backtrace_symbols_fd(array, size, STDERR_FILENO);
+
   exit(code);
+}
+
+void MstUtils::errorHandler(int sig) {
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  MstUtils::error("printing trace:");
+}
+
+void MstUtils::setSignalHandlers() {
+  signal(SIGABRT, MstUtils::errorHandler);
+  signal(SIGFPE, MstUtils::errorHandler);
+  signal(SIGILL, MstUtils::errorHandler);
+  signal(SIGINT, MstUtils::errorHandler);
+  signal(SIGSEGV, MstUtils::errorHandler);
+  signal(SIGTERM, MstUtils::errorHandler);
 }
 
 void MstUtils::assert(bool condition, string message, string from, int exitCode) {

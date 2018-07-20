@@ -232,7 +232,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     if (verb) {
       end = chrono::high_resolution_clock::now();
       searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
-      cout << "\tquick-search time " << searchTime << " ms" << std::endl;
+      if (verb) cout << "\tquick-search time " << searchTime << " ms" << std::endl;
     }
   }
 
@@ -259,7 +259,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
   bool doNewSearch = !noNeedForNewSearch;
   if (doNewSearch) {
     if (verb) {
-      cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
+      if (verb) cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
       if (matches.size() > 0) cout << " (worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << ")";
       cout << endl;
       begin = chrono::high_resolution_clock::now();
@@ -379,7 +379,6 @@ mstreal getRadius(const Structure& S) {
 }
 
 vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragResIdx) {
-//frag.writePDB("/tmp/pair.pdb"); cout << "fragment saved, RMSD = " << RMSDCalculator::rmsdCutoff(frag) << endl;
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
   // F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
@@ -406,8 +405,8 @@ if (0) {
   }
 }
 
-  fasstSolutionSet matches = C.search(true);
-  cout << "found " << matches.size() << " matches" << endl;
+  fasstSolutionSet matches = C.search(false);
+  cout << "\tfound " << matches.size() << " matches" << endl;
   vector<Structure*> matchStructures;
   for (auto it = matches.begin(); it != matches.end(); ++it) {
     matchStructures.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
@@ -449,6 +448,24 @@ fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<in
   if (global != NULL) {
     MstUtils::assert(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
     resTopo.addFragment(*global, MstUtils::range(0, L), -10.0);
+    if (matchOut.is_open()) { global->writePDB(matchOut); matchOut << "END" << endl; }
+  }
+  return resTopo;
+}
+
+fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<vector<int> >& picks, fstream& matchOut, Structure* global = NULL) {
+  fusionTopology resTopo(L);
+  for (int si = 0; si < allMatches.size(); si++) {
+    for (int j = 0; j < picks[si].size(); j++) {
+      Structure& match = *(allMatches[si][picks[si][j]]);
+      resTopo.addFragment(match);
+      if (matchOut.is_open()) { match.writePDB(matchOut); matchOut << "END" << endl; }
+    }
+  }
+  if (global != NULL) {
+    MstUtils::assert(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
+    resTopo.addFragment(*global, MstUtils::range(0, L), -10.0);
+    if (matchOut.is_open()) { global->writePDB(matchOut); matchOut << "END" << endl; }
   }
   return resTopo;
 }
@@ -488,13 +505,16 @@ int main(int argc, char** argv) {
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
   op.addOption("o", "output base name.", true);
-  op.addOption("r", "pick a random match for each TERM in each iteration, rather than considering all matches simultaneously.");
-  op.addOption("rad", "compactness radius. Default will be based on protein length.");
+  op.addOption("n", "pick this many matches for each TERM for fusion (default is 1). At each iteration, one match for a randomly-selected TERM will be randomly substituted.");
+  op.addOption("r", "if specified, will randomly pick the matches for the first iteration. By default, will take the top match for each TERM or the top --n matches, if --n is specified.");
+  op.addOption("m", "if specified, will try to move away from the original structure by including a term in the objective function that rewards large RMSDs to it. Default is no.");
   op.addOption("cyc", "number of cycles--i.e., number of times fresh TERMs are searched for (10 by default).");
   op.addOption("iter", "number of iterations per cycle (1 by default). At the start of each iteration, the overall structure is reinitialized to the current structure");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
   op.addOption("fs", "a selection string for residues to fix.");
+  op.addOption("rad", "compactness radius. Default will be based on protein length.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
+  MstUtils::setSignalHandlers();
   op.setOptions(argc, argv);
   RMSDCalculator rc;
   Structure I(op.getString("p"));
@@ -521,17 +541,16 @@ int main(int argc, char** argv) {
     cout << "fix selection gave " << fixedResidues.size() << " residues, fixing..." << endl;
     map<Residue*, int> indices = MstUtils::indexMap(I.getResidues());
     fixed.resize(fixedResidues.size());
-    for (int i = 0; i < fixedResidues.size(); i++) {
-      fixed[i] = indices[fixedResidues[i]];
-    }
+    for (int i = 0; i < fixedResidues.size(); i++) fixed[i] = indices[fixedResidues[i]];
   }
+  int numPerTERM = op.getInt("n", 1);
+
   F.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000;
   fusionScores bestScore, currScore;
   fstream out, shellOut, dummy;
-  bool pickRand = op.isGiven("r") || op.isGiven("iter");
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
@@ -539,16 +558,16 @@ int main(int argc, char** argv) {
   mstreal R0 = getRadius(I);
   mstreal Rf = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
   int Ncyc = op.getInt("cyc", 10);
-  MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios_base::out);
+  MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
   for (int c = 0; c < Ncyc; c++) {
     cout << "Cycle " << c+1 << "..." << endl;
     if (c == 0) {
-      MstUtils::openFile(shellOut, op.getString("o") + ".shell.init.pdb", ios_base::out);
+      MstUtils::openFile(shellOut, op.getString("o") + ".shell.init.pdb", ios::out);
+    } else if (c == Ncyc - 1) {
+      MstUtils::openFile(shellOut, op.getString("o") + ".shell.pdb", ios::out);
     }
-    if (c == Ncyc - 1) {
-      MstUtils::openFile(shellOut, op.getString("o") + ".shell.pdb", ios_base::out);
-    }
+
     /* --- Decorate the current conformation with TERMs --- */
     // first self TERMs
     cout << "Searching for self TERMs..." << endl;
@@ -591,42 +610,66 @@ int main(int argc, char** argv) {
     mstreal compactnessRadius = Rf;
     // (R0 - Rf)*exp(-c/10.0) + Rf; // exponential scaling
     // (Rf*(c + 1) + R0*(Ncyc - c - 1))/Ncyc; // linear scaling
-
-    // by inserting the starting structure into the topology first, any fixed
-    // regions will be fixed to these starting coordinates
-    // for (int ri = 0; ri < S.residueSize(); ri++) resTopo[ri].push_back(&(S.getResidue(ri)));
     opts.setCompRad(compactnessRadius);
     cout << "will be trying to combine structure to a radius of " << compactnessRadius << endl;
 
     /* --- pick a random combination of TERMs and fuse --- */
-    vector<int> bestPicks(allMatches.size(), 0);
+    vector<vector<int> > bestPicks(allMatches.size()), currPicks;
     vector<vector<Residue*> > resTopo(I.residueSize());
-    for (int si = 0; si < allMatches.size(); si++) bestPicks[si] = MstUtils::randInt(allMatches[si].size());
-    fusionTopology bestTopo = getTopo(I.residueSize(), allMatches, bestPicks, shellOut, &S);
-    bestTopo.addFixedPositions(fixed);
-    Structure bestFused = Fuser::fuse(bestTopo, bestScore, opts);
-    AtomPointerVector init = getCorrespondingAtoms(S, bestFused);
-    cout << "\tinitial fusion => "; totalScore(bestScore, bestFused, init, true); cout << endl;
+    for (int si = 0; si < allMatches.size(); si++) {
+      for (int j = 0; j < MstUtils::min(numPerTERM, (int) allMatches[si].size()); j++) {
+        if (op.isGiven("r")) {
+          bestPicks[si].push_back(MstUtils::randInt(allMatches[si].size()));
+        } else {
+          bestPicks[si].push_back(j);
+        }
+      }
+    }
 
-    /* --- if required, do an MC simulation to find a good combo of TERMs --- */
+    // this is added, so that if there are fixed residues, the starting
+    // conformation of these fixed residues (and thus the final one also) is
+    // chosen from the original structure.
+    opts.setStartingStructure(S);
+
+    /* --- do an MC simulation to find a good combo of TERMs --- */
+    fusionTopology bestTopo, currTopo;
+    Structure bestFused, currFused;
+    fusionScores bestScore, currScore, propScore;
     mstreal kT = 0.001;
-    for (int it = 1; it < op.getInt("iter", 1); it++) {
+    for (int it = 0; it < op.getInt("iter", 1); it++) {
+      vector<vector<int> > propPicks = bestPicks;
       // make a "mutation"
-      vector<int> currPicks = bestPicks;
-      int si = MstUtils::randInt(allMatches.size());
-      currPicks[si] = MstUtils::randInt(allMatches[si].size());
-      fusionTopology currTopo = getTopo(I.residueSize(), allMatches, currPicks, dummy, &S);
-      currTopo.addFixedPositions(fixed);
-      Structure currFused = Fuser::fuse(currTopo, currScore, opts);
-      cout << "\titeration " << it << " => "; totalScore(currScore, currFused, init, true); cout << endl;
-      if (mc(totalScore(bestScore, bestFused, init), totalScore(currScore, currFused, init), kT)) {
+      if (it != 0) {
+        int si = MstUtils::randInt(allMatches.size());
+        int mi = MstUtils::randInt(allMatches[si].size());
+        propPicks[si][mi] = MstUtils::randInt(allMatches[si].size());
+      }
+      fusionTopology propTopo = getTopo(I.residueSize(), allMatches, propPicks, (it == 0) ? shellOut : dummy, op.isGiven("m") ? &S : NULL);
+      propTopo.addFixedPositions(fixed);
+      // this is to provide IC information for connections between any possible
+      // fixed residues residues and flexible ones. NOTE: the weight is set to 0,
+      // so this does not affect the objective function (not needed when there are
+      // no fixed residues, but adding just in case)
+      propTopo.addFragment(S, MstUtils::range(0, propTopo.length()), 0.0);
+      Structure propFused = Fuser::fuse(propTopo, propScore, opts);
+      AtomPointerVector init = getCorrespondingAtoms(S, propFused);
+      cout << "\titeration " << it << " => "; totalScore(propScore, propFused, init, true); cout << endl;
+      if ((it == 0) || mc(totalScore(currScore, currFused, init), totalScore(propScore, propFused, init), kT)) {
         cout << "\t\taccepted" << endl;
+        currFused = propFused;
+        currTopo = propTopo;
+        currScore = propScore;
+        currPicks = propPicks;
+      }
+      if ((it == 0) || (totalScore(currScore, currFused, init) < totalScore(bestScore, bestFused, init))) {
+        cout << "\t\t\tnew best" << endl;
         bestFused = currFused;
         bestTopo = currTopo;
         bestScore = currScore;
         bestPicks = currPicks;
       }
     }
+
     out << "MODEL " << c+1 << endl;
     bestFused.writePDB(out);
     out << "ENDMDL" << endl;

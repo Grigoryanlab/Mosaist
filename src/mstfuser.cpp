@@ -2,6 +2,18 @@
 
 vector<string> fusionTopology::bba = {"N", "CA", "C", "O"};
 
+/* --------- fusionParams ------------ */
+void fusionParams::setStartingStructure(const Structure& _S) {
+  AtomPointerVector atoms;
+  vector<Residue*> R = _S.getResidues();
+  for (int i = 0; i < R.size(); i++) {
+    for (int j = 0; j < fusionTopology::bba.size(); j++) {
+      atoms.push_back(R[i]->findAtom(fusionTopology::bba[j]));
+    }
+  }
+  startStruct = Structure(atoms);
+}
+
 /* --------- fusionTopology ------------ */
 fusionTopology::fusionTopology(const vector<vector<Residue*> >& resTopo) {
   overlappingResidues = resTopo;
@@ -147,6 +159,7 @@ void fusionEvaluator::init() {
     fused.renumber();
   } else {
     fused = params.getStartingStructure();
+    if (fused.residueSize() != topo.length()) MstUtils::error("specified starting structure has " + MstUtils::toString(fused.residueSize()) + " residues, while topology lengthh is " + MstUtils::toString(topo.length()));
   }
   guess = fused; // save initial "averaged" guess for later alignment (easier to visualize output)
   topo.setAlignedFrags(fused);
@@ -212,9 +225,9 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
 
   Chain& F = fused[0];
   if (params.getOptimCartesian()) {
-    for (int i = 0; i < F.residueSize(); i++) {
+    for (int i = 0; i < fused.residueSize(); i++) {
       if (topo.isFixed(i)) continue;
-      Residue& res = F[i];
+      Residue& res = fused.getResidue(i);
       for (int j = 0; j < res.atomSize(); j++) {
         bool skipDFs = ((i == 0) && !isAnchored());
         for (int dim = 0; dim < 3; dim++) {
@@ -238,8 +251,8 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     // -- build the fused backbone, atom by atom
     // build forward
     int startIdx = isAnchored() ? buildOriginRes : 0;
-    for (int i = startIdx; i < F.residueSize(); i++) {
-      Residue& res = F[i];
+    for (int i = startIdx; i < fused.residueSize(); i++) {
+      Residue& res = fused.getResidue(i);
       Atom* N = &(res[0]);
       Atom* CA = &(res[1]);
       Atom* C = &(res[2]);
@@ -308,7 +321,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           }
 
           // if this is the last residue, place the O relative to N-CA-C
-          if (i == F.residueSize() - 1) {
+          if (i == fused.residueSize() - 1) {
             if (init) {
               initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
               initPoint.push_back(angleInitValue(i, i, i, "CA", "C", "O") + aR * MstUtils::randUnit() * noise);
@@ -335,7 +348,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
     startIdx = isAnchored() ? buildOriginRes : -1;
     for (int i = startIdx; i >= 0; i--) {
-      Residue& res = F[i];
+      Residue& res = fused.getResidue(i);
       Atom* N = &(res[0]);
       Atom* CA = &(res[1]);
       Atom* C = &(res[2]);
@@ -383,8 +396,8 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
 
   // built up a list of restraining ICs
   if (init) {
-    for (int i = 0; i < F.residueSize(); i++) {
-      Residue& res = F[i];
+    for (int i = 0; i < fused.residueSize(); i++) {
+      Residue& res = fused.getResidue(i);
       Atom* N = &(res[0]);
       Atom* CA = &(res[1]);
       Atom* C = &(res[2]);
@@ -396,7 +409,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         bondInstances(i, C, O);
         angleInstances(i, N, CA, C);
         // if last residue, constrain O relative to this residue (as opposed to the next one)
-        if (i == F.residueSize() - 1) {
+        if (i == fused.residueSize() - 1) {
           angleInstances(i, CA, C, O);
           dihedralInstances(i, N, CA, C, O);
         }
@@ -412,7 +425,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         dihedralInstances(i, pCA, pC, N, CA);
         dihedralInstances(i, pC, N, CA, C);
         // use this residue to constrain the previous O
-        if (i < F.residueSize() - 1) {
+        if (i < fused.residueSize() - 1) {
           angleInstances(i, pO, pC, N);
           dihedralInstances(i-1, pCA, N, pC, pO);
         }
@@ -421,11 +434,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     }
 
     if (params.isCompOn() || params.isRepOn()) {
-      for (int i = 0; i < F.residueSize(); i++) {
-        Residue& resi = F[i];
-        for (int j = i+2; j < F.residueSize(); j++) { // no interactions between atoms of adjacent residues
+      for (int i = 0; i < fused.residueSize(); i++) {
+        Residue& resi = fused.getResidue(i);
+        for (int j = i+2; j < fused.residueSize(); j++) { // no interactions between atoms of adjacent residues
           if (topo.isFixed(i) && topo.isFixed(j)) continue;
-          Residue& resj = F[j];
+          Residue& resj = fused.getResidue(j);
           for (int ai = 0; ai < resi.atomSize(); ai++) {
             for (int aj = 0; aj < resj.atomSize(); aj++) {
               // to save time, make a distance IC for this pair of atoms only if
@@ -448,7 +461,6 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       }
     }
   }
-
   if (init) return 0.0;
 
   // compute penalty score for out-of-range ICs and best-fit RMSDs

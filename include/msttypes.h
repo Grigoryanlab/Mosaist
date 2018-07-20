@@ -20,6 +20,8 @@
 #include <sys/types.h>
 #include <time.h>
 #include <chrono>
+#include <execinfo.h>
+#include <signal.h>
 #undef assert
 
 using namespace std;
@@ -872,7 +874,9 @@ class MstTimer {
  */
 class MstUtils {
   public:
-    static void openFile (fstream& fs, string filename, ios_base::openmode mode = ios_base::in, string from = "");
+static void setSignalHandlers();
+static void errorHandler(int sig);
+    static void openFile(fstream& fs, string filename, ios_base::openmode mode = ios_base::in, string from = "");
     static void fileToArray(string _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
     static vector<string> fileToArray(string _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
     static FILE* openFileC (const char* filename, const char* mode, string from = "");
