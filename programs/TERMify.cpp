@@ -487,10 +487,12 @@ mstreal totalScore(fusionScores& scoreObj, Structure& fused, AtomPointerVector& 
   RMSDCalculator rc;
   // mstreal a = scoreObj.getScore()/10;
   // mstreal a = scoreObj.getTotRMSDScore();
-  mstreal a = scoreObj.getScore();
-  mstreal b = rc.bestRMSD(init, fused.getAtoms());
-  if (report) cout << "fuser: " << scoreObj << "; total = " << a << " - " << b;
-  return a - b;
+  // mstreal a = scoreObj.getScore();
+  // mstreal b = rc.bestRMSD(init, fused.getAtoms());
+  // if (report) cout << "fuser: " << scoreObj << "; total = " << a << " - " << b;
+  if (report) cout << "fuser: " << scoreObj << "; RMSD from start = " << rc.bestRMSD(init, fused.getAtoms());
+  // return a - b;
+  return scoreObj.getScore();
 }
 
 int main(int argc, char** argv) {
@@ -614,22 +616,21 @@ int main(int argc, char** argv) {
     cout << "will be trying to combine structure to a radius of " << compactnessRadius << endl;
 
     /* --- pick a random combination of TERMs and fuse --- */
-    vector<vector<int> > bestPicks(allMatches.size()), currPicks;
+    vector<vector<int> > currPicks(allMatches.size()), bestPicks;
     vector<vector<Residue*> > resTopo(I.residueSize());
     for (int si = 0; si < allMatches.size(); si++) {
       for (int j = 0; j < MstUtils::min(numPerTERM, (int) allMatches[si].size()); j++) {
         if (op.isGiven("r")) {
-          bestPicks[si].push_back(MstUtils::randInt(allMatches[si].size()));
+          currPicks[si].push_back(MstUtils::randInt(allMatches[si].size()));
         } else {
-          bestPicks[si].push_back(j);
+          currPicks[si].push_back(j);
         }
       }
     }
 
-    // this is added, so that if there are fixed residues, the starting
-    // conformation of these fixed residues (and thus the final one also) is
-    // chosen from the original structure.
-    opts.setStartingStructure(S);
+    // if there are fixed residues, then their starting conformation (and thus)
+    // the final one also) is chosen from the original structure
+    if (!fixed.empty()) opts.setStartingStructure(S);
 
     /* --- do an MC simulation to find a good combo of TERMs --- */
     fusionTopology bestTopo, currTopo;
@@ -637,11 +638,11 @@ int main(int argc, char** argv) {
     fusionScores bestScore, currScore, propScore;
     mstreal kT = 0.001;
     for (int it = 0; it < op.getInt("iter", 1); it++) {
-      vector<vector<int> > propPicks = bestPicks;
+      vector<vector<int> > propPicks = currPicks;
       // make a "mutation"
       if (it != 0) {
         int si = MstUtils::randInt(allMatches.size());
-        int mi = MstUtils::randInt(allMatches[si].size());
+        int mi = MstUtils::randInt(propPicks[si].size());
         propPicks[si][mi] = MstUtils::randInt(allMatches[si].size());
       }
       fusionTopology propTopo = getTopo(I.residueSize(), allMatches, propPicks, (it == 0) ? shellOut : dummy, op.isGiven("m") ? &S : NULL);
@@ -661,12 +662,12 @@ int main(int argc, char** argv) {
         currScore = propScore;
         currPicks = propPicks;
       }
-      if ((it == 0) || (totalScore(currScore, currFused, init) < totalScore(bestScore, bestFused, init))) {
+      if ((it == 0) || (totalScore(propScore, propFused, init) < totalScore(bestScore, bestFused, init))) {
         cout << "\t\t\tnew best" << endl;
-        bestFused = currFused;
-        bestTopo = currTopo;
-        bestScore = currScore;
-        bestPicks = currPicks;
+        bestFused = propFused;
+        bestTopo = propTopo;
+        bestScore = propScore;
+        bestPicks = propPicks;
       }
     }
 
