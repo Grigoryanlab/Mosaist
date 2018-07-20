@@ -874,8 +874,6 @@ class MstTimer {
  */
 class MstUtils {
   public:
-static void setSignalHandlers();
-static void errorHandler(int sig);
     static void openFile(fstream& fs, string filename, ios_base::openmode mode = ios_base::in, string from = "");
     static void fileToArray(string _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
     static vector<string> fileToArray(string _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
@@ -905,6 +903,8 @@ static void errorHandler(int sig);
     static string readNullTerminatedString(fstream& ifs);
     static string getDate();
     static vector<pair<int, int> > splitTasks(int numTasks, int numJobs);
+    static void setSignalHandlers();
+    static void errorHandler(int sig);
 
     // returns a random number in the range [lower, upper]
     static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
