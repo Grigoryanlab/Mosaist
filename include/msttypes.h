@@ -386,6 +386,7 @@ class Atom {
     vector<altInfo>* alternatives; /* since this is a pointer, and will be NULL for most atoms, it's fine
                                     * to use vector here in terms of memory, but very convenient for use */
 };
+ostream & operator<<(ostream &_os, const Atom& _atom); // this just to silence a silly compiler warning
 
 /* The following several classes look and feel like MSL classes, BUT (importantly) their
  * use is absolutely optional, and none of the basic MST datastructures use them. On
@@ -538,6 +539,7 @@ class AtomPointerVector : public vector<Atom*> {
     void read(istream& _is);  // read AtomPointerVector from a binary stream
     friend ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms);
 };
+ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms); // this just to silence a silly compiler warning
 
 class expressionTree {
   public:

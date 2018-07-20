@@ -50,6 +50,7 @@ class Sequence {
     vector<res_t> seq;
     string name;
 };
+ostream & operator<<(ostream &_os, const Sequence& _seq); // this is just to silence a silly compiler warning
 
 class SeqTools {
   public:

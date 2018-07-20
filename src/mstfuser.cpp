@@ -526,7 +526,7 @@ void fusionEvaluator::scoreIC(const icBound& b) {
     case icBrokenBond:
       return;
     default:
-      MstUtils::error("uknown variable type", "fusionEvaluator::scoreIC");
+      MstUtils::error("unknown variable type", "fusionEvaluator::scoreIC");
   }
   if (del != 0) {
     mstreal pen = f * del * del;

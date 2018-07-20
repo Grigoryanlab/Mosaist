@@ -260,7 +260,8 @@ class fusionEvaluator: public optimizerEvaluator {
           case icDistComp:
             return atoms[0]->distance(atoms[1]);
           default:
-            MstUtils::error("uknown variable type", "icBound::getCurrentValue");
+            MstUtils::error("unknown variable type", "icBound::getCurrentValue");
+            return 0; // to make the compiler happy
         }
       }
 
@@ -285,7 +286,7 @@ class fusionEvaluator: public optimizerEvaluator {
             CartesianGeometry::distance(atoms[0], atoms[1], grad);
             break;
           default:
-            MstUtils::error("uknown variable type", "icBound::getCurrentGradient");
+            MstUtils::error("unknown variable type", "icBound::getCurrentGradient");
         }
         return grad;
       }
