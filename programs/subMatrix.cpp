@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
   // prepare FASST object
   F.setMemorySaveMode(true);
   F.readDatabase(op.getString("d"));
-  F.pruneRedundancy(0.5);
+  F.options().setRedundancyCut(0.5);
   // F.setMaxNumMatches(1000); // these many matches are enough to compute reasonable frequencies
   // F.setMinNumMatches(20);   // need at least this many to compute anything reasonable
 

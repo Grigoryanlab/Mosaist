@@ -164,6 +164,79 @@ class fasstSolutionSet {
     bool updated;
 };
 
+class fasstSearchOptions {
+  public:
+    fasstSearchOptions() {
+      rmsdCutRequested = 0.0;
+      maxNumMatches = minNumMatches = suffNumMatches = -1;
+      gapConstSet = false;
+      contextLength = 30;
+      redundancyCut = 1.0;
+    }
+
+    /* -- getters -- */
+    int getMinNumMatches() const { return minNumMatches; }
+    int getMaxNumMatches() const { return maxNumMatches; }
+    int getSufficientNumMatches() const { return suffNumMatches; }
+    mstreal getRMSDCutoff() const { return rmsdCutRequested; }
+    int getMinGap(int i, int j) const { return minGap[i][j]; }
+    int getMaxGap(int i, int j) const { return maxGap[i][j]; }
+    int getContextLength() const { return contextLength; }
+    mstreal getRedundancyCut() const { return redundancyCut; }
+    string getRedundancyProperty() const { return redundancyProp; }
+
+    /* -- setters -- */
+    void setMinNumMatches(int _min);
+    void setMaxNumMatches(int _max);
+    void setSufficientNumMatches(int _suff);
+    void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
+    void setMinGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at list gapLim long] [segment j]
+    void setMaxGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at most gapLim long] [segment j]
+    void setContextLength(int len) { contextLength = len; }
+    /* Normally, the redundancy cutoff is between 0 and 1. But one can set it to
+     * values outside of this range, in principle. Setting it to a value above 1
+     * will cause no redundancy cutoff to be applied, but will populate solution
+     * objects with sequence context information, in case (for example) a filter
+     * for redundancy will need to be applied later. */
+    void setRedundancyCut(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
+    void setRedundancyProperty(const string& _redProp) { redundancyProp = _redProp; }
+
+    /* -- unsetters (resetters) -- */
+    void unsetMinNumMatches() { minNumMatches = -1; }
+    void unsetMaxNumMatches() { maxNumMatches = -1; }
+    void unsetSufficientNumMatches() { suffNumMatches = -1; }
+    void resetGapConstraints(int numQuerySegs);
+    void unsetRedundancyCut() { redundancyCut = 1; }
+    void unsetRedundancyProperty() { redundancyProp = ""; }
+
+    /* -- queriers -- */
+    bool isMinNumMatchesSet() const { return (minNumMatches > 0); }
+    bool isMaxNumMatchesSet() const { return (maxNumMatches > 0); }
+    bool isSufficientNumMatchesSet() const { return (suffNumMatches > 0); }
+    bool minGapConstrained(int i, int j) const { return minGapSet[i][j]; }
+    bool maxGapConstrained(int i, int j) const { return maxGapSet[i][j]; }
+    bool gapConstrained(int i, int j) const { return (minGapSet[i][j] || maxGapSet[i][j]); }
+    bool gapConstraintsExist() const { return gapConstSet; }
+    bool isRedundancyCutSet() const { return redundancyCut < 1; }
+    bool isRedundancyPropertySet() const { return !redundancyProp.empty(); }
+
+    /* -- validators -- */
+    bool validateGapConstraints(int numQuerySegs) const;
+    bool validateSearchRequest(int numQuerySegs) const; // make sure all user specified requirements are consistent
+    bool areNumMatchConstraintsConsistent() const;
+
+  private:
+    mstreal rmsdCutRequested;
+    int contextLength;                       // how long of a local window to consider when comparing segment alingments between solutions
+    mstreal redundancyCut;                   // maximum sequence identity (as a fraction), defined over contextLength-long windows
+    string redundancyProp;                   // residue relational property to use for checking redundancy of sequence windows
+
+    vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
+    vector<vector<bool> > minGapSet, maxGapSet;
+    bool gapConstSet;
+    int maxNumMatches, minNumMatches, suffNumMatches;
+};
+
 /* FASST -- Fast Algorithm for Searching STructure */
 class FASST {
   public:
@@ -269,37 +342,48 @@ class FASST {
     mstreal isResiduePairPropertyPopulated(const string& propType);
     map<int, mstreal> getResiduePairProperties(int ti, const string& propType, int ri);
 
+    // access to search options
+    fasstSearchOptions& options() { return opts; }
+    void setOptions(const fasstSearchOptions& _opts) { opts = _opts; }
+    // NOTE: these getters/setters are depricated! Use FASST::options().[get/set whatever]
+    void setMinNumMatches(int min) { opts.setMinNumMatches(min); }
+    void setMaxNumMatches(int max) { opts.setMaxNumMatches(max); }
+    void setSufficientNumMatches(int suff) { opts.setSufficientNumMatches(suff); }
+    void setRMSDCutoff(mstreal cut) { opts.setRMSDCutoff(cut); }
+    void setMinGap(int i, int j, int gapLim) { opts.setMinGap(i, j, gapLim); }
+    void setMaxGap(int i, int j, int gapLim) { opts.setMaxGap(i, j, gapLim); }
+    void setRedundancyCut(mstreal cut = 0.5) { opts.setRedundancyCut(cut); }
+    void setRedundancyProperty(const string& prop) { opts.setRedundancyProperty(prop); }
+    int getMinNumMatches() const { return opts.getMinNumMatches(); }
+    int getMaxNumMatches() const { return opts.getMaxNumMatches(); }
+    int getSufficientNumMatches() const { return opts.getSufficientNumMatches(); }
+    mstreal getRMSDCutoff() const { return opts.getRMSDCutoff(); }
+    int getMinGap(int i, int j) const { return opts.getMinGap(i, j); }
+    int getMaxGap(int i, int j) const { return opts.getMaxGap(i, j); }
+    int getContextLength() const { return opts.getContextLength(); }
+    mstreal getRedundancyCut() const { return opts.getRedundancyCut(); }
+    string getRedundancyProperty() const { return opts.getRedundancyProperty(); }
+    bool isMinNumMatchesSet() const { return opts.isMinNumMatchesSet(); }
+    bool isMaxNumMatchesSet() const { return opts.isMaxNumMatchesSet(); }
+    bool isSufficientNumMatchesSet() const { return opts.isSufficientNumMatchesSet(); }
+    bool minGapConstrained(int i, int j) const { return opts.minGapConstrained(i, j); }
+    bool maxGapConstrained(int i, int j) const { return opts.maxGapConstrained(i, j); }
+    bool gapConstrained(int i, int j) const { return opts.gapConstrained(i, j); }
+    bool gapConstraintsExist() const { return opts.gapConstraintsExist(); }
+    bool isRedundancyCutSet() const { return opts.isRedundancyCutSet(); }
+    bool isRedundancyPropertySet() const { return opts.isRedundancyPropertySet(); }
+
     int numTargets() const { return targetStructs.size(); }
     Structure getTargetCopy(int i) const { return *(targetStructs[i]); }
     Structure* getTarget(int i) { return targetStructs[i]; }
-    void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
     void setSearchType(searchType _searchType);
     void setMemorySaveMode(bool _memSave) { memSave = _memSave; }
     void setGridSpacing(mstreal _spacing) { gridSpacing = _spacing; updateGrids = true; }
     fasstSolutionSet search();
     int numMatches() { return solutions.size(); }
-    void setMaxNumMatches(int _max);
-    void setMinNumMatches(int _min);
-    void unsetMaxNumMatches() { maxNumMatches = -1; }
-    void unsetMinNumMatches() { minNumMatches = -1; }
-    void setSufficientNumMatches(int _suff);
-    void unsetSufficientNumMatches() { suffNumMatches = -1; }
-    mstreal getRMSDCutoff() { return rmsdCutRequested; }
-    int getMaxNumMatches() { return maxNumMatches; }
-    int getMinNumMatches() { return minNumMatches; }
-    int getSufficientNumMatches() { return suffNumMatches; }
-    bool isMaxNumMatchesSet() { return (maxNumMatches > 0); }
-    bool isMinNumMatchesSet() { return (minNumMatches > 0); }
-    bool isSufficientNumMatchesSet() { return (suffNumMatches > 0); }
+
     fasstSolutionSet getMatches() { return solutions; }
     string toString(const fasstSolution& sol);
-
-    bool gapConstrained(int i, int j) { return (minGapSet[i][j] || maxGapSet[i][j]); }
-    void setMinGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at list gapLim long] [segment j]
-    void setMaxGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at most gapLim long] [segment j]
-    void resetGapConstraints();
-    bool gapConstraintsExist() { return gapConstSet; }
-    bool validateSearchRequest(); // make sure all user specified requirements are consistent
     void writeDatabase(const string& dbFile);
     void readDatabase(const string& dbFile);
 
@@ -318,22 +402,7 @@ class FASST {
     // mstreal matchRMSD(const fasstSolution& sol, const AtomPointerVector& query);
     vector<mstreal> matchRMSDs(fasstSolutionSet& sols, const AtomPointerVector& query, bool update = false);
 
-    /* Normally, the redundancy cutoff is between 0 and 1. But one can set it to
-     * values outside of this range, in principle. Setting it to a value above 1
-     * will cause no redundancy cutoff to be applied, but will populate solution
-     * objects with sequence context information, in case (for example) a filter
-     * for redundancy will need to be applied later. */
-    void setRedundancyCut(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
-    void unsetRedundancyCut() { redundancyCut = 1; }
-    bool isRedundancyCutSet() { return redundancyCut < 1; }
-    mstreal getRedundancyCut() { return redundancyCut; }
-    void setRedundancyProperty(const string& _redProp) { redundancyProp = _redProp; }
-    void unsetRedundancyProperty() { redundancyProp = ""; }
-    bool isRedundancyPropertySet() { return !redundancyProp.empty(); }
-    string getRedundancyProperty() { return redundancyProp; }
-    map<int, map<int, map<int, set<int> > > >& getRedundancyPropertyMap() { return resRelProperties[redundancyProp]; }
-
-    void pruneRedundancy(mstreal _redundancyCut = 0.5) { cout << "FASST::pruneRedundancy DEPRICATED; use FASST::setRedundancyCut" << endl; setRedundancyCut(_redundancyCut); } // NOTE: to be deprecated
+    map<int, map<int, map<int, set<int> > > >& getRedundancyPropertyMap() { return resRelProperties[opts.getRedundancyProperty()]; }
 
   protected:
     void processQuery();
@@ -350,10 +419,11 @@ class FASST {
     mstreal segCentToPrevSegCentTol(int i);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
-    bool areNumMatchConstraintsConsistent();
     void addSequenceContext(fasstSolution& sol); // decorate the solution with sequence context
 
   private:
+    fasstSearchOptions opts;
+
     /* targetStructs[i] and targets[i] store the original i-th target structure
      * and just the part of it that will be searched over, respectively. NOTE:
      * Atoms* in targets[i] point to Atoms of targetStructs[i]. So there is only
@@ -397,15 +467,6 @@ class FASST {
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
     bool memSave;                            // save memory by storing only the backbone of targets?
 
-    vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
-    vector<vector<bool> > minGapSet, maxGapSet;
-    bool gapConstSet;
-
-    // redundancy options
-    int contextLength;                       // how long of a local window to consider when comparing segment alingments between solutions
-    mstreal redundancyCut;                   // maximum sequence identity (as a fraction), defined over contextLength-long windows
-    string redundancyProp;                   // residue relational property to use for checking redundancy of sequence windows
-
     // segmentResiduals[i][j] is the residual of the alignment of segment i, in which
     // its starting residue aligns with the residue index j in the target
     vector<vector<mstreal> > segmentResiduals;
@@ -415,7 +476,6 @@ class FASST {
     searchType type;
     vector<vector<string> > searchableAtomTypes;
     int querySize;
-    int maxNumMatches, minNumMatches, suffNumMatches;
 
     // remOptions[L][i] is a set of alignments for segment i (i >= L) at recursion level
     // L, which are stored sorted by their own residual, through the optList
@@ -455,8 +515,8 @@ class FASST {
     // will be one ProximitySearch object per query segment)
     vector<ProximitySearch*> ps;
 
-    // various solution constraints
-    mstreal rmsdCutRequested, rmsdCut, residualCut;
+    // current RMSD and residual cutoffs (not user-set, but internal)
+    mstreal rmsdCut, residualCut;
 
     // Atom subsets needed at different recursion levels. So queryMasks[i] stores
     // all atoms of the first i+1 segments of the query combined. The same for

@@ -284,7 +284,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
         // repeated with a slightly different query, we will be more likely to
         // succeed with a lookup
         if (c) S->setMinNumMatches(minN*2);
-        else S->unsetMinNumMatches();
+        else S->options().unsetMinNumMatches();
         if (c && verb) cout << "\t\t\tDID NOT WORK without min (found only " << matches.size() << " matches, while minN = " << minN << "), so repeating search..." << endl;
       }
 

@@ -109,19 +109,71 @@ void FASST::optList::constrainRange(int idxLow, int idxHigh) {
   constrainLE(idxHigh);
 }
 
+/* --------- fasstSearchOptions ---------- */
+void fasstSearchOptions::setMaxNumMatches(int _max) {
+  maxNumMatches = _max;
+  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setMaxNumMatches");
+}
+
+void fasstSearchOptions::setMinNumMatches(int _min) {
+  minNumMatches = _min;
+  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setMinNumMatches");
+}
+
+void fasstSearchOptions::setSufficientNumMatches(int _suff) {
+  suffNumMatches = _suff;
+  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setSufficientNumMatches");
+}
+
+bool fasstSearchOptions::areNumMatchConstraintsConsistent() const {
+  if (isMaxNumMatchesSet() && isMinNumMatchesSet() && (minNumMatches > maxNumMatches)) return false;
+  if (isMaxNumMatchesSet() && isSufficientNumMatchesSet() && (maxNumMatches < suffNumMatches)) return false;
+  if (isMinNumMatchesSet() && isSufficientNumMatchesSet() && (minNumMatches > suffNumMatches)) return false;
+  return true;
+}
+
+void fasstSearchOptions::setMinGap(int i, int j, int gapLim) {
+  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
+  minGap[i][j] = gapLim;
+  minGapSet[i][j] = true;
+  gapConstSet = true;
+}
+
+void fasstSearchOptions::setMaxGap(int i, int j, int gapLim) {
+  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
+  maxGap[i][j] = gapLim;
+  maxGapSet[i][j] = true;
+  gapConstSet = true;
+}
+
+void fasstSearchOptions::resetGapConstraints(int numQuerySegs) {
+  minGap.resize(numQuerySegs, vector<int>(numQuerySegs, 0));
+  maxGap = minGap;
+  minGapSet.resize(numQuerySegs, vector<bool>(numQuerySegs, false));
+  maxGapSet = minGapSet;
+  gapConstSet = false;
+}
+
+bool fasstSearchOptions::validateGapConstraints(int numQuerySegs) const {
+  if ((numQuerySegs != minGap.size()) || (numQuerySegs != maxGap.size())) {
+    MstUtils::error("gap constraints inconsistent with number of segments in query", "fasstSearchOptions::areGapsConsistentConsistent");
+  }
+  return true;
+}
+
+bool fasstSearchOptions::validateSearchRequest(int numQuerySegs) const {
+  return validateGapConstraints(numQuerySegs);
+}
+
 /* --------- FASST --------- */
 FASST::FASST() {
   recLevel = 0;
-  setRMSDCutoff(1.0);
+  opts.setRMSDCutoff(1.0);
   setSearchType(searchType::FULLBB);
   querySize = 0;
   updateGrids = false;
   gridSpacing = 15.0;
   memSave = false;
-  maxNumMatches = minNumMatches = suffNumMatches = -1;
-  gapConstSet = false;
-  contextLength = 30;
-  redundancyCut = 1.0;
 }
 
 FASST::~FASST() {
@@ -135,57 +187,6 @@ FASST::~FASST() {
 void FASST::setCurrentRMSDCutoff(mstreal cut) {
   rmsdCut = cut;
   residualCut = cut*cut*querySize;
-}
-
-void FASST::setMaxNumMatches(int _max) {
-  maxNumMatches = _max;
-  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setMaxNumMatches");
-}
-
-void FASST::setMinNumMatches(int _min) {
-  minNumMatches = _min;
-  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setMinNumMatches");
-}
-
-void FASST::setSufficientNumMatches(int _suff) {
-  suffNumMatches = _suff;
-  if (!areNumMatchConstraintsConsistent()) MstUtils::error("invalid combination of match number constraints: [min, max, sufficient] = [" + MstUtils::toString(minNumMatches) + ", " + MstUtils::toString(maxNumMatches) + ", " + MstUtils::toString(suffNumMatches) + "]", "FASST::setSufficientNumMatches");
-}
-
-bool FASST::areNumMatchConstraintsConsistent() {
-  if (isMaxNumMatchesSet() && isMinNumMatchesSet() && (minNumMatches > maxNumMatches)) return false;
-  if (isMaxNumMatchesSet() && isSufficientNumMatchesSet() && (maxNumMatches < suffNumMatches)) return false;
-  if (isMinNumMatchesSet() && isSufficientNumMatchesSet() && (minNumMatches > suffNumMatches)) return false;
-  return true;
-}
-
-void FASST::setMinGap(int i, int j, int gapLim) {
-  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
-  minGap[i][j] = gapLim;
-  minGapSet[i][j] = true;
-  gapConstSet = true;
-}
-
-void FASST::setMaxGap(int i, int j, int gapLim) {
-  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
-  maxGap[i][j] = gapLim;
-  maxGapSet[i][j] = true;
-  gapConstSet = true;
-}
-
-void FASST::resetGapConstraints() {
-  minGap.resize(query.size(), vector<int>(query.size(), 0));
-  maxGap = minGap;
-  minGapSet.resize(query.size(), vector<bool>(query.size(), false));
-  maxGapSet = minGapSet;
-  gapConstSet = false;
-}
-
-bool FASST::validateSearchRequest() {
-  if (query.size() != minGap.size()) {
-    MstUtils::error("gap constraints inconsistent with number of segments in query", "FASST::validateSearchRequest()");
-  }
-  return true;
 }
 
 /* This function sets up the query, in the process deciding which part of the
@@ -258,7 +259,7 @@ void FASST::processQuery() {
   updateGrids = true;
 
   // set gap constraints structure
-  resetGapConstraints();
+  opts.resetGapConstraints(query.size());
 }
 
 AtomPointerVector FASST::getQuerySearchedAtoms() const {
@@ -634,7 +635,7 @@ void FASST::prepForSearch(int ti) {
   currCents.resize(query.size(), CartesianPoint(0, 0, 0));
 
   // mark chain beginning and end indices (if gap constraints are present)
-  if (gapConstraintsExist() || (redundancyCut != 1)) {
+  if (opts.gapConstraintsExist() || (opts.getRedundancyCut() > 1)) {
     targChainBeg.resize(atomToResIdx(target.size()), 0);
     for (int i = 1; i < targChainBeg.size(); i++) {
       if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i-1)]->getChain()) targChainBeg[i] = targChainBeg[i-1];
@@ -667,9 +668,9 @@ mstreal FASST::centToCentTol(int i) {
 fasstSolutionSet FASST::search() {
   // auto begin = chrono::high_resolution_clock::now();
   // int prepTime = 0;
-  validateSearchRequest();
-  if (isMinNumMatchesSet()) setCurrentRMSDCutoff(999.0);
-  else setCurrentRMSDCutoff(rmsdCutRequested);
+  opts.validateSearchRequest(query.size());
+  if (opts.isMinNumMatchesSet()) setCurrentRMSDCutoff(999.0);
+  else setCurrentRMSDCutoff(opts.getRMSDCutoff());
   solutions.clear();
   vector<int> segLen(query.size()); // number of residues in each query segment
   for (int i = 0; i < query.size(); i++) segLen[i] = atomToResIdx(query[i].size());
@@ -720,18 +721,22 @@ fasstSolutionSet FASST::search() {
                                                  currAlignment[recLevel] + segLen[recLevel] - 1);
         }
         // if any gap constraints exist, limit options at this recursion level accordingly
-        if (gapConstraintsExist()) {
+        if (opts.gapConstraintsExist()) {
           for (int j = 0; j < nextLevel; j++) {
             for (int i = nextLevel; i < query.size(); i++) {
               remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], targChainEnd[currAlignment[j]]);
-              if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
-              if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
-              // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i], targChainEnd[currAlignment[j]]);
-              // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j], targChainEnd[currAlignment[j]]);
-              // if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              if (opts.minGapConstrained(qSegOrd[i], qSegOrd[j]))
+                remOptions[nextLevel][i].constrainLE(currAlignment[j] - opts.getMinGap(qSegOrd[i], qSegOrd[j]) - segLen[i]);
+              if (opts.maxGapConstrained(qSegOrd[i], qSegOrd[j]))
+                remOptions[nextLevel][i].constrainGE(currAlignment[j] - opts.getMaxGap(qSegOrd[i], qSegOrd[j]) - segLen[i]);
+              if (opts.minGapConstrained(qSegOrd[j], qSegOrd[i]))
+                remOptions[nextLevel][i].constrainGE(currAlignment[j] + opts.getMinGap(qSegOrd[j], qSegOrd[i]) + segLen[j]);
+              if (opts.maxGapConstrained(qSegOrd[j], qSegOrd[i]))
+                remOptions[nextLevel][i].constrainLE(currAlignment[j] + opts.getMaxGap(qSegOrd[i], qSegOrd[j]) + segLen[j]);
+              // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+              // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              // if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
               if (remOptions[nextLevel][i].empty()) { levelExhausted = true; break; }
             }
             if (levelExhausted) break;
@@ -786,25 +791,22 @@ fasstSolutionSet FASST::search() {
       } else {
         // if at the lowest recursion level already, then record the solution
         fasstSolution sol(currAlignment, sqrt(currResidual/querySize), currentTarget, currentTransform(), segLen, qSegOrd);
-        if (isRedundancyCutSet()) {
+        if (opts.isRedundancyCutSet()) {
           addSequenceContext(sol);
-          solutions.insert(sol, getRedundancyCut());
-        } else if (isRedundancyPropertySet()) {
+          solutions.insert(sol, opts.getRedundancyCut());
+        } else if (opts.isRedundancyPropertySet()) {
           solutions.insert(sol, getRedundancyPropertyMap());
         } else {
           solutions.insert(sol);
         }
 
-        // if (redundancyCut != 1) addSequenceContext(sol);
-        // solutions.insert(sol, redundancyCut);
-
-        if (isSufficientNumMatchesSet() && solutions.size() == suffNumMatches) return solutions;
-        if (isMaxNumMatchesSet() && (solutions.size() > maxNumMatches)) {
+        if (opts.isSufficientNumMatchesSet() && (solutions.size() == opts.getSufficientNumMatches())) return solutions;
+        if (opts.isMaxNumMatchesSet() && (solutions.size() > opts.getMaxNumMatches())) {
           solutions.erase(--solutions.end());
           setCurrentRMSDCutoff(solutions.worstRMSD());
-        } else if (isMinNumMatchesSet() && (solutions.size() > minNumMatches) && (rmsdCut > rmsdCutRequested)) {
-          if (solutions.worstRMSD() > rmsdCutRequested) solutions.erase(--solutions.end());
-          setCurrentRMSDCutoff(MstUtils::max(solutions.worstRMSD(), rmsdCutRequested));
+        } else if (opts.isMinNumMatchesSet() && (solutions.size() > opts.getMinNumMatches()) && (rmsdCut > opts.getRMSDCutoff())) {
+          if (solutions.worstRMSD() > opts.getRMSDCutoff()) solutions.erase(--solutions.end());
+          setCurrentRMSDCutoff(MstUtils::max(solutions.worstRMSD(), opts.getRMSDCutoff()));
         }
       }
     }
@@ -1024,7 +1026,7 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
         for (int j = 0; j < sol.numSegments(); j++) {
           if (i == j) continue;
           // if gap constrained, fill in between these two segments
-          if (gapConstrained(i, j)) {
+          if (opts.gapConstrained(i, j)) {
             if (alignment[i] > alignment[j]) MstUtils::error("solution not consistent with current gap constraints", "FASST::getMatchResidueIndices");
             for (int k = alignment[i] + sol.segLength(i); k < alignment[j]; k++) {
               toInclude.insert(k);
@@ -1098,9 +1100,9 @@ void FASST::addSequenceContext(fasstSolution& sol) {
     for (int ri = sol[i]; ri < sol[i] + Li; ri++) {
       segs[i][ri - alignment[i]] = targSeq[ri];
     }
-    if (contextLength > segs[i].size()) {
+    if (opts.getContextLength() > segs[i].size()) {
       // pad on both ends, to accommodate different scenarios
-      int pad = contextLength - segs[i].size();
+      int pad = opts.getContextLength() - segs[i].size();
       ntPad[i].resize(pad, SeqTools::gapIdx()); ctPad[i].resize(pad, SeqTools::gapIdx());
       for (int ri = 0; ri < pad; ri++) {
         if (sol[i] + Li + ri > targChainEnd[sol[i]]) break; // stop if reach chain C-terminus
