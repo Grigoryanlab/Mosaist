@@ -9,8 +9,8 @@ using namespace MST;
 
 class TERMANAL {
   public:
-    TERMANAL(const FASST* _F = NULL) { F = _F; }
-    void setFASST(const FASST* _F) { F = _F; }
+    TERMANAL(FASST* _F = NULL) { F = _F; }
+    void setFASST(FASST* _F) { F = _F; }
 
     /* Computes the structure score for the given TERM, following roughly the
      * definition and procedure defined in Zheng, Zhang, and Grigoryan, Structure,
@@ -21,7 +21,9 @@ class TERMANAL {
      * in not just one, but any number of positions (by adding the contribution
      * of each). The set of positions at which to account for amino acids is
      * given as the second optional parameter. */
-    mstreal structureScore(const Structure& S, const vector<Residue*>& central = vector<Residue*>());
+    mstreal structureScore(const Structure& S, const vector<Residue*>& central = vector<Residue*>(), bool verbose = false);
+
+    fasstSolutionSet findTopN(const Structure& S, int N);
 
   private:
     FASST* F;
