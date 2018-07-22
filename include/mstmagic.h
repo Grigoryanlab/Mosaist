@@ -28,16 +28,21 @@ class TERMUtils {
      * influence the order of residues in the selected TERM, and the latter is
      * dictated by the topology of the structure from which the TERM is excised.
      * But this may not always be what one wants, so look at the function below. */
-    /* case 1: single central residue */
-    static void selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
-    /* case 2: one or more central residues (given as a vector of Residue*) */
-    static void selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure& frag, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
+
+    /* case 1: single central residue; returns index of the central residue in
+     * the final motif structure. */
+    static int selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
+    /* case 2: one or more central residues (given as a vector of Residue*);
+     * returns indices of central residues in the final motif structure. */
+    static vector<int> selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure& frag, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
     /* case 3: same as case 1, but returns a Structure rather than accepting a reference */
     static Structure selectTERM(Residue& cenRes, ConFind& C, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
     /* case 4: same as case 2, but returns a Structure */
     static Structure selectTERM(const vector<Residue*>& cenRes, ConFind& C, int pm = 2, mstreal cdCut = 0.01, vector<int>* fragResIdx = NULL);
-    /* case 5: all central residues + contacting residues (together referred to as source residues) are already specified */
-    static void selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm = 2, vector<int>* fragResIdx = NULL);
+    /* case 5: all central residues + contacting residues (together referred to
+     * as source residues) are already specified. Returns indices of central
+     * residues in the final motif structure. */
+    static vector<int> selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm = 2, vector<int>* fragResIdx = NULL);
 
     // /* The following function is a little different, in that it simply cuts out
     //  * one segment at a time, and splices them together. It does not worry about

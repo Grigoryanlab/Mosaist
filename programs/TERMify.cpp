@@ -378,12 +378,20 @@ mstreal getRadius(const Structure& S) {
   return rad;
 }
 
-vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragResIdx) {
+vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragResIdx, const vector<int>& centIdx = vector<int>()) {
+  int need = 5; // want at least this many matches in the end
+  // estimate how many matches to ask for at first
+  int seqConsts = 0;
+  for (int i = 0; i < centIdx.size(); i++) {
+    if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) seqConsts++;
+  }
+  int Nmin = need*(pow(20, seqConsts) + 3);
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
   // F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
-  F->setMaxNumMatches(200);
-  F->setMinNumMatches(100);
+  F->options().unsetMaxNumMatches();
+  F->options().setMinNumMatches(Nmin);
+  F->options().setMaxNumMatches(Nmin*2);
 // TODO: fix so that it _always_ reports the same results as regular searching (basically, up to removing duplicates in the right way)
 if (0) {
   fasstSolutionSet matchesOld = F->search();
@@ -405,16 +413,33 @@ if (0) {
   }
 }
 
-  fasstSolutionSet matches = C.search(false);
-  cout << "\tfound " << matches.size() << " matches" << endl;
   vector<Structure*> matchStructures;
-  for (auto it = matches.begin(); it != matches.end(); ++it) {
-    matchStructures.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
-    Structure& match = *(matchStructures.back());
-    MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
-    for (int k = 0; k < match.residueSize(); k++) {
-      match.getResidue(k).setNum(fragResIdx[k]); // make residue numbers store indices into the original structure
+  while (true) {
+    fasstSolutionSet matches = C.search(false);
+    for (auto it = matches.begin(); it != matches.end(); ++it) {
+      if (centIdx.size() > 0) {
+        // check for sequence compatibility
+        Sequence mseq = F->getMatchSequence(*it);
+        bool comp = true;
+        for (int i = 0; i < centIdx.size(); i++) {
+          Residue& res = frag.getResidue(centIdx[i]);
+          if (SeqTools::isUnknown(res.getName())) continue;
+          if (SeqTools::aaToIdx(res.getName()) != mseq[centIdx[i]]) { comp = false; break; }
+        }
+        if (!comp) continue; // skip non-compatible solutions
+      }
+      matchStructures.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
+      Structure& match = *(matchStructures.back());
+      MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
+      for (int k = 0; k < match.residueSize(); k++) {
+        match.getResidue(k).setNum(fragResIdx[k]); // make residue numbers store indices into the original structure
+      }
     }
+    cout << "\tfound " << matchStructures.size() << " matches" << endl;
+    if (matchStructures.size() >= need) break;
+    F->options().unsetMaxNumMatches();
+    F->options().setMinNumMatches(matches.size()*2);
+    F->options().setMaxNumMatches(F->options().getMinNumMatches()*2);
   }
   return matchStructures;
 }
@@ -507,6 +532,7 @@ int main(int argc, char** argv) {
   op.addOption("d", "a database file with a list of PDB files.");
   op.addOption("b", "a binary database file. If both --d and --b are given, will overwrite this file with a corresponding binary database.");
   op.addOption("o", "output base name.", true);
+  op.addOption("s", "account for sequence by working only with TERMs that contain relevant amino acids from the target. Amino acids named UNK will be ignored, whichh is convenient for disregarding parts of the sequence (e.g., those parts that will be designed later).");
   op.addOption("n", "pick this many matches for each TERM for fusion (default is 1). At each iteration, one match for a randomly-selected TERM will be randomly substituted.");
   op.addOption("r", "if specified, will randomly pick the matches for the first iteration. By default, will take the top match for each TERM or the top --n matches, if --n is specified.");
   op.addOption("m", "if specified, will try to move away from the original structure by including a term in the objective function that rewards large RMSDs to it. Default is no.");
@@ -514,6 +540,7 @@ int main(int argc, char** argv) {
   op.addOption("iter", "number of iterations per cycle (1 by default). At the start of each iteration, the overall structure is reinitialized to the current structure");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
   op.addOption("fs", "a selection string for residues to fix.");
+  op.addOption("us", "a selection string for residues to mark as having unknown identity (i.e., their identity will not matter if accounting for sequence).");
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
   MstUtils::setSignalHandlers();
@@ -544,6 +571,12 @@ int main(int argc, char** argv) {
     map<Residue*, int> indices = MstUtils::indexMap(I.getResidues());
     fixed.resize(fixedResidues.size());
     for (int i = 0; i < fixedResidues.size(); i++) fixed[i] = indices[fixedResidues[i]];
+  }
+  if (op.isGiven("us")) {
+    selector sel(I);
+    vector<Residue*> unkResidues = sel.selectRes(op.getString("us"));
+    cout << "unknown sequence selection gave " << unkResidues.size() << " residues, marking unknown..." << endl;
+    for (int i = 0; i < unkResidues.size(); i++) unkResidues[i]->setName("UNK");
   }
   int numPerTERM = op.getInt("n", 1);
 
@@ -578,11 +611,11 @@ int main(int argc, char** argv) {
       Chain& C = S[ci];
       for (int ri = 0; ri < C.residueSize(); ri++) {
         Structure frag; vector<int> fragResIdx;
-        TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
+        vector<int> centIdx = TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
         F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-        vector<Structure*> matches = getMatches(cache, frag, fragResIdx);
+        vector<Structure*> matches = getMatches(cache, frag, fragResIdx, op.isGiven("s") ? centIdx : vector<int>());
         allMatches.push_back(matches);
       }
     }
@@ -596,11 +629,11 @@ int main(int argc, char** argv) {
       Residue* resA = contactList[k].first;
       Residue* resB = contactList[k].second;
       Structure frag; vector<int> fragResIdx;
-      TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
+      vector<int> centIdx = TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
       F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-      vector<Structure*> matches = getMatches(cache, frag, fragResIdx);
+      vector<Structure*> matches = getMatches(cache, frag, fragResIdx, op.isGiven("s") ? centIdx : vector<int>());
       allMatches.push_back(matches);
     }
 

@@ -138,13 +138,14 @@ vector<AtomPointerVector> TERMUtils::mostDesignableFragments(Structure& C, vecto
   return ret;
 }
 
-void TERMUtils::selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+int TERMUtils::selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
   vector<Residue*> conts = C.getContactingResidues(&cenRes, cdCut);
   conts.insert(conts.begin(), &cenRes);
-  TERMUtils::selectTERM(conts, frag, pm, fragResIdx);
+  vector<int> centralIdx = TERMUtils::selectTERM(conts, frag, pm, fragResIdx);
+  return centralIdx[0];
 }
 
-void TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
   set<Residue*> included;
   vector<Residue*> list;
   // for order consistency, first insert the central residues
@@ -164,13 +165,13 @@ void TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure
       }
     }
   }
-  TERMUtils::selectTERM(list, frag, pm, fragResIdx);
+  return TERMUtils::selectTERM(list, frag, pm, fragResIdx);
 }
 
-void TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm, vector<int>* fragResIdx) {
-  if (cenRes.size() == 0) return;
+vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm, vector<int>* fragResIdx) {
+  if (cenRes.size() == 0) return vector<int>();
   Structure* S = cenRes[0]->getChain()->getParent();
-  vector<bool> selected(S->residueSize(), false);
+  vector<bool> selected(S->residueSize(), false), central(S->residueSize(), false);
   for (int i = 0; i < cenRes.size(); i++) {
     Residue& res = *(cenRes[i]);
     Chain* C = res.getChain();
@@ -180,9 +181,12 @@ void TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int 
     for (int k = ri - pm; k <= ri + pm; k++) {
       if ((k < fi) || (k > li)) continue;
       selected[k] = true;
+      if (k == ri) central[k] = true;
     }
   }
+
   Chain* newChain = frag.appendChain("A", true);
+  int n = 0; vector<int> centralIdx;
   for (int k = 0; k < selected.size(); k++) {
     if (selected[k]) {
       // where there is a break in the selection, start a new chain
@@ -191,8 +195,11 @@ void TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int 
       }
       newChain->appendResidue(new Residue(S->getResidue(k)));
       if (fragResIdx != NULL) fragResIdx->push_back(k);
+      if (central[k]) centralIdx.push_back(n);
+      n++;
     }
   }
+  return centralIdx;
 }
 
 Structure TERMUtils::selectTERM(Residue& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx) {
