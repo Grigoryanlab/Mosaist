@@ -521,15 +521,18 @@ Structure Structure::reassignChainsByConnectivity(mstreal maxPeptideBond) {
 
 void Structure::reassignChainsByConnectivity(Structure& dest, mstreal maxPeptideBond) {
   if (this->residueSize() == 0) return;
+  int k = 0; // index of chain in original structure; used to try to pick the
+             // same chain names (in same order) as in the original structure,
+             // so that if the connectivity was correct, same chain names remain
   vector<Residue*> residues = this->getResidues();
-	Chain* chain = dest.appendChain("A");
+	Chain* chain = dest.appendChain((k < this->chainSize()) ? (*this)[k].getID() : "A"); k++;
 	for (int i = 0; i < residues.size() - 1; i++) {
     chain->appendResidue(new Residue(*residues[i]));
 		Atom* atomC = residues[i]->findAtom("C", true);
 		Atom* atomN = residues[i + 1]->findAtom("N", true);
     if ((atomC == NULL) || (atomN == NULL)) MstUtils::error("cannot break into disjoint segments as some C or N backbone atoms are missing", "Structure::reassignChainsByConnectivity");
 		if (atomC->distance(atomN) > maxPeptideBond) {
-      chain = dest.appendChain("A");
+      chain = dest.appendChain((k < this->chainSize()) ? (*this)[k].getID() : "A"); k++;
     }
 	}
 	chain->appendResidue(new Residue(*residues[residues.size() - 1]));
