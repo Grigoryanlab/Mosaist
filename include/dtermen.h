@@ -59,8 +59,11 @@ class dTERMen {
     void buildBackgroundPotentials();
     oneDimPotType buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot = false);
     oneDimPotType buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc); // without specifying a background potential
-    void printOneDimPotential(const oneDimPotType& P);
     twoDimPotType buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<int>& AA, bool isAngle = false, const vector<mstreal>& priorPot = vector<mstreal>(), const vector<mstreal>& mult = vector<mstreal>());
+    mstreal lookupOneDimPotential(const oneDimPotType& P, mstreal x, res_t aa);
+    mstreal lookupOneDimPotential(const oneDimPotType& P, mstreal x, mstreal y, res_t aa);
+    void printOneDimPotential(const oneDimPotType& P);
+    void printTwoDimPotential(const twoDimPotType& P); // TODO
 
     /* Bins the data in the input vector X according to the binning type and
      * parameters. Outputs a struct with members bins and binEdges. The k-th bin
@@ -74,20 +77,24 @@ class dTERMen {
      * 2 -- non-uniform binning with some minimal number of elements per bin and
      *      a minimal bin width. binSpec is expected to be {min value, max value,
      *      minimum number of points per bin, minimal bin width}.
-     * NOTE: in all of these, it is assumed that the data fully fit within the
-     * range [min; max]. If this is not the case, the behavior is unpredicted.
      * Optional argument M (must be the same size as X, if specified) supplies
      * the multiplicity of each point. This is used in non-uniform binning to
      * count data "mass" (i.e., sum of inverses of multiplicities) rather the
      * pure number of points. If isAngle is set to true, will treat input data
-     * as angles in degrees, mapping them to the interval [-pi; pi), and ignores
-     * any bad angle values (defined via Residue::isBadDihedral). Thus, the above
-     * bin definitions will do the right thing of counting +/- pi just once. */
+     * as angles in degrees, mapping them to the interval [-pi; pi). This makes
+     * it so that the bin definitions above do the right thing of counting +/- pi
+     * just once.
+     * NOTE: any data points that fall outside of the range [min; max] are
+     * ignored in building the potential. This may include bad diehdral angles,
+     * such as phi/psi angles for terminal residues. */
     histType binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M = vector<mstreal>(), bool isAngle = false);
 
     void readBackgroundPotentials(const string& file); // TODO
     void writeBackgroundPotentials(const string& file); // TODO
+
     mstreal selfEnergy(Residue* R, vector<Residue*> C);
+    mstreal bbOmegaEner(mstreal omg, res_t aa) { return lookupOneDimPotential(omPot, omg, aa); }
+    mstreal envEner(mstreal env, res_t aa) { return lookupOneDimPotential(envPot, env, aa); }
 
   private:
     FASST F;

@@ -586,6 +586,37 @@ int main(int argc, char** argv) {
   int Ni = 1000;
   fusionScores bestScore, currScore;
   fstream out, shellOut, dummy;
+  contactList L;
+
+  // If fixed residues were defined, then not all contacts will be needed; only
+  // contacts that can ultimately implicate a non-fixed residue are of interest.
+  // These are either contacts with non-fixed residues OR contacts with fixed
+  // residues that are within +/- pmPair of non-fixed residues.
+  vector<int> contResis;
+  if (!fixed.empty()) {
+    vector<bool> getConts(I.residueSize(), false);
+    set<int> nonFixed = MstUtils::contents(MstUtils::setdiff(MstUtils::range(0, I.residueSize()), fixed));
+    int k = 0;
+    for (int ci = 0; ci < I.chainSize(); ci++) {
+      Chain& C = I[ci];
+      for (int ri = 0; ri < C.residueSize(); ri++) {
+        if (nonFixed.find(k) != nonFixed.end()) {
+          getConts[k] = true;
+        } else {
+          for (int rri = MstUtils::max(0, ri - pmSelf); rri < MstUtils::min(C.residueSize(), ri + pmSelf + 1); rri++) {
+            if (nonFixed.find(k + rri - ri) != nonFixed.end()) {
+              getConts[k] = true;
+              break;
+            }
+          }
+        }
+        k++;
+      }
+    }
+    for (int i = 0; i < getConts.size(); i++) {
+      if (getConts[i]) contResis.push_back(i);
+    }
+  }
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
@@ -623,7 +654,13 @@ int main(int argc, char** argv) {
     // then pair TERMs
     cout << "Searching for pair TERMs..." << endl;
     ConFind cfd(&RL, S);
-    contactList L = cfd.getContacts(S, 0.01);
+    if (fixed.empty()) {
+      L = cfd.getContacts(S, 0.01);
+    } else {
+      vector<Residue*> residues;
+      for (int i = 0; i < contResis.size(); i++) residues.push_back(&(S.getResidue(contResis[i])));
+      L = cfd.getContacts(residues, 0.01);
+    }
     vector<pair<Residue*, Residue*> > contactList = L.getOrderedContacts();
     for (int k = 0; k < contactList.size(); k++) {
       Residue* resA = contactList[k].first;

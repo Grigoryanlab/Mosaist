@@ -175,9 +175,12 @@ void dTERMen::buildBackgroundPotentials() {
     for (int ri = 0; ri < N; ri++) {
       string aaName = (S->getResidue(ri)).getName();
       if (!isInGlobalAlphabet(aaName)) continue;
+// TODO: need to separate a background frequency potential, so that we can assume
+// zero in potential lookup calls for values outside of the range (and the total
+// self energy would then, at least, be the background frequencies).
+// TODO: could also do an end potential: 1, 2, 3 treated specially and N-2, N-1
+// N also.
       aa.push_back(aaToIndex(aaName));
-// TODO: check to make sure dihedral values are not BAD. If so, skip the residue!
-// TODO: given the above, do we still need the complication of ignoring data in binData? My guess no.
       for (int i = 0; i < propNames.size(); i++) {
         propVals[propNames[i]].push_back(F.getResidueProperty(ti, propNames[i], ri));
       }
@@ -186,7 +189,6 @@ void dTERMen::buildBackgroundPotentials() {
   }
 
   vector<vector<mstreal> > back(aa.size(), vector<mstreal> (globalAlphabetSize(), 0.0)); // existing background potential
-  // TODO: implement potential lookup
   // TODO: implement 2D potential building!
   // ppPot = buildTwoDimPotential(propVals["phi"], propVals["psi"], {-180, 180, 72}, {-180, 180, 72}, aa, true, back);
   omPot = buildOneDimPotential(binData(propVals["omega"], 2, {-180, 180, 1000, 1}, propVals["mult"], true), aa, 1.0, back, true);
@@ -195,38 +197,67 @@ cout << "Omega potential:\n"; printOneDimPotential(omPot);
 cout << "Env potential:\n"; printOneDimPotential(envPot);
 }
 
-dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M, bool isAngle) {
-  // transform data if using dihedral angles
-  vector<mstreal> X1, M1;
-  vector<int> origIndices = MstUtils::range(0, (int) X.size());
-  if (isAngle) {
-    vector<int> exclude;
-    for (int i = 0; i < X.size(); i++) {
-      if (Residue::isBadDihedral(X[i])) {
-        exclude.push_back(i);
-        continue;
-      }
-      mstreal an = CartesianGeometry::angleDiff(X[i], 0);
-      // represent +/- pi as -pi; then, thhe bin boundary definition always works
-      if (an >= 180) an = -180;
-      X1.push_back(an);
-      M1.push_back(M.empty() ? 1.0 : M[i]);
+mstreal dTERMen::lookupOneDimPotential(const oneDimPotType& P, mstreal x, res_t aa) {
+  if ((x < P.binEdges.front()) || (x > P.binEdges.back())) return 0;
+  // do a binary search
+  int nb = P.binEdges.size() - 1;
+  int left = 0, right = nb - 1, k;
+  while (true) {
+    k = (left + right)/2;
+    if (x < P.binEdges[k]) {
+      right = k - 1;
+    } else if ((x > P.binEdges[k+1]) || ((k < nb - 1) && (x == P.binEdges[k+1]))) { // the last bin includes the opper limit
+      left = k + 1;
+    } else {
+      break;
     }
-    origIndices = MstUtils::setdiff(origIndices, exclude);
-  } else if (M.empty()) {
-    for (int i = 0; i < X.size(); i++) M1.push_back(1.0);
   }
-  const vector<mstreal>& x = (isAngle ? X1 : X);
-  const vector<mstreal>& m = ((isAngle || M.empty()) ? M1 : M);
-  vector<int> sortedInds = MstUtils::sortIndices(x);
+  return P.aaEnergies[k][aa];
+}
 
+dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M, bool isAngle) {
+  // limit to data points within range and transform dihedral angles
+  mstreal minVal = binSpec[0];
+  mstreal maxVal = binSpec[1];
+  vector<mstreal> x = X, m = M;
+  vector<int> origIndices = MstUtils::range(0, (int) X.size());
+  vector<int> exclude;
+  for (int i = 0; i < x.size(); i++) {
+    if ((x[i] < minVal) || (x[i] > maxVal)) {
+      exclude.push_back(i);
+      continue;
+    }
+    if (isAngle) {
+      mstreal an = CartesianGeometry::angleDiff(x[i], 0);
+      // represent +/- pi as -pi; then, the bin boundary definition always works
+      if (an >= 180) an = -180;
+      x[i] = an;
+    }
+  }
+  if (m.empty()) m.resize(x.size(), 1.0);
+  if (!exclude.empty()) {
+    vector<mstreal> cleanedData(x.size() - exclude.size());
+    vector<mstreal> cleanedMult(cleanedData.size());
+    vector<int> cleanedIndices(cleanedData.size());
+    int k = 0, j = 0;
+    for (int i = 0; i < x.size(); i++) {
+      if (i == exclude[k]) { k++; continue; }
+      cleanedData[j] = x[i];
+      cleanedMult[j] = m[i];
+      cleanedIndices[j] = origIndices[i];
+      j++;
+    }
+    x = cleanedData;
+    origIndices = cleanedIndices;
+    m = cleanedMult;
+  }
+
+  // actually do binning
+  vector<int> sortedInds = MstUtils::sortIndices(x);
   histType H;
-  mstreal minVal, maxVal;
   if (binSpecType == 1) {
     /* Uniform binning */
     if (binSpec.size() != 3) MstUtils::error("expected three values for bin specification type 1", "dTERMen::binData");
-    mstreal minVal = binSpec[0];
-    mstreal maxVal = binSpec[1];
     int nb = (int) binSpec[2];
     if ((nb <= 0) || (minVal >= maxVal)) MstUtils::error("inconsistent bin specification, type 1", "dTERMen::binData");
     mstreal bw = (maxVal - minVal)/nb;
@@ -237,8 +268,6 @@ dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, co
     /* Non-uniform binning with some minimal number of elements per bin and a
      * minimal bin width. */
     if (binSpec.size() != 4) MstUtils::error("expected four values for bin specification type 2", "dTERMen::binData");
-    mstreal minVal = binSpec[0];
-    mstreal maxVal = binSpec[1];
     int minNumPerBin = (int) binSpec[2];
     mstreal minBinWidth = binSpec[3];
     if ((minNumPerBin <= 0) || (minVal >= maxVal) || (minBinWidth < 0)) MstUtils::error("inconsistent bin specification, type 2", "dTERMen::binData");
