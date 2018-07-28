@@ -38,9 +38,14 @@ class contactList {
     int size() { return resi.size(); }
     Residue* residueA(int i) { return resi[i]; }
     Residue* residueB(int i) { return resj[i]; }
+    Residue* srcResidue(int i) { return resi[i]; }
+    Residue* dstResidue(int i) { return resj[i]; }
+    vector<Residue*> srcResidues() { return resi; }
+    vector<Residue*> dstResidues(){ return resj; }
     mstreal degree(int i) { return degrees[i]; }
     mstreal degree(Residue* _resi, Residue* _resj);
     string info(int i) { return infos[i]; }
+    void sortByDegree(); // sorts the contact list by contact degree, highest to lowest
     vector<pair<Residue*, Residue*> > getOrderedContacts();
     bool areInContact(Residue* A, Residue* B);
 

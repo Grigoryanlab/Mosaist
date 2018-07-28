@@ -4,31 +4,25 @@
 #include "msttypes.h"
 #include "mstfasst.h"
 #include "mstsequence.h"
+#include "mstcondeg.h"
+#include "mstmagic.h"
 using namespace MST;
+
+/* Remaining questions:
+ * NOTE: when there is no +/- pmSelf or +/- pmPair on one side, what do we do? Extend on the other side?
+ * NOTE: the wiki pages show minimum numbers of matches required and the RMSD cutoff, but what about the max?
+ $ NOTE: what is the value of pmSelf for self residual, self correction, and what is the value of pmPair?
+ */
 
 class dTERMen {
   public:
-    // Implementation approach:
-    // 1. DONE: get phi, psi, and environment values into the database (fasstDB does this now)
-    // 2. DONE: perform all-by-all local sequence window comparison within the database, using the
-    //    uclust-like algorithm (not guaranteed, but pretty good for close homology), and get
-    //    two things for every position: its multiplicity (i.e., the number of times closely
-    //    homologous local sequences are found in the database) and the local cluster index
-    //    (i.e., such that all closely homologous local sequence windows belong to the same
-    //    cluster).
-    // 3. DONE: make a modification in FASST, so that it can optionally use the "local cluster
-    //    index" property to remove redundancy (no need to calculate alighments, so very fast),
-    //    if the property is available within the database.
-    // 4. TODO: implement on-the-fly backbone and environment potential calculation (upon reading
-    //    the FASST database), by accounting for multiplicity of each residue.
-    // TODO:
-    // 1. get location of FASST database and initialize a built-in FASST object
-    // 2. from data within FASST database, build phi, psi, omega, and environment potential lookup tables
-    dTERMen(const string& configFile);
     dTERMen();
+    dTERMen(const string& configFile);
+    void init();
     void readConfigFile(const string& configFile);
 
     mstreal getkT() const { return kT; }
+    FASST* getFASST() { return &F; }
     void setAminoAcidMap();
     void printAminoAcidMap();
     int globalAlphabetSize() const { return globAlph.size(); }
@@ -41,11 +35,19 @@ class dTERMen {
     string indexToResName(int idx) const;
     res_t indexToAA(int idx) const;
 
-    struct histType {
+    struct oneDimHist {
       vector<vector<int> > bins;
       vector<mstreal> binEdges;
       vector<mstreal> binMasses;
       vector<mstreal> weights;
+    };
+    struct twoDimHist {
+      vector<vector<vector<int> > > bins;
+      vector<mstreal> xBinEdges, yBinEdges;
+      vector<mstreal> weights;
+    };
+    struct zeroDimPotType { // NOTE: in the future, these should become classes with overloaded "access" operators for lookup
+      vector<mstreal> aaEnergies;
     };
     struct oneDimPotType {
       vector<mstreal> binEdges;
@@ -54,16 +56,19 @@ class dTERMen {
     struct twoDimPotType {
       vector<mstreal> xBinEdges;
       vector<mstreal> yBinEdges;
-      vector<vector<mstreal> > aaEnergies;
+      vector<vector<vector<mstreal> > > aaEnergies;
     };
     void buildBackgroundPotentials();
-    oneDimPotType buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot = false);
-    oneDimPotType buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc); // without specifying a background potential
-    twoDimPotType buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<int>& AA, bool isAngle = false, const vector<mstreal>& priorPot = vector<mstreal>(), const vector<mstreal>& mult = vector<mstreal>());
-    mstreal lookupOneDimPotential(const oneDimPotType& P, mstreal x, res_t aa);
-    mstreal lookupOneDimPotential(const oneDimPotType& P, mstreal x, mstreal y, res_t aa);
+    zeroDimPotType buildZeroDimPotential(const vector<int>& AA, vector<vector<mstreal> >& backPot);
+    oneDimPotType buildOneDimPotential(const oneDimHist& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot = false);
+    oneDimPotType buildOneDimPotential(const oneDimHist& H, const vector<int>& AA, mstreal pc); // without specifying a background potential
+    twoDimPotType buildTwoDimPotential(const twoDimHist& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot = false);
+    mstreal lookupZeroDimPotential(const zeroDimPotType& P, int aa);
+    mstreal lookupOneDimPotential(const oneDimPotType& P, mstreal x, int aa);
+    mstreal lookupTwoDimPotential(const twoDimPotType& P, mstreal x, mstreal y, int aa);
+    void printZeroDimPotential(const zeroDimPotType& P);
     void printOneDimPotential(const oneDimPotType& P);
-    void printTwoDimPotential(const twoDimPotType& P); // TODO
+    void printTwoDimPotential(const twoDimPotType& P);
 
     /* Bins the data in the input vector X according to the binning type and
      * parameters. Outputs a struct with members bins and binEdges. The k-th bin
@@ -87,21 +92,41 @@ class dTERMen {
      * NOTE: any data points that fall outside of the range [min; max] are
      * ignored in building the potential. This may include bad diehdral angles,
      * such as phi/psi angles for terminal residues. */
-    histType binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M = vector<mstreal>(), bool isAngle = false);
+    oneDimHist binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M = vector<mstreal>(), bool isAngle = false);
+    twoDimHist binData(const vector<mstreal>& X, const vector<mstreal>& Y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<mstreal>& M = vector<mstreal>(), bool isAngle = false);
 
-    void readBackgroundPotentials(const string& file); // TODO
+    void readBackgroundPotentials(const string& file);  // TODO
     void writeBackgroundPotentials(const string& file); // TODO
 
-    mstreal selfEnergy(Residue* R, vector<Residue*> C);
-    mstreal bbOmegaEner(mstreal omg, res_t aa) { return lookupOneDimPotential(omPot, omg, aa); }
-    mstreal envEner(mstreal env, res_t aa) { return lookupOneDimPotential(envPot, env, aa); }
+    mstreal backEner(const string& aa) { return lookupZeroDimPotential(bkPot, aaToIndex(aa)); }
+    mstreal bbOmegaEner(mstreal omg, const string& aa) { return lookupOneDimPotential(omPot, omg, aaToIndex(aa)); }
+    mstreal bbPhiPsiEner(mstreal phi, mstreal psi, const string& aa) { return lookupTwoDimPotential(ppPot, phi, psi, aaToIndex(aa)); }
+    mstreal envEner(mstreal env, const string& aa) { return lookupOneDimPotential(envPot, env, aaToIndex(aa)); }
+
+    /* Compute the dTERMen self energy of a given Residue; identifies relevant
+     * contacts using ConFind. The first form computes the value for a specific
+     * amino acid at the given position (by default the one actually there), and
+     * the second form returns values for all amino acids at the position. */
+    mstreal selfEnergy(Residue* R, const string& aa = "");
+    vector<mstreal> selfEnergies(Residue* R);
+
+  protected:
+    int findBin(const vector<mstreal>& binEdges, mstreal x); // do a binary search to find the bin into which the value falls
+    mstreal backEner(int aai) { return lookupZeroDimPotential(bkPot, aai); }
+    mstreal bbOmegaEner(mstreal omg, int aai) { return lookupOneDimPotential(omPot, omg, aai); }
+    mstreal bbPhiPsiEner(mstreal phi, mstreal psi, int aai) { return lookupTwoDimPotential(ppPot, phi, psi, aai); }
+    mstreal envEner(mstreal env, int aai) { return lookupOneDimPotential(envPot, env, aai); }
+    vector<mstreal> enerToProb(const vector<mstreal>& ener);
 
   private:
     FASST F;
-    string fasstdbPath, backPotFile;
-    mstreal kT;
+    RotamerLibrary RL;
+    string fasstdbPath, backPotFile, rotLibFile;
+    zeroDimPotType bkPot;
     oneDimPotType omPot, envPot;
     twoDimPotType ppPot;
+    mstreal kT, cdCut, selfResidualPC;
+    int pmSelf, pmPair;
 
     /* We may want to deal with different "universal" alphabets (separate from
      * the design alphabet). We may want to interpret SEC (selenocysteine), for

@@ -1,5 +1,18 @@
 #include "mstcondeg.h"
 
+void contactList::sortByDegree() {
+  vector<int> sortedIndices = MstUtils::sortIndices(degrees, true);
+  vector<Residue*> resiOld = resi, resjOld = resj;
+  vector<mstreal> degreesOld = degrees;
+  vector<string> infosOld = infos;
+  for (int i = 0; i < sortedIndices.size(); i++) {
+    resi[i] = resiOld[sortedIndices[i]];
+    resj[i] = resjOld[sortedIndices[i]];
+    degrees[i] = degreesOld[sortedIndices[i]];
+    infos[i] = infosOld[sortedIndices[i]];
+  }
+}
+
 vector<pair<Residue*, Residue*> > contactList::getOrderedContacts() {
   vector<pair<Residue*, Residue*> > conts(orderedContacts.size());
   int i = 0;

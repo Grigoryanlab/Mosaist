@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
   FASST F;
   F.setMemorySaveMode(true);
   F.readDatabase(op.getString("b"));
-  F.pruneRedundancy(0.5);
+  F.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   Clusterer clusterGuru(false);
   fusionParams fuserOpts; fuserOpts.setNumIters(1000); fuserOpts.setVerbose(false);

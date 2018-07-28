@@ -1,16 +1,22 @@
 #include "dtermen.h"
 
 dTERMen::dTERMen() {
-  kT = 1.0;
-  aaMapType = 1;
-  setAminoAcidMap();
+  init();
 }
 
 dTERMen::dTERMen(const string& configFile) {
+  init();
+  readConfigFile(configFile);
+}
+
+void dTERMen::init() {
   kT = 1.0;
   aaMapType = 1;
+  cdCut = 0.01;
+  pmSelf = 1;
+  pmPair = 1;
+  selfResidualPC = 1.0;
   setAminoAcidMap();
-  readConfigFile(configFile);
 }
 
 void dTERMen::readConfigFile(const string& configFile) {
@@ -22,6 +28,8 @@ void dTERMen::readConfigFile(const string& configFile) {
     if (ents.size() != 2) MstUtils::error("could not parse parameter line '" + lines[i] + "' from file " + configFile, "dTERMen::dTERMen(const string&)");
     if (ents[0].compare("fasstdb") == 0) {
       fasstdbPath = ents[1];
+    } else if (ents[0].compare("rotlib") == 0) {
+      rotLibFile = ents[1];
     } else {
       MstUtils::error("unknown parameter name '" + ents[0] + "'", "dTERMen::dTERMen(const string&)");
     }
@@ -33,6 +41,10 @@ void dTERMen::readConfigFile(const string& configFile) {
     readBackgroundPotentials(backPotFile);
   } else {
     buildBackgroundPotentials();
+  }
+  if (rotLibFile.empty()) { MstUtils::error("dTERMen configuration file does not specify a rotamer library, '" + configFile + "'", "dTERMen::readConfigFile"); }
+  else {
+    RL.readRotamerLibrary(rotLibFile);
   }
 }
 
@@ -175,11 +187,6 @@ void dTERMen::buildBackgroundPotentials() {
     for (int ri = 0; ri < N; ri++) {
       string aaName = (S->getResidue(ri)).getName();
       if (!isInGlobalAlphabet(aaName)) continue;
-// TODO: need to separate a background frequency potential, so that we can assume
-// zero in potential lookup calls for values outside of the range (and the total
-// self energy would then, at least, be the background frequencies).
-// TODO: could also do an end potential: 1, 2, 3 treated specially and N-2, N-1
-// N also.
       aa.push_back(aaToIndex(aaName));
       for (int i = 0; i < propNames.size(); i++) {
         propVals[propNames[i]].push_back(F.getResidueProperty(ti, propNames[i], ri));
@@ -188,34 +195,88 @@ void dTERMen::buildBackgroundPotentials() {
     }
   }
 
-  vector<vector<mstreal> > back(aa.size(), vector<mstreal> (globalAlphabetSize(), 0.0)); // existing background potential
-  // TODO: implement 2D potential building!
-  // ppPot = buildTwoDimPotential(propVals["phi"], propVals["psi"], {-180, 180, 72}, {-180, 180, 72}, aa, true, back);
-  omPot = buildOneDimPotential(binData(propVals["omega"], 2, {-180, 180, 1000, 1}, propVals["mult"], true), aa, 1.0, back, true);
-cout << "Omega potential:\n"; printOneDimPotential(omPot);
-  envPot = buildOneDimPotential(binData(propVals["env"], 1, {0, 1, 75}, propVals["mult"], false), aa, 1.0, back, true);
-cout << "Env potential:\n"; printOneDimPotential(envPot);
+  // for each position in the database, accumulate total statistical potential,
+  // for  all possible amino acids, from all known pseudo-energy types
+  vector<vector<mstreal> > back(aa.size(), vector<mstreal> (globalAlphabetSize(), 0.0));
+  bkPot = buildZeroDimPotential(aa, back);
+  // cout << "Background frequency potential:\n"; printZeroDimPotential(bkPot);
+  ppPot = buildTwoDimPotential(binData(propVals["phi"], propVals["psi"], {-180, 180, 36}, {-180, 180, 36}, propVals["mult"], true), aa, 10.0, back, true);
+  // cout << "Phi/psi potential:\n"; printTwoDimPotential(ppPot);
+  omPot = buildOneDimPotential(binData(propVals["omega"], 2, {-180, 180, 1000, 1}, propVals["mult"], true), aa, 10.0, back, true);
+  // cout << "Omega potential:\n"; printOneDimPotential(omPot);
+  envPot = buildOneDimPotential(binData(propVals["env"], 1, {0, 1, 75}, propVals["mult"], false), aa, 10.0, back, true);
+  // cout << "Env potential:\n"; printOneDimPotential(envPot);
+// TODO: could also do an end potential: 1, 2, 3 treated specially and N-2, N-1
+// N also.
 }
 
-mstreal dTERMen::lookupOneDimPotential(const oneDimPotType& P, mstreal x, res_t aa) {
-  if ((x < P.binEdges.front()) || (x > P.binEdges.back())) return 0;
+int dTERMen::findBin(const vector<mstreal>& binEdges, mstreal x) {
+  if ((x < binEdges.front()) || (x > binEdges.back())) return -1;
   // do a binary search
-  int nb = P.binEdges.size() - 1;
+  int nb = binEdges.size() - 1;
   int left = 0, right = nb - 1, k;
   while (true) {
     k = (left + right)/2;
-    if (x < P.binEdges[k]) {
+    if (x < binEdges[k]) {
       right = k - 1;
-    } else if ((x > P.binEdges[k+1]) || ((k < nb - 1) && (x == P.binEdges[k+1]))) { // the last bin includes the opper limit
+    } else if ((x > binEdges[k+1]) || ((k < nb - 1) && (x == binEdges[k+1]))) { // the last bin includes the opper limit
       left = k + 1;
     } else {
       break;
     }
   }
+  return k;
+}
+
+mstreal dTERMen::lookupZeroDimPotential(const zeroDimPotType& P, int aa) {
+  return P.aaEnergies[aa];
+}
+
+mstreal dTERMen::lookupOneDimPotential(const oneDimPotType& P, mstreal x, int aa) {
+  int k = findBin(P.binEdges, x);
+  if (k < 0) return 0;
   return P.aaEnergies[k][aa];
 }
 
-dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M, bool isAngle) {
+mstreal dTERMen::lookupTwoDimPotential(const twoDimPotType& P, mstreal x, mstreal y, int aa) {
+  int kx = findBin(P.xBinEdges, x);
+  if (kx < 0) return 0;
+  int ky = findBin(P.yBinEdges, y);
+  if (kx < 0) return 0;
+  return P.aaEnergies[kx][ky][aa];
+}
+
+dTERMen::twoDimHist dTERMen::binData(const vector<mstreal>& X, const vector<mstreal>& Y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<mstreal>& M, bool isAngle) {
+  dTERMen::oneDimHist xH = binData(X, 1, xBinSpec, M, isAngle);
+  dTERMen::oneDimHist yH = binData(Y, 1, yBinSpec, M, isAngle);
+  dTERMen::twoDimHist xyH;
+  xyH.xBinEdges = xH.binEdges;
+  xyH.yBinEdges = yH.binEdges;
+  xyH.weights = xH.weights; // the weights vector should be the same for X- and Y- histograms, so can copy from either
+  xyH.bins.resize(xH.bins.size(), vector<vector<int> >(yH.bins.size()));
+
+  // find intersections between X and Y bins
+  map<int, int> yPointsToBins;
+  for (int i = 0; i < yH.bins.size(); i++) {
+    for (int k = 0; k < yH.bins[i].size(); k++) {
+      yPointsToBins[yH.bins[i][k]] = i;
+    }
+  }
+  for (int i = 0; i < xH.bins.size(); i++) {
+    for (int k = 0; k < xH.bins[i].size(); k++) {
+      int idx = xH.bins[i][k];
+      if (yPointsToBins.find(idx) != yPointsToBins.end()) {
+        int j = yPointsToBins[idx];
+        xyH.bins[i][j].push_back(idx);
+// cout << "[" << X[idx] << ", " << Y[idx] << "] -> " << "{" << xyH.xBinEdges[i] << ":" << xyH.xBinEdges[i+1] << ", " << xyH.yBinEdges[j] << ":" << xyH.yBinEdges[j+1] << "}" << endl;
+      }
+    }
+  }
+
+  return xyH;
+}
+
+dTERMen::oneDimHist dTERMen::binData(const vector<mstreal>& X, int binSpecType, const vector<mstreal>& binSpec, const vector<mstreal>& M, bool isAngle) {
   // limit to data points within range and transform dihedral angles
   mstreal minVal = binSpec[0];
   mstreal maxVal = binSpec[1];
@@ -254,7 +315,7 @@ dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, co
 
   // actually do binning
   vector<int> sortedInds = MstUtils::sortIndices(x);
-  histType H;
+  oneDimHist H;
   if (binSpecType == 1) {
     /* Uniform binning */
     if (binSpec.size() != 3) MstUtils::error("expected three values for bin specification type 1", "dTERMen::binData");
@@ -361,6 +422,9 @@ dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, co
   H.bins.resize(H.binEdges.size() - 1);
   H.binMasses.resize(H.binEdges.size() - 1);
   H.weights.resize(X.size(), 0.0);
+  for (int i = 0; i < X.size(); i++) { // copy all weights (even for excluded points)
+    H.weights[i] = M.empty() ? 1.0 : 1.0/M[i];
+  }
   int bi = 0; mstreal binMass = 0;
   for (int i = 0; i < sortedInds.size(); i++) {
     // the last bin includes the right-most end of the range
@@ -371,13 +435,34 @@ dTERMen::histType dTERMen::binData(const vector<mstreal>& X, int binSpecType, co
     }
     H.bins[bi].push_back(origIndices[sortedInds[i]]);
     binMass += 1/m[sortedInds[i]];
-    H.weights[origIndices[sortedInds[i]]] = 1/m[sortedInds[i]];
   }
 
   return H;
 }
 
-dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot) {
+dTERMen::zeroDimPotType dTERMen::buildZeroDimPotential(const vector<int>& AA, vector<vector<mstreal> >& backPot) {
+  // get the potential
+  zeroDimPotType pot;
+  int naa = globalAlphabetSize();
+  map<int, mstreal> aaCounts;
+  for (int i = 0; i < naa; i++) aaCounts[i] = 0.0;
+  for (int i = 0; i < AA.size(); i++) aaCounts[AA[i]] += 1;
+  pot.aaEnergies = vector<mstreal>(naa, 1.0/0.0);
+  for (int i = 0; i < naa; i++) {
+    pot.aaEnergies[i] = -kT*log(aaCounts[i]/AA.size());
+  }
+
+  // compute the background energy
+  for (int i = 0; i < AA.size(); i++) {
+    for (int j = 0; j < naa; j++) {
+      backPot[i][j] = pot.aaEnergies[j];
+    }
+  }
+
+  return pot;
+}
+
+dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const oneDimHist& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot) {
   oneDimPotType pot;
   pot.binEdges = H.binEdges;
   int nb = pot.binEdges.size() - 1;
@@ -408,8 +493,8 @@ dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const histType& H, const ve
       // compute the expectation of each amino acid in this position
       if (!backPot.empty()) {
         mstreal Z = 0; // partition function for this position (over all amino acids)
-        for (int aai = 0; aai < naa; aai++) Z += exp(-backPot[k][aai]);
-        for (int aai = 0; aai < naa; aai++) expCounts[aai] += w*exp(-backPot[k][aai])/Z;
+        for (int aai = 0; aai < naa; aai++) Z += exp(-backPot[k][aai]/kT);
+        for (int aai = 0; aai < naa; aai++) expCounts[aai] += w*exp(-backPot[k][aai]/kT)/Z;
       } else {
         // if no prior potential given, assume uniform prior
         for (int aai = 0; aai < naa; aai++) expCounts[aai] += w/naa;
@@ -418,7 +503,7 @@ dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const histType& H, const ve
 
     // compute the potential using frequency-proportional pseudocounts
     for (int aa = 0; aa < naa; aa++) {
-      pot.aaEnergies[bi][aa] = -log((pot.aaEnergies[bi][aa] + pc*fAA[aa]*naa)/(expCounts[aa] + pc*fAA[aa]*naa));
+      pot.aaEnergies[bi][aa] = -kT*log((pot.aaEnergies[bi][aa] + pc*fAA[aa]*naa)/(expCounts[aa] + pc*fAA[aa]*naa));
     }
   }
 
@@ -438,18 +523,95 @@ dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const histType& H, const ve
   return pot;
 }
 
-dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const histType& H, const vector<int>& AA, mstreal pc) {
+
+dTERMen::twoDimPotType dTERMen::buildTwoDimPotential(const twoDimHist& H, const vector<int>& AA, mstreal pc, vector<vector<mstreal> >& backPot, bool updateBackPot) {
+  twoDimPotType pot;
+  pot.xBinEdges = H.xBinEdges;
+  pot.yBinEdges = H.yBinEdges;
+  int xnb = H.xBinEdges.size() - 1;
+  int ynb = H.yBinEdges.size() - 1;
+  int naa = globalAlphabetSize();
+  pot.aaEnergies.resize(xnb, vector<vector<mstreal> >(ynb, vector<mstreal>(naa, 0.0)));
+
+  // overall amino-acid frequencies
+  CartesianPoint fAA(naa);
+  for (int bi = 0; bi < xnb; bi++) { // iterating over bin indices ignores any points excluded from binning
+    for (int bj = 0; bj < ynb; bj++) {
+      const vector<int>& binInds = H.bins[bi][bj];
+      for (int i = 0; i < binInds.size(); i++) {
+        int k = binInds[i];
+        fAA[AA[k]] += H.weights[k];
+      }
+    }
+  }
+  fAA /= fAA.sum();
+
+  // add up the weighted counts of each amino acid in each bin
+  for (int bi = 0; bi < xnb; bi++) { // iterating over bin indices ignores any points excluded from binning
+    for (int bj = 0; bj < ynb; bj++) {
+      vector<mstreal> expCounts = vector<mstreal> (naa, 0.0); // expectation of each amino acid in this bin
+      const vector<int>& binInds = H.bins[bi][bj];
+      for (int i = 0; i < binInds.size(); i++) {
+        int k = binInds[i];
+        mstreal w = H.weights[k]; // position weight
+        int aa = AA[k];
+        pot.aaEnergies[bi][bj][aa] += w;
+
+        // compute the expectation of each amino acid in this position
+        if (!backPot.empty()) {
+          mstreal Z = 0; // partition function for this position (over all amino acids)
+          for (int aai = 0; aai < naa; aai++) Z += exp(-backPot[k][aai]/kT);
+          for (int aai = 0; aai < naa; aai++) expCounts[aai] += w*exp(-backPot[k][aai]/kT)/Z;
+        } else {
+          // if no prior potential given, assume uniform prior
+          for (int aai = 0; aai < naa; aai++) expCounts[aai] += w/naa;
+        }
+      }
+
+      // compute the potential using frequency-proportional pseudocounts
+cout << "\n[" << H.xBinEdges[bi] << "-" << H.xBinEdges[bi+1] << ", " << H.yBinEdges[bj] << "-" << H.yBinEdges[bj+1] << "] observed: " << MstUtils::vecToString(pot.aaEnergies[bi][bj]) << endl;
+cout << "expected: " << MstUtils::vecToString(expCounts) << endl << endl;
+      for (int aa = 0; aa < naa; aa++) {
+        pot.aaEnergies[bi][bj][aa] = -kT*log((pot.aaEnergies[bi][bj][aa] + pc*fAA[aa]*naa)/(expCounts[aa] + pc*fAA[aa]*naa));
+      }
+    }
+  }
+
+  // update the prior potential
+  if (!backPot.empty() && updateBackPot) {
+    for (int bi = 0; bi < xnb; bi++) { // iterating over bin indices ignores any points excluded from binning
+      for (int bj = 0; bj < ynb; bj++) {
+        const vector<int>& binInds = H.bins[bi][bj];
+        for (int i = 0; i < binInds.size(); i++) {
+          int k = binInds[i];
+          for (int aai = 0; aai < naa; aai++) {
+            backPot[k][aai] += pot.aaEnergies[bi][bj][aai];
+          }
+        }
+      }
+    }
+  }
+
+  return pot;
+}
+
+dTERMen::oneDimPotType dTERMen::buildOneDimPotential(const oneDimHist& H, const vector<int>& AA, mstreal pc) {
   vector<vector<mstreal> > backPot;
   return buildOneDimPotential(H, AA, pc, backPot, false);
+}
+
+void dTERMen::printZeroDimPotential(const zeroDimPotType& P) {
+  int naa = P.aaEnergies.size();
+  for (int aa = 0; aa < naa; aa++) {
+    cout << indexToResName(aa) << "\t" << P.aaEnergies[aa] << endl;
+  }
 }
 
 void dTERMen::printOneDimPotential(const oneDimPotType& P) {
   int nb = P.aaEnergies.size();
   if (nb == 0) return;
-  int naa = P.aaEnergies[0].size();
-  for (int aa = 0; aa < naa; aa++) {
-    cout << indexToResName(aa) << " ";
-  }
+  int naa = globalAlphabetSize();
+  for (int aa = 0; aa < naa; aa++) cout << indexToResName(aa) << " ";
   cout << endl;
   for (int bi = 0; bi < nb; bi++) {
     printf("%f %f", P.binEdges[bi], P.binEdges[bi+1]);
@@ -460,13 +622,92 @@ void dTERMen::printOneDimPotential(const oneDimPotType& P) {
   }
 }
 
-dTERMen::twoDimPotType dTERMen::buildTwoDimPotential(const vector<mstreal>& x, const vector<mstreal>& y, const vector<mstreal>& xBinSpec, const vector<mstreal>& yBinSpec, const vector<int>& aa, bool isAngle, const vector<mstreal>& priorPot, const vector<mstreal>& mult) {
-  twoDimPotType pot;
-  return pot;
+void dTERMen::printTwoDimPotential(const twoDimPotType& P) {
+  int xnb = P.xBinEdges.size() - 1;
+  int ynb = P.yBinEdges.size() - 1;
+  int naa = globalAlphabetSize();
+  for (int aa = 0; aa < naa; aa++) {
+    cout << "---------------> " << indexToResName(aa) << ":" << endl;
+    for (int i = 0; i < xnb; i++) {
+      for (int j = 0; j < ynb; j++) {
+        printf("%5.3f ", P.aaEnergies[i][j][aa]);
+      }
+      printf("\n");
+    }
+  }
 }
 
 void dTERMen::readBackgroundPotentials(const string& file) {
 
+}
+
+mstreal dTERMen::selfEnergy(Residue* R, const string& aa) {
+  return (selfEnergies(R))[dTERMen::aaToIndex(aa.empty() ? R->getName() : aa)];
+}
+
+vector<mstreal> dTERMen::selfEnergies(Residue* R) {
+  Structure* S = R->getStructure();
+  if (S == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergy");
+  ConFind C(&RL, *S);
+  contactList cL = C.getContacts(R, cdCut);
+  cL.sortByDegree();
+
+  // -- simple environment components
+  int naa = globalAlphabetSize();
+  vector<mstreal> selfE(naa, 0.0);
+  for (int aai = 0; aai < naa; aai++) {
+    selfE[aai] = backEner(aai) + bbOmegaEner(R->getOmega(), aai) + bbPhiPsiEner(R->getPhi(), R->getPsi(), aai) + envEner(C.getFreedom(R), aai);
+  }
+
+  // -- self residual
+  Structure selfTERM;
+  int cInd = TERMUtils::selectTERM({R}, selfTERM, pmSelf)[0];
+  F.setOptions(fasstSearchOptions());
+  F.setQuery(selfTERM);
+  F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(selfTERM, 1.0, 20));
+  F.setMinNumMatches(1000);
+  F.setMaxNumMatches(10000);
+  F.setRedundancyProperty("sim");
+  fasstSolutionSet matches = F.search();
+  vector<mstreal> No(naa, selfResidualPC), Ne(naa, selfResidualPC);
+  vector<mstreal> p(naa, 0);
+  mstreal phi, psi, omg, env, ener;
+  for (int i = 0; i < matches.size(); i++) {
+    // see what amino acid is actually observed at the position
+    const fasstSolution& m = matches[i];
+    res_t aa = F.getMatchSequence(m)[cInd];
+    int aaIdx = dTERMen::aaToIndex(aa);
+    if (aaIdx < 0) continue; // this match has some amino acid that is not known in the current alphabet
+    No[aaIdx] += 1.0;
+
+    // now try out all amino acids at this position and compute expectations
+    phi = F.getResidueProperties(m, "phi")[cInd];
+    psi = F.getResidueProperties(m, "psi")[cInd];
+    omg = F.getResidueProperties(m, "omega")[cInd];
+    env = F.getResidueProperties(m, "env")[cInd];
+    for (int aai = 0; aai < naa; aai++) {
+      p[aai] = backEner(aai) + bbOmegaEner(omg, aai) + bbPhiPsiEner(phi, psi, aai) + envEner(env, aai);
+    }
+    p = dTERMen::enerToProb(p);
+    for (int aai = 0; aai < naa; aai++) Ne[aai] += p[aai];
+  }
+  for (int aai = 0; aai < naa; aai++) {
+    selfE[aai] += -kT*log(No[aai]/Ne[aai]);
+  }
+
+  // -- self correction
+  
+
+  return selfE;
+}
+
+vector<mstreal> dTERMen::enerToProb(const vector<mstreal>& ener) {
+  mstreal minEner = MstUtils::min(ener);
+  mstreal Z = 0;
+  vector<mstreal> p(ener.size(), 0);
+  for (int i = 0; i < ener.size(); i++) Z += exp(-(ener[i] - minEner)/kT);
+  for (int i = 0; i < ener.size(); i++) p[i] = exp(-(ener[i] - minEner)/kT)/Z;
+  return p;
 }
 
 /* ----------- EnergyTable --------------- */

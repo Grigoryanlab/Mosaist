@@ -1263,13 +1263,13 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, map<int, map<int, map<in
   int ti = sol.getTargetIndex();
   bool advance = true;
   if (relMap.find(ti) != relMap.end()) {
-    map<int, map<int, set<int> > > relMapI = relMap[ti];
+    map<int, map<int, set<int> > >& relMapI = relMap[ti];
     // compare this solution to each previously accepted solution
     for (auto psol = solsSet.begin(); psol != solsSet.end(); (advance ? psol++ : psol)) {
       advance = true;
       int tj = psol->getTargetIndex();
       if (relMapI.find(tj) == relMapI.end()) continue; // do the two targets have any related residues?
-      map<int, set<int> > relMapIJ = relMapI[tj];
+      map<int, set<int> >& relMapIJ = relMapI[tj];
 
       // compare each segment
       for (int i = 0; i < sol.numSegments(); i++) {
