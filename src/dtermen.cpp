@@ -15,7 +15,11 @@ void dTERMen::init() {
   cdCut = 0.01;
   pmSelf = 1;
   pmPair = 1;
-  selfResidualPC = 1.0;
+  selfResidualPC = selfCorrPC = 1.0;
+  selfResidualMinN = 1000;
+  selfResidualMaxN = 5000;
+  selfCorrMinN = 200;
+  selfCorrMinN = 5000;
   setAminoAcidMap();
 }
 
@@ -569,8 +573,6 @@ dTERMen::twoDimPotType dTERMen::buildTwoDimPotential(const twoDimHist& H, const 
       }
 
       // compute the potential using frequency-proportional pseudocounts
-cout << "\n[" << H.xBinEdges[bi] << "-" << H.xBinEdges[bi+1] << ", " << H.yBinEdges[bj] << "-" << H.yBinEdges[bj+1] << "] observed: " << MstUtils::vecToString(pot.aaEnergies[bi][bj]) << endl;
-cout << "expected: " << MstUtils::vecToString(expCounts) << endl << endl;
       for (int aa = 0; aa < naa; aa++) {
         pot.aaEnergies[bi][bj][aa] = -kT*log((pot.aaEnergies[bi][bj][aa] + pc*fAA[aa]*naa)/(expCounts[aa] + pc*fAA[aa]*naa));
       }
@@ -645,31 +647,172 @@ mstreal dTERMen::selfEnergy(Residue* R, const string& aa) {
   return (selfEnergies(R))[dTERMen::aaToIndex(aa.empty() ? R->getName() : aa)];
 }
 
-vector<mstreal> dTERMen::selfEnergies(Residue* R) {
-  Structure* S = R->getStructure();
-  if (S == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergy");
-  ConFind C(&RL, *S);
+vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
+  if (R->getStructure() == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergy");
+  if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
+  Structure& S = *(R->getStructure());
+  ConFind C(&RL, S);
   contactList cL = C.getContacts(R, cdCut);
   cL.sortByDegree();
+  vector<Residue*> contResidues = cL.dstResidues();
 
   // -- simple environment components
+  if (verbose) cout << "\tdTERMen::selfEnergies -> trivial statistical components..." << endl;
   int naa = globalAlphabetSize();
-  vector<mstreal> selfE(naa, 0.0);
+  CartesianPoint selfE(naa, 0.0);
+  // vector<mstreal> selfE(naa, 0.0);
   for (int aai = 0; aai < naa; aai++) {
     selfE[aai] = backEner(aai) + bbOmegaEner(R->getOmega(), aai) + bbPhiPsiEner(R->getPhi(), R->getPsi(), aai) + envEner(C.getFreedom(R), aai);
   }
 
   // -- self residual
+  if (verbose) cout << "\tdTERMen::selfEnergies -> self residual..." << endl;
   Structure selfTERM;
-  int cInd = TERMUtils::selectTERM({R}, selfTERM, pmSelf)[0];
+  vector<int> fragResIdx;
+  int cInd = TERMUtils::selectTERM({R}, selfTERM, pmSelf, &fragResIdx)[0];
   F.setOptions(fasstSearchOptions());
   F.setQuery(selfTERM);
-  F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(selfTERM, 1.0, 20));
-  F.setMinNumMatches(1000);
-  F.setMaxNumMatches(10000);
+  F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20));
+  F.setMinNumMatches(selfResidualMinN);
+  F.setMaxNumMatches(selfResidualMaxN);
   F.setRedundancyProperty("sim");
   fasstSolutionSet matches = F.search();
-  vector<mstreal> No(naa, selfResidualPC), Ne(naa, selfResidualPC);
+  selfE += singleBodyStatEnergy(matches, cInd, selfResidualPC);
+  // vector<mstreal> No(naa, selfResidualPC), Ne(naa, selfResidualPC);
+  // vector<mstreal> p(naa, 0);
+  // mstreal phi, psi, omg, env, ener;
+  // for (int i = 0; i < matches.size(); i++) {
+  //   // see what amino acid is actually observed at the position
+  //   const fasstSolution& m = matches[i];
+  //   res_t aa = F.getMatchSequence(m)[cInd];
+  //   int aaIdx = dTERMen::aaToIndex(aa);
+  //   if (aaIdx < 0) continue; // this match has some amino acid that is not known in the current alphabet
+  //   No[aaIdx] += 1.0;
+  //
+  //   // now try out all amino acids at this position and compute expectations
+  //   phi = F.getResidueProperties(m, "phi")[cInd];
+  //   psi = F.getResidueProperties(m, "psi")[cInd];
+  //   omg = F.getResidueProperties(m, "omega")[cInd];
+  //   env = F.getResidueProperties(m, "env")[cInd];
+  //   for (int aai = 0; aai < naa; aai++) {
+  //     p[aai] = backEner(aai) + bbOmegaEner(omg, aai) + bbPhiPsiEner(phi, psi, aai) + envEner(env, aai);
+  //   }
+  //   p = dTERMen::enerToProb(p);
+  //   for (int aai = 0; aai < naa; aai++) Ne[aai] += p[aai];
+  // }
+  // for (int aai = 0; aai < naa; aai++) {
+  //   selfE[aai] += -kT*log(No[aai]/Ne[aai]);
+  // }
+
+  // -- self correction
+  if (verbose) cout << "\tdTERMen::selfEnergies -> self correction..." << endl;
+  class clique {
+    // represents a local interaction "clique" for self-correction calculations
+    public:
+      vector<Residue*> residues;
+      int centResIdx;
+      fasstSolutionSet matches;
+      string toString() {
+        stringstream ss;
+        ss << "clique with " << residues.size() << " residues, centered on " << centResIdx << ", " << matches.size() << " matches:";
+        for (int i = 0; i < residues.size(); i++) ss << " " << *(residues[i]);
+        return ss.str();
+      }
+  };
+
+  // consider each contacting residue with the central one and see if there are
+  // enough matches. If so, create a clique to be grown later. If not, still
+  // create a clique (with number of matches), which will not be grown.
+  vector<clique> finalCliques;
+  map<Residue*, clique> cliquesToGrow;
+  for (int i = 0; i < contResidues.size(); i++) {
+    if (verbose) cout << "\t\tdTERMen::selfEnergies -> seed clique with contact " << *(contResidues[i]) << "..." << endl;
+    clique c;
+    c.residues = {R, contResidues[i]};
+    vector<int> fragResIdx;
+    Structure term;
+    c.centResIdx = TERMUtils::selectTERM(c.residues, term, pmSelf, &fragResIdx)[0];
+    F.setOptions(fasstSearchOptions());
+    F.setQuery(term);
+    mstreal cut = RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.1, 15);
+    F.setRMSDCutoff(cut);
+    F.setMinNumMatches(selfCorrMinN);
+    F.setMaxNumMatches(selfCorrMaxN);
+    c.matches = F.search();
+    if (matches[selfCorrMinN - 1].getRMSD() > cut) { finalCliques.push_back(c); }
+    else { cliquesToGrow[contResidues[i]] = c; }
+  }
+
+  // for those contacts with sufficient matches, try to combine into larger cliques
+  while (!cliquesToGrow.empty()) {
+    // sort remaining contacting residues by decreasing number of matches of the
+    // clique comprising the residue and the central residue
+    vector<Residue*> remConts = MstUtils::keys(cliquesToGrow);
+    sort(remConts.begin(), remConts.end(), [&cliquesToGrow](Residue* i, Residue* j) { return cliquesToGrow[i].matches.size() > cliquesToGrow[j].matches.size(); });
+
+    // pick the one with highest number of contacts, and try to grow the clique
+    clique parentClique = cliquesToGrow[remConts[0]];
+    remConts.erase(remConts.begin());
+    clique grownClique;
+    if (verbose) cout << "\t\tdTERMen::selfEnergies -> will try to grow [" << parentClique.toString() << "]..." << endl;
+    while (!remConts.empty()) {
+      // try to add every remaining contact
+      for (int j = 0; j < remConts.size(); j++) {
+        if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> trying to add " << *(remConts[j]) << "..." << endl;
+        clique newClique;
+        newClique.residues = parentClique.residues;
+        newClique.residues.push_back(remConts[j]);
+        Structure term; vector<int> fragResIdx;
+        newClique.centResIdx = TERMUtils::selectTERM(newClique.residues, term, pmSelf, &fragResIdx)[0];
+        F.setOptions(fasstSearchOptions());
+        F.setQuery(term);
+        mstreal cut = RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.1, 15);
+        F.setRMSDCutoff(cut);
+        F.setMaxNumMatches(selfCorrMaxN);
+        newClique.matches = F.search();
+        if ((j == 0) || (newClique.matches.size() > grownClique.matches.size())) {
+          if (verbose) cout << "\t\t\t\tdTERMen::selfEnergies -> new best" << endl;
+          grownClique = newClique;
+        }
+      }
+      if ((grownClique.matches.size() >= selfCorrMinN) && (grownClique.matches.size() > 0.8*parentClique.matches.size())) {
+        remConts = MstUtils::setdiff(remConts, {grownClique.residues.back()});
+        parentClique = grownClique;
+        if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> chose to add " << *(grownClique.residues.back()) << "..." << endl;
+      } else {
+        if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> nothing more worked, sticking with parent clique..." << endl;
+        grownClique = parentClique;
+        break;
+      }
+    }
+
+    // add the grown clique to the list of final cliques, and remove used up
+    // residues from the list of cliques to grow
+    if (verbose) cout << "\t\tdTERMen::selfEnergies -> adding final clique [" << grownClique.toString() << "]..." << endl;
+    finalCliques.push_back(grownClique);
+    vector<Residue*> deleted = MstUtils::setdiff(MstUtils::keys(cliquesToGrow), remConts);
+    if (verbose) cout << "\t\tdTERMen::selfEnergies -> neighboring residues taken care of this cycle:";
+    for (int i = 0; i < deleted.size(); i++) {
+      if (verbose) cout << " " << *(deleted[i]);
+      cliquesToGrow.erase(deleted[i]);
+    }
+    if (verbose) cout << endl;
+  }
+
+  // finally, actually compute the self correction for each final clique
+  if (verbose) cout << "\tdTERMen::selfEnergies -> final cliques:" << endl;
+  for (int i = 0; i < finalCliques.size(); i++) {
+    if (verbose) cout << "\t\t" << finalCliques[i].toString() << endl;
+    selfE += singleBodyStatEnergy(finalCliques[i].matches, finalCliques[i].centResIdx, selfCorrPC);
+  }
+
+  return selfE;
+}
+
+CartesianPoint dTERMen::singleBodyStatEnergy(fasstSolutionSet& matches, int cInd, int pc) {
+  int naa = globalAlphabetSize();
+  CartesianPoint selfE(naa, 0.0);
+  vector<mstreal> No(naa, pc), Ne(naa, pc);
   vector<mstreal> p(naa, 0);
   mstreal phi, psi, omg, env, ener;
   for (int i = 0; i < matches.size(); i++) {
@@ -692,11 +835,8 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R) {
     for (int aai = 0; aai < naa; aai++) Ne[aai] += p[aai];
   }
   for (int aai = 0; aai < naa; aai++) {
-    selfE[aai] += -kT*log(No[aai]/Ne[aai]);
+    selfE[aai] = -kT*log(No[aai]/Ne[aai]);
   }
-
-  // -- self correction
-  
 
   return selfE;
 }

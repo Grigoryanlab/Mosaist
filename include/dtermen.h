@@ -9,9 +9,7 @@
 using namespace MST;
 
 /* Remaining questions:
- * NOTE: when there is no +/- pmSelf or +/- pmPair on one side, what do we do? Extend on the other side?
- * NOTE: the wiki pages show minimum numbers of matches required and the RMSD cutoff, but what about the max?
- $ NOTE: what is the value of pmSelf for self residual, self correction, and what is the value of pmPair?
+ * TODO: when there is no +/- pmSelf or +/- pmPair on one side, extend on the other side (current dTERMen)!
  */
 
 class dTERMen {
@@ -108,7 +106,7 @@ class dTERMen {
      * amino acid at the given position (by default the one actually there), and
      * the second form returns values for all amino acids at the position. */
     mstreal selfEnergy(Residue* R, const string& aa = "");
-    vector<mstreal> selfEnergies(Residue* R);
+    vector<mstreal> selfEnergies(Residue* R, bool verbose = false);
 
   protected:
     int findBin(const vector<mstreal>& binEdges, mstreal x); // do a binary search to find the bin into which the value falls
@@ -116,6 +114,12 @@ class dTERMen {
     mstreal bbOmegaEner(mstreal omg, int aai) { return lookupOneDimPotential(omPot, omg, aai); }
     mstreal bbPhiPsiEner(mstreal phi, mstreal psi, int aai) { return lookupTwoDimPotential(ppPot, phi, psi, aai); }
     mstreal envEner(mstreal env, int aai) { return lookupOneDimPotential(envPot, env, aai); }
+
+    /* Given a list of FASST solutions, computes the residual statistical energy
+     * for all amino acids at the position with index cInd, after accounting for
+     * all "trivial" background statistical contributions at this position
+     * accross all of the matches. */
+    CartesianPoint singleBodyStatEnergy(fasstSolutionSet& matches, int cInd, int pc);
     vector<mstreal> enerToProb(const vector<mstreal>& ener);
 
   private:
@@ -125,8 +129,9 @@ class dTERMen {
     zeroDimPotType bkPot;
     oneDimPotType omPot, envPot;
     twoDimPotType ppPot;
-    mstreal kT, cdCut, selfResidualPC;
+    mstreal kT, cdCut, selfResidualPC, selfCorrPC;
     int pmSelf, pmPair;
+    int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN;
 
     /* We may want to deal with different "universal" alphabets (separate from
      * the design alphabet). We may want to interpret SEC (selenocysteine), for

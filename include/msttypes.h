@@ -943,8 +943,12 @@ class MstUtils {
     static set<T> contents(const vector<T>& vec);
     template <class T>
     static map<T, int> indexMap(const vector<T>& vec);
+
+    /* The returned vector has all of the elements in vector A, in their original
+     * relative order, that do not appear in vector B. */
     template <class T>
     static vector<T> setdiff(const vector<T>& A, const vector<T>& B);
+
     template <class T>
     static vector<T> range(const T& from, const T& to, const T& step = 1);
 

@@ -18,7 +18,7 @@ using namespace MST;
 
 class fasstCache {
   public:
-    fasstCache(FASST* s) { S = s; maxNumResults = 1000; }
+    fasstCache(FASST* s, int max = 1000) { S = s; maxNumResults = max; }
     ~fasstCache() { clear(); }
     void clear(); // clears cache (removes all solutions)
     FASST* getFASST() const { return S; }
@@ -548,7 +548,6 @@ int main(int argc, char** argv) {
   RMSDCalculator rc;
   Structure I(op.getString("p"));
   FASST F;
-  fasstCache cache(&F);
   vector<int> fixed;
   F.setMemorySaveMode(true);
   if (op.isGiven("d")) {
@@ -617,6 +616,9 @@ int main(int argc, char** argv) {
       if (getConts[i]) contResis.push_back(i);
     }
   }
+
+  // create a cache with size proprtional to the number of flexible residues
+  fasstCache cache(&F, (I.residueSize() - fixed.size())*100);
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order

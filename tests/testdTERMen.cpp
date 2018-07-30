@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
   cout << "phi/psi energy for LYS in [-45, -65] is: " << D.bbPhiPsiEner(-45, -65, "LYS") << endl;
 
   Residue* R = &(S.getResidue(MstUtils::randInt(S.residueSize())));
-  vector<mstreal> selfE = D.selfEnergies(R);
+  vector<mstreal> selfE = D.selfEnergies(R, true);
   cout << "self energies at site " << *R << ":" << endl;
   for (int i = 0; i < D.globalAlphabetSize(); i++) {
     cout << D.indexToResName(i) << " => " << selfE[i] << endl;
