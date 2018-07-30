@@ -520,6 +520,13 @@ mstreal totalScore(fusionScores& scoreObj, Structure& fused, AtomPointerVector& 
   return scoreObj.getScore();
 }
 
+void copySequence(const Structure& from, Structure& to) {
+  if (from.residueSize() != to.residueSize()) MstUtils::error("structures of different sizes", "copySequence");
+  for (int i = 0; i < from.residueSize(); i++) {
+    to.getResidue(i).setName(from.getResidue(i).getName());
+  }
+}
+
 int main(int argc, char** argv) {
   // TODO: debug Neilder-Meid optimization by comparing a simple case with Matlab
   // TODO: enable a setting in Fuser, whereby fully overlapping segments are scored
@@ -725,6 +732,7 @@ int main(int argc, char** argv) {
       // no fixed residues, but adding just in case)
       propTopo.addFragment(S, MstUtils::range(0, propTopo.length()), 0.0);
       Structure propFused = Fuser::fuse(propTopo, propScore, opts);
+      copySequence(S, propFused);
       AtomPointerVector init = getCorrespondingAtoms(S, propFused);
       cout << "\titeration " << it << " => "; totalScore(propScore, propFused, init, true); cout << endl;
       if ((it == 0) || mc(totalScore(currScore, currFused, init), totalScore(propScore, propFused, init), kT)) {

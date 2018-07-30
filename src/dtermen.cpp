@@ -651,6 +651,10 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
   if (R->getStructure() == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergy");
   if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
   Structure& S = *(R->getStructure());
+  auto rmsdCutSelfRes = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20); };
+  auto rmsdCutSelfCor = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.1, 15); };
+
+  // -- get contacts
   ConFind C(&RL, S);
   contactList cL = C.getContacts(R, cdCut);
   cL.sortByDegree();
@@ -672,42 +676,23 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
   int cInd = TERMUtils::selectTERM({R}, selfTERM, pmSelf, &fragResIdx)[0];
   F.setOptions(fasstSearchOptions());
   F.setQuery(selfTERM);
-  F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20));
+  F.setRMSDCutoff(rmsdCutSelfRes(fragResIdx, S));
   F.setMinNumMatches(selfResidualMinN);
   F.setMaxNumMatches(selfResidualMaxN);
   F.setRedundancyProperty("sim");
   fasstSolutionSet matches = F.search();
   selfE += singleBodyStatEnergy(matches, cInd, selfResidualPC);
-  // vector<mstreal> No(naa, selfResidualPC), Ne(naa, selfResidualPC);
-  // vector<mstreal> p(naa, 0);
-  // mstreal phi, psi, omg, env, ener;
-  // for (int i = 0; i < matches.size(); i++) {
-  //   // see what amino acid is actually observed at the position
-  //   const fasstSolution& m = matches[i];
-  //   res_t aa = F.getMatchSequence(m)[cInd];
-  //   int aaIdx = dTERMen::aaToIndex(aa);
-  //   if (aaIdx < 0) continue; // this match has some amino acid that is not known in the current alphabet
-  //   No[aaIdx] += 1.0;
-  //
-  //   // now try out all amino acids at this position and compute expectations
-  //   phi = F.getResidueProperties(m, "phi")[cInd];
-  //   psi = F.getResidueProperties(m, "psi")[cInd];
-  //   omg = F.getResidueProperties(m, "omega")[cInd];
-  //   env = F.getResidueProperties(m, "env")[cInd];
-  //   for (int aai = 0; aai < naa; aai++) {
-  //     p[aai] = backEner(aai) + bbOmegaEner(omg, aai) + bbPhiPsiEner(phi, psi, aai) + envEner(env, aai);
-  //   }
-  //   p = dTERMen::enerToProb(p);
-  //   for (int aai = 0; aai < naa; aai++) Ne[aai] += p[aai];
-  // }
-  // for (int aai = 0; aai < naa; aai++) {
-  //   selfE[aai] += -kT*log(No[aai]/Ne[aai]);
-  // }
 
   // -- self correction
   if (verbose) cout << "\tdTERMen::selfEnergies -> self correction..." << endl;
   class clique {
-    // represents a local interaction "clique" for self-correction calculations
+    // represents a local interaction "clique" for self-correction calculations.
+    // NOTE: the word "clique" is used loosely here, "connected component" would
+    // probably be more accurate, because we don't actually look at contacts
+    // between the residues that contact the central residue. BUT, the final
+    // set of motifs we hope to end up with can still be thought of as cliques,
+    // because each motif occurs together frequently enough (so the residues
+    // involved in the motif "go together" frequently -- i.e., form a "clique").
     public:
       vector<Residue*> residues;
       int centResIdx;
@@ -734,7 +719,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
     c.centResIdx = TERMUtils::selectTERM(c.residues, term, pmSelf, &fragResIdx)[0];
     F.setOptions(fasstSearchOptions());
     F.setQuery(term);
-    mstreal cut = RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.1, 15);
+    mstreal cut = rmsdCutSelfCor(fragResIdx, S);
     F.setRMSDCutoff(cut);
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
@@ -766,8 +751,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
         newClique.centResIdx = TERMUtils::selectTERM(newClique.residues, term, pmSelf, &fragResIdx)[0];
         F.setOptions(fasstSearchOptions());
         F.setQuery(term);
-        mstreal cut = RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.1, 15);
-        F.setRMSDCutoff(cut);
+        F.setRMSDCutoff(rmsdCutSelfCor(fragResIdx, S));
         F.setMaxNumMatches(selfCorrMaxN);
         newClique.matches = F.search();
         if ((j == 0) || (newClique.matches.size() > grownClique.matches.size())) {
@@ -775,7 +759,9 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
           grownClique = newClique;
         }
       }
-      if ((grownClique.matches.size() >= selfCorrMinN) && (grownClique.matches.size() > 0.8*parentClique.matches.size())) {
+      // EITHER a sufficient number of matches OR not too many fewer than for the
+      // parent clique is the logic we had implemented in original dTERMen
+      if ((grownClique.matches.size() >= selfCorrMinN) || (grownClique.matches.size() > 0.8*parentClique.matches.size())) {
         remConts = MstUtils::setdiff(remConts, {grownClique.residues.back()});
         parentClique = grownClique;
         if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> chose to add " << *(grownClique.residues.back()) << "..." << endl;
