@@ -660,6 +660,17 @@ int Chain::getResidueIndex(const Residue* res) {
   return residueIndexInChain[(Residue*) res];
 }
 
+int Chain::getIndex() const {
+  const Structure* P = getParent();
+  if (P == NULL) MstUtils::error("cannot get index of disembodied chain", "Chain::getIndex()");
+  int idx = -1;
+  for (int i = 0; i < P->chainSize(); i++) {
+    if (&(P->getChain(i)) == this) return i;
+  }
+  MstUtils::error("strange error: Chain does not appear to belong to its parent Structure", "Chain::getIndex()");
+  return -1;
+}
+
 void Chain::incrementNumAtoms(int delta) {
   numAtoms += delta;
   if (parent != NULL) {
@@ -924,6 +935,14 @@ mstreal Residue::getOmega(bool strict) {
   }
 
   return CartesianGeometry::dihedral(*A, *B, *C, *D);
+}
+
+bool Residue::areBonded(const Residue& resN, const Residue& resC, mstreal maxPeptideBond) {
+  Atom* atomC = resN.findAtom("C", true);
+  Atom* atomN = resC.findAtom("N", true);
+  if ((atomC == NULL) || (atomN == NULL)) MstUtils::error("necessary C or N backbone atom(s) missing", "Residue::areBonded");
+  if (atomC->distance(atomN) > maxPeptideBond) return false;
+  return true;
 }
 
 Atom* Residue::findAtom(string _name, bool strict) const {

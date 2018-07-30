@@ -669,17 +669,21 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
     selfE[aai] = backEner(aai) + bbOmegaEner(R->getOmega(), aai) + bbPhiPsiEner(R->getPhi(), R->getPsi(), aai) + envEner(C.getFreedom(R), aai);
   }
 
+  // set up FASST base options
+  F.setOptions(fasstSearchOptions());
+  F.setRedundancyProperty("sim");
+  fasstSearchOptions foptsBase = F.options();
+
   // -- self residual
   if (verbose) cout << "\tdTERMen::selfEnergies -> self residual..." << endl;
   Structure selfTERM;
   vector<int> fragResIdx;
   int cInd = TERMUtils::selectTERM({R}, selfTERM, pmSelf, &fragResIdx)[0];
-  F.setOptions(fasstSearchOptions());
+  F.setOptions(foptsBase);
   F.setQuery(selfTERM);
   F.setRMSDCutoff(rmsdCutSelfRes(fragResIdx, S));
   F.setMinNumMatches(selfResidualMinN);
   F.setMaxNumMatches(selfResidualMaxN);
-  F.setRedundancyProperty("sim");
   fasstSolutionSet matches = F.search();
   selfE += singleBodyStatEnergy(matches, cInd, selfResidualPC);
 
@@ -717,7 +721,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
     vector<int> fragResIdx;
     Structure term;
     c.centResIdx = TERMUtils::selectTERM(c.residues, term, pmSelf, &fragResIdx)[0];
-    F.setOptions(fasstSearchOptions());
+    F.setOptions(foptsBase);
     F.setQuery(term);
     mstreal cut = rmsdCutSelfCor(fragResIdx, S);
     F.setRMSDCutoff(cut);
@@ -749,7 +753,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
         newClique.residues.push_back(remConts[j]);
         Structure term; vector<int> fragResIdx;
         newClique.centResIdx = TERMUtils::selectTERM(newClique.residues, term, pmSelf, &fragResIdx)[0];
-        F.setOptions(fasstSearchOptions());
+        F.setOptions(foptsBase);
         F.setQuery(term);
         F.setRMSDCutoff(rmsdCutSelfCor(fragResIdx, S));
         F.setMaxNumMatches(selfCorrMaxN);

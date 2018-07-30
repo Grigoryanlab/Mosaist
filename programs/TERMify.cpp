@@ -378,9 +378,8 @@ mstreal getRadius(const Structure& S) {
   return rad;
 }
 
-vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragResIdx, const vector<int>& centIdx = vector<int>()) {
-  int need = 5; // want at least this many matches in the end
-  // estimate how many matches to ask for at first
+vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragResIdx, int need = 5, const vector<int>& centIdx = vector<int>()) {
+  // want at least "need" matches in the end; estimate how many to ask for at first
   int seqConsts = 0;
   for (int i = 0; i < centIdx.size(); i++) {
     if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) seqConsts++;
@@ -569,6 +568,7 @@ int main(int argc, char** argv) {
   }
   if (op.isGiven("f")) {
     fixed = MstUtils::splitToInt(op.getString("f"));
+    cout << "fix specification gave " << fixed.size() << " residues, fixing..." << endl;
   }
   if (op.isGiven("fs")) {
     selector sel(I);
@@ -655,7 +655,7 @@ int main(int argc, char** argv) {
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
         F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-        vector<Structure*> matches = getMatches(cache, frag, fragResIdx, op.isGiven("s") ? centIdx : vector<int>());
+        vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
         allMatches.push_back(matches);
       }
     }
@@ -679,7 +679,7 @@ int main(int argc, char** argv) {
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
       F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-      vector<Structure*> matches = getMatches(cache, frag, fragResIdx, op.isGiven("s") ? centIdx : vector<int>());
+      vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
       allMatches.push_back(matches);
     }
 
@@ -707,7 +707,7 @@ int main(int argc, char** argv) {
       }
     }
 
-    // if there are fixed residues, then their starting conformation (and thus)
+    // if there are fixed residues, then their starting conformation (and thus,
     // the final one also) is chosen from the original structure
     if (!fixed.empty()) opts.setStartingStructure(S);
 
@@ -727,10 +727,15 @@ int main(int argc, char** argv) {
       fusionTopology propTopo = getTopo(I.residueSize(), allMatches, propPicks, (it == 0) ? shellOut : dummy, op.isGiven("m") ? &S : NULL);
       propTopo.addFixedPositions(fixed);
       // this is to provide IC information for connections between any possible
-      // fixed residues residues and flexible ones. NOTE: the weight is set to 0,
-      // so this does not affect the objective function (not needed when there are
-      // no fixed residues, but adding just in case)
-      propTopo.addFragment(S, MstUtils::range(0, propTopo.length()), 0.0);
+      // fixed residues and flexible ones. NOTE: the weight is set to 0, so this
+      // does not affect the objective function.
+      // TODO: this has the effect of "normalizing" IC information in the current
+      // structure, which may not be a good idea if the structure is poor. Need to solve.
+// TODO: why is this needed????? ICs between fixed and flexible residues should
+// be covered by TERMs that go across the two. Experimentally, it does seem to go
+// into the typical "long loop" for calculating ICs, so need to find where it is
+// having trouble and why.
+      // if (!fixed.empty()) propTopo.addFragment(S, MstUtils::range(0, propTopo.length()), 0.0);
       Structure propFused = Fuser::fuse(propTopo, propScore, opts);
       copySequence(S, propFused);
       AtomPointerVector init = getCorrespondingAtoms(S, propFused);

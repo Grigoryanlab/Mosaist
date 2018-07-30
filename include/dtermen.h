@@ -10,6 +10,12 @@ using namespace MST;
 
 /* Remaining questions:
  * TODO: when there is no +/- pmSelf or +/- pmPair on one side, extend on the other side (current dTERMen)!
+ * TODO: make terminus-specific trivial potentials (probably all of them)
+ * TODO: A MAJOR issue is that there is considerable overcounting of the local backbone between self residual
+ *       and self correction. Possible solutions are:
+ *       - pre-compute self residual for all residues in the database; would take a long time, but could be
+ *         shortened considerably via FASST cache. With a pre-computed self residual we can always take it
+ *         out of the contributions from the mathces (just like we do for phi/psi).
  */
 
 class dTERMen {

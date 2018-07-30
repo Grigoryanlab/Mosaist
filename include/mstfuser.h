@@ -124,7 +124,7 @@ class fusionTopology {
 
   public:
     /* Initializes an empty topology of a given length */
-    fusionTopology(int L = 0) { overlappingResidues.resize(L); fixed.resize(L, false); numMobAtoms = bba.size()*L; }
+    fusionTopology(int L = 0);
 
     /* initialize a topology from the "old-style" resTopo array. resTopo is of
      * length equal to the number of residues in the fused structure (i.e., the
@@ -138,15 +138,15 @@ class fusionTopology {
 
     /* These two functions allow one to add fragments to an existing topology,
      * specifying which position indices residues of the fragment are to overlap
-     * with. This is specified either explicitly, via the second parameter, the
-     * indices are taken from resnum fields of the residues, by default. One can
+     * with. This is specified either explicitly, via the second parameter OR the
+     * indices are taken from resnum fields of the residues (default). One can
      * also specify a weight factor for the added fragment. */
     void addFragment(Structure& S, const vector<int>& fragResIdx = vector<int>(), mstreal weight = 1.0);
     void addFragment(vector<Residue*>& R, const vector<int>& fragResIdx = vector<int>(), mstreal weight = 1.0);
 
     /* These function mark specified position(s) as fixed in the topology. */
     void addFixedPositions(vector<int> fixedInds);
-    void addFixedPosition(int i) { fixed[i] = true; numMobAtoms -= bba.size(); }
+    void addFixedPosition(int i) { fixed[i] = true; }
 
     /* Once a topology object is set up, this function finds pairings between the
      * fragments to be overlapped and regions in the fused structure that they
@@ -155,6 +155,10 @@ class fusionTopology {
      * superposition and other analysis. To do this, the function accepts a reference
      * to a Structure object that represents the structure to be fused. */
     void setAlignedFrags(Structure& fused);
+
+    /* Checks whether the given structure is consistent with the topology--i.e.,
+     * has the right number of chains of the righht length. */
+    bool isConsistent(const Structure& S);
 
     /* Getters and setters */
     int numAlignedFrags() const { return alignedFrags.size(); }
@@ -167,10 +171,15 @@ class fusionTopology {
     int numOverlappingResidues(int pi) { return overlappingResidues[pi].size(); }
     vector<int> getFixedPositions();
     int numFixedPositions();
+    int numFixedInChain(int ci);
     bool isFixed(int i) { return fixed[i]; }
+    bool isFixed(int ci, int ri) { return fixedInChain[ci][ri]; }
     int length() { return overlappingResidues.size(); }
-    int numMobileAtoms() { return numMobAtoms; }
+    int numMobileAtoms(int ci) { updateConnectivity(); return numMobAtoms[ci]; }
+    int numMobileAtoms();
     vector<mstreal> getFragWeights() const { return fragWeights; }
+    vector<int> getChainLengths() { updateConnectivity(); return chainLengths; }
+    int numChains() { updateConnectivity(); return chainLengths.size(); }
 
     /* Assignment (copy constructor implemented using this) */
     fusionTopology& operator=(const fusionTopology& topo);
@@ -187,15 +196,29 @@ class fusionTopology {
     }
 
   protected:
+    /* This function figures out the connectivity (i.e., chains) implied by the
+     * topology object. It returns the length of each chain, in the order they
+     * occur within the topology. The determination is made based on available
+     * fragments. If two consecutive residues are not found bonded to each other
+     * in any fragment they are both a part of, then a chain break is said to
+     * occur between them. */
+    void updateConnectivity(bool verbose = true);
+
     static vector<string> bba;
 
   private:
+    // general topology information
     vector<pair<AtomPointerVector, vector<int> > > fragments;
     vector<mstreal> fragWeights;
     vector<vector<Residue*> > overlappingResidues;
     vector<bool> fixed;
     vector<pair<AtomPointerVector, AtomPointerVector> > alignedFrags;
-    int numMobAtoms;
+
+    // per chain information (computed when needed)
+    vector<int> chainLengths;
+    vector<int> numMobAtoms;
+    vector<vector<bool> > fixedInChain;
+    bool updated; // have changes to the topology been made that require an update of connectivity?
 };
 
 class fusionEvaluator: public optimizerEvaluator {
@@ -219,19 +242,24 @@ class fusionEvaluator: public optimizerEvaluator {
     vector<mstreal> guessPoint();
     void setGuessPoint(const vector<mstreal>& _initPoint) { initPoint = _initPoint; }
     void noisifyGuessPoint(mstreal _noise = 1.0) { params.setNoise(_noise); initPoint.resize(0); }
-    int numResidues() { return overlappingResidues.size(); }
-    bool isAnchored() { return (topo.numFixedPositions() > 0); }
+    bool isAnchored(int ci) { return (topo.numFixedInChain(ci) > 0); }
     int numDF() {
-      int df = 3*topo.numMobileAtoms() - 6;
-      if (isAnchored()) df += 6;
+      /* if we have fixed residues, then there is an absolute reference frame and
+       * every atom gets exactly three coordinates. Otherwise, the first three
+       * atoms are "special" as we want to remove rigid transformations. */
+      int df = 0;
+      for (int ci = 0; ci < topo.numChains(); ci++) {
+        if (isAnchored(ci)) df += 3*topo.numMobileAtoms(ci);
+        else df += 3*topo.numMobileAtoms(ci) - 6;
+      }
       return df;
     }
-    int getBuildOrigin() { return buildOriginRes; }
-    void setBuildOrigin(int _buildOriginRes) { buildOriginRes = _buildOriginRes; }
+    vector<int> getBuildOrigins() { return buildOriginRes; }
+    void setBuildOrigins(const vector<int>& _buildOriginRes) { buildOriginRes = _buildOriginRes; }
     Structure getStructure() { return fused; }
     Structure getAlignedStructure();
     void setVerbose(bool _verbose) { params.setVerbose(_verbose); }
-    int randomizeBuildOrigin();
+    void pickBuildOrigins(bool randomize = false);
     fusionScores getScores();
 
   class icBound {
@@ -318,9 +346,13 @@ class fusionEvaluator: public optimizerEvaluator {
 
   private:
     Structure fused, guess;
-    int buildOriginRes;    // index one of the fixed residues, which will be used
-                           // to start placing all other atoms. If there are no
-                           // fixed residues, this index is set to -1;
+
+    /* For each chain, this will store the index of some residue, from which the
+     * building of that chain is to begin. If there are fixed residues in the
+     * chain, one of them will be chosen. If not, then some other arbitrary
+     * residue will be chosen as the build origin (e.g., the first one). */
+    vector<int> buildOriginRes;
+
     fusionTopology topo;   // stores all information about the topology of the fusion
 
     /* Allowed ranges for internal degrees of freedom. Note that the number of
@@ -333,10 +365,6 @@ class fusionEvaluator: public optimizerEvaluator {
      * compared to allowed ranges to score (e.g., the bond between a fixed and
      * a non-fixed atom). */
     vector<icBound> bounds;
-
-    /* For each residue index in the fused structure, this variable stores the
-     * list of all overlapping fragment residues. */
-    vector<vector<Residue*> > overlappingResidues;
 
     vector<mstreal> initPoint;
     fusionParams params;

@@ -148,9 +148,10 @@ class Chain {
     vector<Atom*> getAtoms();
     string getID() const { return cid; }
     string getSegID() const { return sid; }
-    Structure* getParent() { return parent; }
-    Structure* getStructure() { return getParent(); }
+    Structure* getParent() const { return parent; }
+    Structure* getStructure() const { return getParent(); }
     int getResidueIndex(const Residue* res); // this in the in-chain residue index!
+    int getIndex() const; // index of this chain within the larger structure
 
     /* convenience functoins, not efficient (linear search). If you need to do this a lot,
      * call getResidues() and construct your own data structure (e.g., a map<>) for fast lookups. */
@@ -247,6 +248,8 @@ class Residue {
     mstreal getPsi(bool strict = true);
     mstreal getOmega(bool strict = true);
     static bool isBadDihedral(mstreal dihe) { return dihe == Residue::badDihedral; }
+    static bool areBonded(const Residue& resN, const Residue& resC, mstreal maxPeptideBond = 2.0);
+    static bool areBonded(Residue* resN, Residue* resC, mstreal maxPeptideBond = 2.0) { return Residue::areBonded(*resN, *resC, maxPeptideBond); }
 
     int getResidueIndex() const;
     int getResidueIndexInChain() const;
@@ -309,9 +312,9 @@ class Atom {
     bool isNamed(const char* _name) const { return (strcmp(name, _name) == 0); }
     bool isNamed(const string& _name) const { return isNamed(_name.c_str()); }
     int numAlternatives() { return (alternatives == NULL) ? 0 : alternatives->size(); }
-    Residue* getParent() { return parent; }
-    Residue* getResidue() { return parent; }
-    Chain* getChain() { return (parent == NULL) ? NULL : parent->getParent(); }
+    Residue* getParent() const { return parent; }
+    Residue* getResidue() const { return parent; }
+    Chain* getChain() const { return (parent == NULL) ? NULL : parent->getParent(); }
     Structure* getStructure() { Chain* chain = getChain(); return (chain == NULL) ? NULL : chain->getParent(); }
 
     void setName(const char* _name);
