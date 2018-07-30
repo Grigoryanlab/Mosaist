@@ -106,31 +106,26 @@ void fusionTopology::setAlignedFrags(Structure& fused) {
 bool fusionTopology::isConsistent(const Structure& S) {
   if (S.residueSize() != this->length()) return false;
   vector<int> chainLengths = getChainLengths();
-  // NOTE: the structure can have more chains than the topology if some chains
-  // are fully fixed, are consecuitive in the topology and end up collapsed
-  if (S.chainSize() < chainLengths.size()) return false;
-  int ri = 0;
+  if (S.chainSize() != chainLengths.size()) return false;
   for (int i = 0; i < chainLengths.size(); i++) {
-    // the residue corresponding to the last residue of the current topology
-    // chain must also be the terminal residue in some chain of the structure
-    int riNext = ri + chainLengths[i] - 1;
-    if (S.getResidue(riNext).getResidueIndexInChain() != S.getResidue(riNext).getChain()->residueSize() - 1) return false;
-
-    // residues corresponding the current chain in the topology may sweep more
-    // than one chain in the structure only if all these chains are fixed
-    int ci = S.getResidue(riNext).getChain()->getIndex(); // last residue of current topology chain
-    int pci = S.getResidue(ri).getChain()->getIndex();  // first residue of current topology chain
-    if (ci != pci) {
-cout << "\ta single chain in the topology appears to sweep from chain " << pci << " to " << ci << " in the structure, checking if these chains are fully fixed..." << endl;
-      // this is okay only if what we skipped were fully fixed chains
-      int numSkipped = 0;
-      for (int sci = pci; sci <= ci; sci++) numSkipped += S[sci].residueSize();
-cout << "\tthese chains have " << numSkipped << " residues and topology has " << numFixedInChain(i) << " fixed" << endl;
-      if (numFixedInChain(i) != numSkipped) return false;
-    }
-    ri = riNext + 1;
+    if (S[i].residueSize() != chainLengths[i]) return false;
   }
   return true;
+}
+
+Structure fusionTopology::remapChains(const Structure& S) {
+  Structure Sc;
+  if (S.residueSize() != this->length()) MstUtils::error("cannot remap chains because number of residues in Structure does not map that of topology");
+  vector<int> chainLengths = getChainLengths();
+  int k = 0;
+  for (int ci = 0; ci < chainLengths.size(); ci++) {
+    Chain* C = Sc.appendChain("A", true);
+    for (int ri = 0; ri < chainLengths[ci]; ri++) {
+      C->appendResidue(new Residue(S.getResidue(k)));
+      k++;
+    }
+  }
+  return Sc;
 }
 
 void fusionTopology::addFixedPositions(vector<int> fixedInds) {
@@ -293,7 +288,9 @@ void fusionEvaluator::init() {
     fused.renumber();
   } else {
     fused = params.getStartingStructure();
-    if (!topo.isConsistent(fused)) MstUtils::error("specified starting structure is inconsistent with the topology");
+    // sometimes, the topology may end up lumping several consecutive fixed chain
+    // together, so try to redistribute residues to match the topology chains
+    if (!topo.isConsistent(fused)) fused = topo.remapChains(fused);
   }
   guess = fused; // save initial "averaged" guess for later alignment (easier to visualize output)
   topo.setAlignedFrags(fused);

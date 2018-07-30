@@ -159,6 +159,7 @@ class fusionTopology {
     /* Checks whether the given structure is consistent with the topology--i.e.,
      * has the right number of chains of the righht length. */
     bool isConsistent(const Structure& S);
+    Structure remapChains(const Structure& S);
 
     /* Getters and setters */
     int numAlignedFrags() const { return alignedFrags.size(); }
