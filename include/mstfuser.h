@@ -39,6 +39,7 @@ class fusionParams {
     mstreal getBondFC() { return kb; }
     mstreal getAngleFC() { return ka; }
     mstreal getDihedralFC() { return kh; }
+    vector<mstreal> getIntCoorFCs() { return {kb, ka, kh}; }
     mstreal getRepFC() { return krep; }
     mstreal getCompFC() { return kcomp; }
     mstreal getCompRad() { return Rcomp; }
@@ -59,6 +60,7 @@ class fusionParams {
     void setErrTol(mstreal _tol) { tol = _tol; }
     void setBondFC(mstreal _k) { kb = _k; }
     void setAngleFC(mstreal _k) { ka = _k; }
+    void setIntCoorFCs(const vector<mstreal>& ks) { kb = ks[0]; ka = ks[1]; kh = ks[2]; }
     void setDihedralFC(mstreal _k) { kh = _k; }
     void setRepFC(mstreal _k) { krep = _k; }
     void setCompFC(mstreal _k) { kcomp = _k; }
@@ -189,7 +191,7 @@ class fusionTopology {
       for (int i = 0; i < _topo.overlappingResidues.size(); i++) {
         cout << i << ": ";
         for (int k = 0; k < _topo.overlappingResidues[i].size(); k++) {
-          cout << *(_topo.overlappingResidues[i][k]) << "[" << _topo.overlappingResidues[i][k]->getStructure() << "], ";
+          cout << *(_topo.overlappingResidues[i][k]) << " [" << _topo.overlappingResidues[i][k]->getStructure() << "], ";
         }
         cout << endl;
       }
@@ -243,14 +245,14 @@ class fusionEvaluator: public optimizerEvaluator {
     vector<mstreal> guessPoint();
     void setGuessPoint(const vector<mstreal>& _initPoint) { initPoint = _initPoint; }
     void noisifyGuessPoint(mstreal _noise = 1.0) { params.setNoise(_noise); initPoint.resize(0); }
-    bool isAnchored(int ci) { return (topo.numFixedInChain(ci) > 0); }
+    bool isAnchored() { return (topo.numFixedPositions() > 0); }
     int numDF() {
       /* if we have fixed residues, then there is an absolute reference frame and
        * every atom gets exactly three coordinates. Otherwise, the first three
        * atoms are "special" as we want to remove rigid transformations. */
       int df = 0;
       for (int ci = 0; ci < topo.numChains(); ci++) {
-        if (isAnchored(ci)) df += 3*topo.numMobileAtoms(ci);
+        if (isAnchored()) df += 3*topo.numMobileAtoms(ci);
         else df += 3*topo.numMobileAtoms(ci) - 6;
       }
       return df;

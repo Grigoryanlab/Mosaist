@@ -544,6 +544,7 @@ int main(int argc, char** argv) {
   op.addOption("m", "if specified, will try to move away from the original structure by including a term in the objective function that rewards large RMSDs to it. Default is no.");
   op.addOption("cyc", "number of cycles--i.e., number of times fresh TERMs are searched for (10 by default).");
   op.addOption("iter", "number of iterations per cycle (1 by default). At the start of each iteration, the overall structure is reinitialized to the current structure");
+  op.addOption("a", "alternate between optimizing without and with internal coordinate constraints. Can be useful for getting out of local minima.");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
   op.addOption("fs", "a selection string for residues to fix.");
   op.addOption("us", "a selection string for residues to mark as having unknown identity (i.e., their identity will not matter if accounting for sequence).");
@@ -726,17 +727,17 @@ int main(int argc, char** argv) {
       }
       fusionTopology propTopo = getTopo(I.residueSize(), allMatches, propPicks, (it == 0) ? shellOut : dummy, op.isGiven("m") ? &S : NULL);
       propTopo.addFixedPositions(fixed);
-      // this is to provide IC information for connections between any possible
-      // fixed residues and flexible ones. NOTE: the weight is set to 0, so this
-      // does not affect the objective function.
-      // TODO: this has the effect of "normalizing" IC information in the current
-      // structure, which may not be a good idea if the structure is poor. Need to solve.
-// TODO: why is this needed????? ICs between fixed and flexible residues should
-// be covered by TERMs that go across the two. Experimentally, it does seem to go
-// into the typical "long loop" for calculating ICs, so need to find where it is
-// having trouble and why.
-      // if (!fixed.empty()) propTopo.addFragment(S, MstUtils::range(0, propTopo.length()), 0.0);
-      Structure propFused = Fuser::fuse(propTopo, propScore, opts);
+      Structure propFused;
+      if (op.isGiven("a")) {
+        vector<mstreal> ics = opts.getIntCoorFCs();
+        opts.setIntCoorFCs({0, 0, 0});
+        propFused = Fuser::fuse(propTopo, propScore, opts);
+        opts.setIntCoorFCs(ics);
+        opts.setStartingStructure(propFused);
+        propFused = Fuser::fuse(propTopo, propScore, opts);
+      } else {
+        propFused = Fuser::fuse(propTopo, propScore, opts);
+      }
       copySequence(S, propFused);
       AtomPointerVector init = getCorrespondingAtoms(S, propFused);
       cout << "\titeration " << it << " => "; totalScore(propScore, propFused, init, true); cout << endl;
@@ -756,10 +757,6 @@ int main(int argc, char** argv) {
       }
     }
 
-    out << "MODEL " << c+1 << endl;
-    bestFused.writePDB(out);
-    out << "ENDMDL" << endl;
-
     // align based on the fixed part, if anything was fixed (for ease of visualization)
     if (fixed.size() > 0) {
       AtomPointerVector before = getBackbone(S, fixed);
@@ -775,6 +772,10 @@ int main(int argc, char** argv) {
       }
     }
     if (shellOut.is_open()) shellOut.close();
+
+    out << "MODEL " << c+1 << endl;
+    S.writePDB(out);
+    out << "ENDMDL" << endl;
   }
   out.close();
   S.writePDB(op.getString("o") + ".fin.pdb");

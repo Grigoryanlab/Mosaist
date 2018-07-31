@@ -115,7 +115,7 @@ bool fusionTopology::isConsistent(const Structure& S) {
 
 Structure fusionTopology::remapChains(const Structure& S) {
   Structure Sc;
-  if (S.residueSize() != this->length()) MstUtils::error("cannot remap chains because number of residues in Structure does not map that of topology");
+  if (S.residueSize() != this->length()) MstUtils::error("cannot remap chains because number of residues in Structure does not match that in topology");
   vector<int> chainLengths = getChainLengths();
   int k = 0;
   for (int ci = 0; ci < chainLengths.size(); ci++) {
@@ -291,6 +291,7 @@ void fusionEvaluator::init() {
     // sometimes, the topology may end up lumping several consecutive fixed chain
     // together, so try to redistribute residues to match the topology chains
     if (!topo.isConsistent(fused)) fused = topo.remapChains(fused);
+    fused.renumber();
   }
   guess = fused; // save initial "averaged" guess for later alignment (easier to visualize output)
   topo.setAlignedFrags(fused);
@@ -371,8 +372,8 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       for (int i = 0; i < C.residueSize(); i++) {
         if (topo.isFixed(ci, i)) continue;
         Residue& res = C[i];
+        bool skipDFs = ((i == 0) && !isAnchored());
         for (int j = 0; j < res.atomSize(); j++) {
-          bool skipDFs = ((i == 0) && !isAnchored(ci));
           for (int dim = 0; dim < 3; dim++) {
             /* If the fused structure is not anchored in space, skip all coordinates
              * of the first atom, the Y and the Z coordinates of the second atom,
@@ -564,40 +565,41 @@ cout << "NOT FINISHED YET!!!!!" << endl;
 
   // built up a list of restraining ICs
   if (init) {
+    k = 0;
     for (int ci = 0; ci < fused.chainSize(); ci++) {
-      Chain& C = fused[ci];
-      for (int i = 0; i < C.residueSize(); i++) {
-        Residue& res = C[i];
+      Chain& chain = fused[ci];
+      for (int i = 0; i < chain.residueSize(); i++, k++) {
+        Residue& res = chain[i];
         Atom* N = &(res[0]);
         Atom* CA = &(res[1]);
         Atom* C = &(res[2]);
         Atom* O = &(res[3]);
         // if residue not fixed, evaluate its internal coordinates
         if (!topo.isFixed(ci, i)) {
-          bondInstances(i, N, CA);
-          bondInstances(i, CA, C);
-          bondInstances(i, C, O);
-          angleInstances(i, N, CA, C);
+          bondInstances(k, N, CA);
+          bondInstances(k, CA, C);
+          bondInstances(k, C, O);
+          angleInstances(k, N, CA, C);
           // if last residue, constrain O relative to this residue (as opposed to the next one)
-          if (i == fused.residueSize() - 1) {
-            angleInstances(i, CA, C, O);
-            dihedralInstances(i, N, CA, C, O);
+          if (i == chain.residueSize() - 1) {
+            angleInstances(k, CA, C, O);
+            dihedralInstances(k, N, CA, C, O);
           }
         }
 
         // if either the previous residue or the current one is not fixed, evaluate
         // the internal coordinates connecting the two
         if ((i > 0) && (!topo.isFixed(ci, i-1) || !topo.isFixed(ci, i))) {
-          bondInstances(i, pC, N);
-          angleInstances(i, pCA, pC, N);
-          dihedralInstances(i, pN, pCA, pC, N);
-          angleInstances(i, pC, N, CA);
-          dihedralInstances(i, pCA, pC, N, CA);
-          dihedralInstances(i, pC, N, CA, C);
+          bondInstances(k, pC, N);
+          angleInstances(k, pCA, pC, N);
+          dihedralInstances(k, pN, pCA, pC, N);
+          angleInstances(k, pC, N, CA);
+          dihedralInstances(k, pCA, pC, N, CA);
+          dihedralInstances(k, pC, N, CA, C);
           // use this residue to constrain the previous O
-          if (i < fused.residueSize() - 1) {
-            angleInstances(i, pO, pC, N);
-            dihedralInstances(i-1, pCA, N, pC, pO);
+          if (i < chain.residueSize() - 1) {
+            angleInstances(k, pO, pC, N);
+            dihedralInstances(k-1, pCA, N, pC, pO);
           }
         }
         pN = N; pCA = CA; pC = C; pO = O;
@@ -654,7 +656,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point, Vector& grad) {
       for (int i = 0; i < grad.length(); i++) {
         cout << grad[i] << " " << fdGrad[i] << endl;
       }
-      cout << "norm difference: " << diff << " (" << 100.0*diff/(0.5*(grad.norm() + fdGrad.norm())) << " %%)" << endl;
+      cout << "norm difference: " << diff << " (" << 100.0*diff/(0.5*(grad.norm() + fdGrad.norm())) << " %)" << endl;
     } else {
       cout << "comparison SUCCEEDED\n";
     }
@@ -1131,7 +1133,6 @@ Structure Fuser::autofuse(const vector<Residue*>& residues, int flexOnlyNearOver
     }
     chain.insert(chain.end(), ntoc.begin(), ntoc.end()); // append the last found chain
   }
-//  MstUtils::assert(chain.size() == resTopo.size(), "could not deduce chain connectivity automatically", "Fuser::autofuse");
 
   // finally, re-order
   vector<vector<Residue*> > oldResTopo = resTopo;
