@@ -256,35 +256,6 @@ void fusionEvaluator::init() {
         }
       }
     }
-    //
-    // fused.appendChain("A", true);
-    // for (int i = 0; i < topo.length(); i++) {
-    //   if (topo.numOverlappingResidues(i) == 0) MstUtils::error("position index " + MstUtils::toString(i) + " has no overlapping residues in the specified topology", "fusionEvaluator::fusionEvaluator");
-    //   Residue* res = new Residue(topo.getOverlappingResidue(i, 0)->getName(), 1);
-    //   fused[0].appendResidue(res);
-    //   for (int j = 0; j < fusionTopology::bba.size(); j++) {
-    //     /* I previously disallowed multiple residues to be aligned in fixed
-    //      * positions in the topology. BUT, it turns out this can be quite useful.
-    //      * For example, if we have residues 3 and 4 fixed, we may still want to
-    //      * have a fragment covering [2, 3, 4] and another one covering [3, 4, 5],
-    //      * because those fragments would consrain geometries between residues 2
-    //      * and 3 and residues 4 and 5. Sure, 3 and 4 could not move and so could
-    //      * not lower the RMSD score themselves. BUT, 2 and 5 can move and would
-    //      * affect the RMSDs arising from the above fragments. So, since allowing
-    //      * multiple residues aligned onto fixed topology positions does make
-    //      * sense, we have to decide how to initialize the coordinates of these
-    //      * fixed positions. If we take the usual average, then it is difficult
-    //      * for the user to specify what exactly these positions should be fixed
-    //      * to (specifying this via the average would be awkward for the user). So
-    //      * here I decided to adopt a convention, where for fixed positions the
-    //      * coordinates would be initialized from the FIRST available residue.
-    //      * The first one always exists, even if only one residue is aligned. And
-    //      * it is also relatively simple to use the first residue at fixed positions
-    //      * as a way of communicating the fixed coordinates. */
-    //     CartesianPoint m = topo.isFixed(i) ? atomInstances(i, fusionTopology::bba[j])[0] : atomInstances(i, fusionTopology::bba[j]).getGeometricCenter();
-    //     res->appendAtom(new Atom(1, fusionTopology::bba[j], m.getX(), m.getY(), m.getZ(), 0, 1.0, false));
-    //   }
-    // }
     fused.renumber();
   } else {
     fused = params.getStartingStructure();
@@ -295,7 +266,7 @@ void fusionEvaluator::init() {
   }
   guess = fused; // save initial "averaged" guess for later alignment (easier to visualize output)
   topo.setAlignedFrags(fused);
-  pickBuildOrigins(); // pick build origins for each chain
+  chooseBuildOrigin(); // pick build origins for each chain
 
   // optionally, initialize the structure using average IC's of overlapping segments
   if (params.getCoorInitType() == fusionParams::coorInitType::meanIC) {
@@ -329,19 +300,12 @@ fusionEvaluator::fusionEvaluator(const vector<vector<Residue*> >& resTopo, vecto
   init();
 }
 
-void fusionEvaluator::pickBuildOrigins(bool randomize) {
-  buildOriginRes.clear();
-  buildOriginRes.resize(fused.chainSize(), 0);
-  vector<int> chainLengths = topo.getChainLengths();
-  int k = 0;
-  for (int ci = 0; ci < chainLengths.size(); ci++) {
-    vector<int> fixedInChain;
-    for (int ri = 0; ri < chainLengths[ci]; ri++, k++) {
-      if (topo.isFixed(k)) fixedInChain.push_back(k);
-    }
-    if (fixedInChain.empty()) buildOriginRes[ci] = 0;
-    else if (randomize) buildOriginRes[ci] = fixedInChain[MstUtils::randInt(fixedInChain.size())];
-    else buildOriginRes[ci] = fixedInChain[0];
+void fusionEvaluator::chooseBuildOrigin(bool randomize) {
+  vector<int> fixedResidues = topo.getFixedPositions();
+  if (randomize) {
+    buildOriginRes = (fixedResidues.size() > 0) ? fixedResidues[MstUtils::randInt(0, fixedResidues.size() - 1)] : MstUtils::randInt(0, topo.length() - 1);
+  } else {
+    buildOriginRes = (fixedResidues.size() > 0) ? MstUtils::min(fixedResidues) : 0;
   }
 }
 
@@ -367,200 +331,198 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
   mstreal noise = params.getNoise();
 
   if (params.getOptimCartesian()) {
-    for (int ci = 0; ci < fused.chainSize(); ci++) {
-      Chain& C = fused[ci];
-      for (int i = 0; i < C.residueSize(); i++) {
-        if (topo.isFixed(ci, i)) continue;
-        Residue& res = C[i];
+    for (int i = 0; i < fused.residueSize(); i++) {
+      if (topo.isFixed(i)) continue;
+      Residue& res = fused.getResidue(i);
+      for (int j = 0; j < res.atomSize(); j++) {
         bool skipDFs = ((i == 0) && !isAnchored());
-        for (int j = 0; j < res.atomSize(); j++) {
-          for (int dim = 0; dim < 3; dim++) {
-            /* If the fused structure is not anchored in space, skip all coordinates
-             * of the first atom, the Y and the Z coordinates of the second atom,
-             * and the Z coordinate of the third atom. In this case, the constructor
-             * would have placed the first atom at the origin, the second atom on
-             * the X-axis, and the third atom in the X-Y plane. */
-            if (skipDFs && (j < 3) && (dim >= j)) continue;
-            if (init) {
-              initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
-              gradOfXYZ.addPartial(res[j], dim, k, 1.0);
-            } else {
-              res[j][dim] = point[k];
-            }
-            k++;
+        for (int dim = 0; dim < 3; dim++) {
+          /* If the fused structure is not anchored in space, skip all coordinates
+           * of the first atom, the Y and the Z coordinates of the second atom,
+           * and the Z coordinate of the third atom. In this case, the constructor
+           * would have placed the first atom at the origin, the second atom on
+           * the X-axis, and the third atom in the X-Y plane. */
+          if (skipDFs && (j < 3) && (dim >= j)) continue;
+          if (init) {
+            initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
+            gradOfXYZ.addPartial(res[j], dim, k, 1.0);
+          } else {
+            res[j][dim] = point[k];
           }
+          k++;
         }
       }
     }
-    //
-    // for (int i = 0; i < fused.residueSize(); i++) {
-    //   if (topo.isFixed(i)) continue;
-    //   Residue& res = fused.getResidue(i);
-    //   for (int j = 0; j < res.atomSize(); j++) {
-    //     bool skipDFs = ((i == 0) && !isAnchored());
-    //     for (int dim = 0; dim < 3; dim++) {
-    //       /* If the fused structure is not anchored in space, skip all coordinates
-    //        * of the first atom, the Y and the Z coordinates of the second atom,
-    //        * and the Z coordinate of the third atom. In this case, the constructor
-    //        * would have placed the first atom at the origin, the second atom on
-    //        * the X-axis, and the third atom in the X-Y plane. */
-    //       if (skipDFs && (j < 3) && (dim >= j)) continue;
-    //       if (init) {
-    //         initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
-    //         gradOfXYZ.addPartial(res[j], dim, k, 1.0);
-    //       } else {
-    //         res[j][dim] = point[k];
+    // for (int ci = 0; ci < fused.chainSize(); ci++) {
+    //   Chain& C = fused[ci];
+    //   for (int i = 0; i < C.residueSize(); i++) {
+    //     if (topo.isFixed(ci, i)) continue;
+    //     Residue& res = C[i];
+    //     bool skipDFs = ((ci == 0) && (i == 0) && !isAnchored());
+    //     for (int j = 0; j < res.atomSize(); j++) {
+    //       for (int dim = 0; dim < 3; dim++) {
+    //         /* If the fused structure is not anchored in space, skip all coordinates
+    //          * of the first atom, the Y and the Z coordinates of the second atom,
+    //          * and the Z coordinate of the third atom. In this case, the constructor
+    //          * would have placed the first atom at the origin, the second atom on
+    //          * the X-axis, and the third atom in the X-Y plane. */
+    //         if (skipDFs && (j < 3) && (dim >= j)) continue;
+    //         if (init) {
+    //           initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
+    //           gradOfXYZ.addPartial(res[j], dim, k, 1.0);
+    //         } else {
+    //           res[j][dim] = point[k];
+    //         }
+    //         k++;
     //       }
-    //       k++;
     //     }
     //   }
     // }
   } else {
-cout << "NOT FINISHED YET!!!!!" << endl;
-    // // -- build the fused backbone, atom by atom
-    // // build forward
-    // int startIdx = isAnchored() ? buildOriginRes : 0;
-    // for (int i = startIdx; i < fused.residueSize(); i++) {
-    //   Residue& res = fused.getResidue(i);
-    //   Atom* N = &(res[0]);
-    //   Atom* CA = &(res[1]);
-    //   Atom* C = &(res[2]);
-    //   Atom* O = &(res[3]);
-    //   if (!topo.isFixed(i)) {
-    //     if ((i == 0) && !isAnchored()) {
-    //       if (init) {
-    //         initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
-    //       } else {
-    //         mstreal r2d = M_PI/180;
-    //         mstreal d0 = point[k];
-    //         mstreal d1 = point[k+1];
-    //         mstreal a0 = point[k+2]*r2d;
-    //         N->setCoor(0.0, 0.0, 0.0);
-    //         CA->setCoor(d0, 0.0, 0.0);
-    //         gradOfXYZ.addPartial(CA, 0, k, 1.0);
-    //         C->setCoor(d0 - d1*cos(a0), d1*sin(a0), 0.0);
-    //         gradOfXYZ.addPartial(C, 0, k, 1.0);
-    //         gradOfXYZ.addPartial(C, 0, k+1, -cos(a0));
-    //         gradOfXYZ.addPartial(C, 0, k+2, sin(a0)*r2d);
-    //         gradOfXYZ.addPartial(C, 1, k+1, sin(a0));
-    //         gradOfXYZ.addPartial(C, 1, k+2, cos(a0)*r2d);
-    //         k += 3;
-    //       }
-    //     } else {
-    //       // place N relative to pN, pCA, pC
-    //       if (init) {
-    //         initPoint.push_back(bondInitValue(i-1, i, "C", "N") + bR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(angleInitValue(i-1, i-1, i, "CA", "C", "N") + aR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(dihedralInitValue(i-1, i-1, i-1, i, "N", "CA", "C", "N") + dR * MstUtils::randUnit() * noise);
-    //       } else {
-    //         N->build(pC, pCA, pN, point[k], point[k+1], point[k+2]);
-    //         // TODO: when we want to enable gradient calculation
-    //         // // partial derivatives of XYZ coordinates of the placed atom with
-    //         // // respect to bond, angle, and dihedral
-    //         // vector<mstreal> icPartials(9, 0.0);
-    //         // // partial derivatives of XYZ coordinates of the placed atom with
-    //         // // respect to XYZ coordinates of each of the anchoring atoms
-    //         // vector<vector<mstreal> > xyzPartials(3, vector<mstreal>(9, 0.0));
-    //         // N->build(pC, pCA, pN, point[k], point[k+1], point[k+2], partials, xyzPartials);
-    //         // gradOfXYZ.addPartials(N, {k, k+1, k+2}, icPartials);
-    //         // gradOfXYZ.addRecursivePartials(N, pC, xyzPartials[0]);
-    //         // gradOfXYZ.addRecursivePartials(N, pCA, xyzPartials[1]);
-    //         // gradOfXYZ.addRecursivePartials(N, pN, xyzPartials[2]);
-    //         k += 3;
-    //       }
-    //
-    //       // place CA relative to pCA, pC, N
-    //       if (init) {
-    //         initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(angleInitValue(i-1, i, i, "C", "N", "CA") + aR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(dihedralInitValue(i-1, i-1, i, i, "CA", "C", "N", "CA") + dR * MstUtils::randUnit() * noise);
-    //       } else {
-    //         CA->build(N, pC, pCA, point[k], point[k+1], point[k+2]); k += 3;
-    //       }
-    //
-    //       // place C relative to pC, N, CA
-    //       if (init) {
-    //         initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
-    //         initPoint.push_back(dihedralInitValue(i-1, i, i, i, "C", "N", "CA", "C") + dR * MstUtils::randUnit() * noise);
-    //       } else {
-    //         C->build(CA, N, pC, point[k], point[k+1], point[k+2]); k += 3;
-    //       }
-    //
-    //       // if this is the last residue, place the O relative to N-CA-C
-    //       if (i == fused.residueSize() - 1) {
-    //         if (init) {
-    //           initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
-    //           initPoint.push_back(angleInitValue(i, i, i, "CA", "C", "O") + aR * MstUtils::randUnit() * noise);
-    //           initPoint.push_back(dihedralInitValue(i, i, i, i, "N", "CA", "C", "O") + dR * MstUtils::randUnit() * noise);
-    //         } else {
-    //           O->build(C, CA, N, point[k], point[k+1], point[k+2]); k += 3;
-    //         }
-    //       }
-    //     }
-    //   }
-    //   // place previous O relative to pCA, N, pC (an improper)
-    //   if ((i > startIdx) && !topo.isFixed(i-1)) {
-    //     if (init) {
-    //       initPoint.push_back(bondInitValue(i-1, i-1, "C", "O") + bR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(angleInitValue(i, i-1, i-1, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(dihedralInitValue(i-1, i, i-1, i-1, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
-    //     } else {
-    //       pO->build(pC, N, pCA, point[k], point[k+1], point[k+2]); k += 3;
-    //     }
-    //   }
-    //   pN = N; pCA = CA; pC = C; pO = O;
-    // }
-    //
-    // // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
-    // startIdx = isAnchored() ? buildOriginRes : -1;
-    // for (int i = startIdx; i >= 0; i--) {
-    //   Residue& res = fused.getResidue(i);
-    //   Atom* N = &(res[0]);
-    //   Atom* CA = &(res[1]);
-    //   Atom* C = &(res[2]);
-    //   Atom* O = &(res[3]);
-    //   if (!topo.isFixed(i)) {
-    //     // place C relative to pC, pCA, pN
-    //     if (init) {
-    //       initPoint.push_back(bondInitValue(i+1, i, "N", "C") + bR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(angleInitValue(i+1, i+1, i, "CA", "N", "C") + aR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(dihedralInitValue(i+1, i+1, i+1, i, "C", "CA", "N", "C") + dR * MstUtils::randUnit() * noise);
-    //     } else {
-    //       C->build(pN, pCA, pC, point[k], point[k+1], point[k+2]); k += 3;
-    //     }
-    //
-    //     // place CA relative to pCA, pN, C
-    //     if (init) {
-    //       initPoint.push_back(bondInitValue(i, i, "C", "CA") + bR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "CA") + aR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(dihedralInitValue(i+1, i+1, i, i, "CA", "N", "C", "CA") + dR * MstUtils::randUnit() * noise);
-    //     } else {
-    //       CA->build(C, pN, pCA, point[k], point[k+1], point[k+2]); k += 3;
-    //     }
-    //
-    //     // place N relative to pN, C, CA
-    //     if (init) {
-    //       initPoint.push_back(bondInitValue(i, i, "CA", "N") + bR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(angleInitValue(i, i, i, "C", "CA", "N") + aR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(dihedralInitValue(i+1, i, i, i, "N", "C", "CA", "N") + dR * MstUtils::randUnit() * noise);
-    //     } else {
-    //       N->build(CA, C, pN, point[k], point[k+1], point[k+2]); k += 3;
-    //     }
-    //
-    //     // place O relative to pCA, pN, C (an improper)
-    //     if (init) {
-    //       initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
-    //       initPoint.push_back(dihedralInitValue(i, i+1, i, i, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
-    //     } else {
-    //       O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
-    //     }
-    //   }
-    //   pN = N; pCA = CA; pC = C; pO = O;
-    // }
+    // -- build the fused backbone, atom by atom
+    // build forward
+    int startIdx = isAnchored() ? buildOriginRes : 0;
+    for (int i = startIdx; i < fused.residueSize(); i++) {
+      Residue& res = fused.getResidue(i);
+      Atom* N = &(res[0]);
+      Atom* CA = &(res[1]);
+      Atom* C = &(res[2]);
+      Atom* O = &(res[3]);
+      if (!topo.isFixed(i)) {
+        if ((i == 0) && !isAnchored()) {
+          if (init) {
+            initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
+          } else {
+            mstreal r2d = M_PI/180;
+            mstreal d0 = point[k];
+            mstreal d1 = point[k+1];
+            mstreal a0 = point[k+2]*r2d;
+            N->setCoor(0.0, 0.0, 0.0);
+            CA->setCoor(d0, 0.0, 0.0);
+            gradOfXYZ.addPartial(CA, 0, k, 1.0);
+            C->setCoor(d0 - d1*cos(a0), d1*sin(a0), 0.0);
+            gradOfXYZ.addPartial(C, 0, k, 1.0);
+            gradOfXYZ.addPartial(C, 0, k+1, -cos(a0));
+            gradOfXYZ.addPartial(C, 0, k+2, sin(a0)*r2d);
+            gradOfXYZ.addPartial(C, 1, k+1, sin(a0));
+            gradOfXYZ.addPartial(C, 1, k+2, cos(a0)*r2d);
+            k += 3;
+          }
+        } else {
+          // place N relative to pN, pCA, pC
+          if (init) {
+            initPoint.push_back(bondInitValue(i-1, i, "C", "N") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i-1, i-1, i, "CA", "C", "N") + aR * MstUtils::randUnit() * noise);
+            initPoint.push_back(dihedralInitValue(i-1, i-1, i-1, i, "N", "CA", "C", "N") + dR * MstUtils::randUnit() * noise);
+          } else {
+            N->build(pC, pCA, pN, point[k], point[k+1], point[k+2]);
+            // TODO: when we want to enable gradient calculation
+            // // partial derivatives of XYZ coordinates of the placed atom with
+            // // respect to bond, angle, and dihedral
+            // vector<mstreal> icPartials(9, 0.0);
+            // // partial derivatives of XYZ coordinates of the placed atom with
+            // // respect to XYZ coordinates of each of the anchoring atoms
+            // vector<vector<mstreal> > xyzPartials(3, vector<mstreal>(9, 0.0));
+            // N->build(pC, pCA, pN, point[k], point[k+1], point[k+2], partials, xyzPartials);
+            // gradOfXYZ.addPartials(N, {k, k+1, k+2}, icPartials);
+            // gradOfXYZ.addRecursivePartials(N, pC, xyzPartials[0]);
+            // gradOfXYZ.addRecursivePartials(N, pCA, xyzPartials[1]);
+            // gradOfXYZ.addRecursivePartials(N, pN, xyzPartials[2]);
+            k += 3;
+          }
+
+          // place CA relative to pCA, pC, N
+          if (init) {
+            initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i-1, i, i, "C", "N", "CA") + aR * MstUtils::randUnit() * noise);
+            initPoint.push_back(dihedralInitValue(i-1, i-1, i, i, "CA", "C", "N", "CA") + dR * MstUtils::randUnit() * noise);
+          } else {
+            CA->build(N, pC, pCA, point[k], point[k+1], point[k+2]); k += 3;
+          }
+
+          // place C relative to pC, N, CA
+          if (init) {
+            initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
+            initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
+            initPoint.push_back(dihedralInitValue(i-1, i, i, i, "C", "N", "CA", "C") + dR * MstUtils::randUnit() * noise);
+          } else {
+            C->build(CA, N, pC, point[k], point[k+1], point[k+2]); k += 3;
+          }
+
+          // if this is the last residue, place the O relative to N-CA-C
+          if (i == fused.residueSize() - 1) {
+            if (init) {
+              initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
+              initPoint.push_back(angleInitValue(i, i, i, "CA", "C", "O") + aR * MstUtils::randUnit() * noise);
+              initPoint.push_back(dihedralInitValue(i, i, i, i, "N", "CA", "C", "O") + dR * MstUtils::randUnit() * noise);
+            } else {
+              O->build(C, CA, N, point[k], point[k+1], point[k+2]); k += 3;
+            }
+          }
+        }
+      }
+      // place previous O relative to pCA, N, pC (an improper)
+      if ((i > startIdx) && !topo.isFixed(i-1)) {
+        if (init) {
+          initPoint.push_back(bondInitValue(i-1, i-1, "C", "O") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i, i-1, i-1, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i-1, i, i-1, i-1, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
+        } else {
+          pO->build(pC, N, pCA, point[k], point[k+1], point[k+2]); k += 3;
+        }
+      }
+      pN = N; pCA = CA; pC = C; pO = O;
+    }
+
+    // build backwards (only would happens when there is an anchor and it is not the 0-th residue)
+    startIdx = isAnchored() ? buildOriginRes : -1;
+    for (int i = startIdx; i >= 0; i--) {
+      Residue& res = fused.getResidue(i);
+      Atom* N = &(res[0]);
+      Atom* CA = &(res[1]);
+      Atom* C = &(res[2]);
+      Atom* O = &(res[3]);
+      if (!topo.isFixed(i)) {
+        // place C relative to pC, pCA, pN
+        if (init) {
+          initPoint.push_back(bondInitValue(i+1, i, "N", "C") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i+1, i+1, i, "CA", "N", "C") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i+1, i+1, i+1, i, "C", "CA", "N", "C") + dR * MstUtils::randUnit() * noise);
+        } else {
+          C->build(pN, pCA, pC, point[k], point[k+1], point[k+2]); k += 3;
+        }
+
+        // place CA relative to pCA, pN, C
+        if (init) {
+          initPoint.push_back(bondInitValue(i, i, "C", "CA") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "CA") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i+1, i+1, i, i, "CA", "N", "C", "CA") + dR * MstUtils::randUnit() * noise);
+        } else {
+          CA->build(C, pN, pCA, point[k], point[k+1], point[k+2]); k += 3;
+        }
+
+        // place N relative to pN, C, CA
+        if (init) {
+          initPoint.push_back(bondInitValue(i, i, "CA", "N") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i, i, i, "C", "CA", "N") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i+1, i, i, i, "N", "C", "CA", "N") + dR * MstUtils::randUnit() * noise);
+        } else {
+          N->build(CA, C, pN, point[k], point[k+1], point[k+2]); k += 3;
+        }
+
+        // place O relative to pCA, pN, C (an improper)
+        if (init) {
+          initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
+          initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
+          initPoint.push_back(dihedralInitValue(i, i+1, i, i, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
+        } else {
+          O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
+        }
+      }
+      pN = N; pCA = CA; pC = C; pO = O;
+    }
   }
 
   // built up a list of restraining ICs
@@ -991,12 +953,12 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
   } else {
     mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution, params.isVerbose());
   }
-  vector<int> bestAnchor = E.getBuildOrigins();
+  int bestAnchor = E.getBuildOrigin();
   if (params.isVerbose()) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
   for (int i = 0; i < params.numCycles() - 1; i++) {
     E.noisifyGuessPoint(0.2);
     vector<mstreal> solution;
-    E.pickBuildOrigins(true);
+    E.chooseBuildOrigin(true);
     if (params.setMinimizerType() == fusionParams::gradDescent) {
       score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
     } else if (params.setMinimizerType() == fusionParams::conjGrad) {
@@ -1004,10 +966,10 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
     } else {
       score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
     }
-    if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigins(); }
+    if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigin(); }
     if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
   }
-  E.setBuildOrigins(bestAnchor);
+  E.setBuildOrigin(bestAnchor);
   if (params.isVerbose()) {
     cout << "best score = " << bestScore << ":" << endl;
     E.setVerbose(true);

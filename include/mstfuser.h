@@ -250,19 +250,15 @@ class fusionEvaluator: public optimizerEvaluator {
       /* if we have fixed residues, then there is an absolute reference frame and
        * every atom gets exactly three coordinates. Otherwise, the first three
        * atoms are "special" as we want to remove rigid transformations. */
-      int df = 0;
-      for (int ci = 0; ci < topo.numChains(); ci++) {
-        if (isAnchored()) df += 3*topo.numMobileAtoms(ci);
-        else df += 3*topo.numMobileAtoms(ci) - 6;
-      }
-      return df;
+      if (isAnchored()) return 3*topo.numMobileAtoms();
+      return 3*topo.numMobileAtoms() - 6;
     }
-    vector<int> getBuildOrigins() { return buildOriginRes; }
-    void setBuildOrigins(const vector<int>& _buildOriginRes) { buildOriginRes = _buildOriginRes; }
+    int getBuildOrigin() { return buildOriginRes; }
+    void setBuildOrigin(int _buildOriginRes) { buildOriginRes = _buildOriginRes; }
     Structure getStructure() { return fused; }
     Structure getAlignedStructure();
     void setVerbose(bool _verbose) { params.setVerbose(_verbose); }
-    void pickBuildOrigins(bool randomize = false);
+    void chooseBuildOrigin(bool randomize = false);
     fusionScores getScores();
 
   class icBound {
@@ -350,11 +346,10 @@ class fusionEvaluator: public optimizerEvaluator {
   private:
     Structure fused, guess;
 
-    /* For each chain, this will store the index of some residue, from which the
-     * building of that chain is to begin. If there are fixed residues in the
-     * chain, one of them will be chosen. If not, then some other arbitrary
-     * residue will be chosen as the build origin (e.g., the first one). */
-    vector<int> buildOriginRes;
+    /* Index of some residue, from which building based on internal coordinates
+     * will procede. If there are fixed residues, one of them will be chosen. If
+     * not, then some other arbitrary residue will be chosen (e.g., the first one). */
+    int buildOriginRes;
 
     fusionTopology topo;   // stores all information about the topology of the fusion
 
