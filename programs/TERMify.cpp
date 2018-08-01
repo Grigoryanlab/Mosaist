@@ -17,6 +17,9 @@ using namespace std;
 using namespace MST;
 
 class fasstCache {
+  // TODO: compute pressure on RMSD cutoff tolerance and max hits tolerance by
+  // keeping track of the two params for each search separately
+  // TODO: move filterRedundancy and filterRedundancyByProp into fasstSolutionSet
   public:
     fasstCache(FASST* s, int max = 1000) { S = s; maxNumResults = max; }
     ~fasstCache() { clear(); }
@@ -384,7 +387,7 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
   for (int i = 0; i < centIdx.size(); i++) {
     if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) seqConsts++;
   }
-  int Nmin = need*(pow(20, seqConsts) + 3);
+  int Nmin = need*(pow(20, seqConsts)*2 + 3);
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
   // F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
@@ -413,7 +416,9 @@ if (0) {
 }
 
   vector<Structure*> matchStructures;
-  while (true) {
+  // limit iterations, because it is technically possible that a match meeting
+  // the sequence constraints does not exist, at which point we will just give up
+  for (int c = 0; c < 10; c++) {
     fasstSolutionSet matches = C.search(false);
     for (auto it = matches.begin(); it != matches.end(); ++it) {
       if (centIdx.size() > 0) {
@@ -436,6 +441,8 @@ if (0) {
     }
     cout << "\tfound " << matchStructures.size() << " matches" << endl;
     if (matchStructures.size() >= need) break;
+    for (int i = 0; i < matchStructures.size(); i++) delete(matchStructures[i]);
+    matchStructures.clear();
     F->options().unsetMaxNumMatches();
     F->options().setMinNumMatches(matches.size()*2);
     F->options().setMaxNumMatches(F->options().getMinNumMatches()*2);
@@ -657,7 +664,7 @@ int main(int argc, char** argv) {
         cout << "TERM around " << C[ri] << endl;
         F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
         vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
-        allMatches.push_back(matches);
+        if (!matches.empty()) allMatches.push_back(matches);
       }
     }
 
@@ -681,9 +688,8 @@ int main(int argc, char** argv) {
       cout << "TERM around " << *resA << " x " << *resB << endl;
       F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
       vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
-      allMatches.push_back(matches);
+      if (!matches.empty()) allMatches.push_back(matches);
     }
-
     // fuser options
     fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
     opts.setMinimizerType(fusionParams::gradDescent);

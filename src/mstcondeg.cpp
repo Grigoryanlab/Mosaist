@@ -67,12 +67,12 @@ ConFind::~ConFind() {
   if (isRotLibLocal) delete rotLib;
   delete bbNN;
   delete caNN;
-  for (fastmap<Residue*, vector<rotamerID*> >::iterator it = survivingRotamers.begin(); it != survivingRotamers.end(); ++it) {
+  for (auto it = survivingRotamers.begin(); it != survivingRotamers.end(); ++it) {
     vector<rotamerID*>& rots = it->second;
     for (int i = 0; i < rots.size(); i++) delete(rots[i]);
   }
-  for (fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* >::iterator it = rotamerHeavySC.begin(); it != rotamerHeavySC.end(); ++it) {
-    if (it->second != NULL) delete it->second;
+  for (auto it = rotamerHeavySC.begin(); it != rotamerHeavySC.end(); ++it) {
+    if (it->second != NULL) delete(it->second);
   }
 }
 
