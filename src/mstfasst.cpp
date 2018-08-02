@@ -636,11 +636,13 @@ void FASST::prepForSearch(int ti) {
 
   // mark chain beginning and end indices (if gap constraints are present)
   if (opts.gapConstraintsExist() || (opts.getRedundancyCut() != 1)) {
+    targChainBeg.clear();
     targChainBeg.resize(atomToResIdx(target.size()), 0);
     for (int i = 1; i < targChainBeg.size(); i++) {
       if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i-1)]->getChain()) targChainBeg[i] = targChainBeg[i-1];
       else targChainBeg[i] = i;
     }
+    targChainEnd.clear();
     targChainEnd.resize(atomToResIdx(target.size()), atomToResIdx(target.size()) - 1);
     for (int i = targChainEnd.size() - 2; i >= 0; i--) {
       if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i+1)]->getChain()) targChainEnd[i] = targChainEnd[i+1];

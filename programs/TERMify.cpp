@@ -7,6 +7,7 @@
 
 #include "msttypes.h"
 #include "mstfasst.h"
+#include "mstfasstcache.h"
 #include "mstcondeg.h"
 #include "mstfuser.h"
 #include "mstcondeg.h"
@@ -15,346 +16,6 @@
 
 using namespace std;
 using namespace MST;
-
-class fasstCache {
-  // TODO: compute pressure on RMSD cutoff tolerance and max hits tolerance by
-  // keeping track of the two params for each search separately
-  // TODO: move filterRedundancy and filterRedundancyByProp into fasstSolutionSet
-  public:
-    fasstCache(FASST* s, int max = 1000) { S = s; maxNumResults = max; }
-    ~fasstCache() { clear(); }
-    void clear(); // clears cache (removes all solutions)
-    FASST* getFASST() const { return S; }
-    fasstSolutionSet search(bool verb = false);
-    int getMaxNumResults() const { return maxNumResults; }
-
-    void write(const string& filename) const {
-      fstream out;
-      MstUtils::openFile(out, filename, fstream::out | fstream::binary, "fasstCache::write");
-      write(out);
-      out.close();
-    }
-
-    void write(ostream &_os) const { // write the object to a binary stream
-      MstUtils::writeBin(_os, maxNumResults);
-      MstUtils::writeBin(_os, (int) cache.size());
-      for (auto it = cache.begin(); it != cache.end(); ++it) (*it)->write(_os);
-    }
-
-    void read(const string& filename) {
-      fstream in;
-      MstUtils::openFile(in, filename, fstream::in | fstream::binary, "fasstCache::read");
-      read(in);
-      in.close();
-    }
-
-    void read(istream &_is) { // write object from a binary stream
-      clear();
-      MstUtils::readBin(_is, maxNumResults);
-      int numResults; MstUtils::readBin(_is, numResults);
-      for (int i = 0; i < numResults; i++) {
-        fasstCachedResult* result = new fasstCachedResult();
-        result->read(_is);
-        cache.insert(result);
-      }
-    }
-
-  protected:
-    static vector<int> getStructureTopology(const Structure& S) {
-      vector<int> topo(S.chainSize(), 0);
-      for (int i = 0; i < S.chainSize(); i++) topo[i] = S[i].residueSize();
-      return topo;
-    }
-
-  private:
-    class fasstCachedResult {
-      friend class fasstCache;
-      public:
-        fasstCachedResult() { rmsdCut = 0.0; solSet = NULL; priority = 1.0; }
-        fasstCachedResult(const AtomPointerVector& q, const fasstSolutionSet& sols, mstreal cut, vector<int> topo) {
-          q.clone(query);
-          solSet = new fasstSolutionSet(sols);
-          priority = 1.0; topology = topo; rmsdCut = cut;
-        }
-        fasstCachedResult(const fasstCachedResult& r) {
-          r.query.clone(query);
-          solSet = new fasstSolutionSet(*(r.solSet));
-          rmsdCut = r.rmsdCut; priority = r.priority; topology = r.topology;
-        }
-        ~fasstCachedResult() {
-          query.deletePointers();
-          delete(solSet);
-        }
-        void upPriority(mstreal del = 1.0) { priority += del; }
-        void elapsePriority(int Thalf) { priority *= pow(0.5, 1.0/Thalf); }
-
-        AtomPointerVector getQuery() const { return query; }
-        fasstSolutionSet* getSolutions() const { return solSet; }
-        mstreal getRMSDCutoff() const { return rmsdCut; }
-        mstreal getPriority() const { return priority; }
-        vector<int> getTopology() const { return topology; }
-        bool isSameTopology(const vector<int>& compTopo) const {
-          if (topology.size() != compTopo.size()) return false;
-          for (int i = 0; i < topology.size(); i++) {
-            if (topology[i] != compTopo[i]) return false;
-          }
-          return true;
-        }
-
-        friend bool operator<(const fasstCachedResult& ri, const fasstCachedResult& rj) {
-          if (ri.priority != rj.priority) return (ri.priority > rj.priority);
-          if (ri.solSet->size() != rj.solSet->size()) return ri.solSet->size() < rj.solSet->size();
-          if (ri.query.size() != rj.query.size()) return ri.query.size() < rj.query.size();
-          return &ri < &rj;
-        }
-
-        friend ostream& operator<<(ostream &_os, const fasstCachedResult& _res) {
-          _os << "[" << MstUtils::vecToString(_res.topology) << "] " << _res.rmsdCut << "(" << _res.priority << ")" << endl;
-          _os << _res.query << endl << *(_res.solSet);
-          return _os;
-        }
-
-        void write(ostream &_os) const {
-          MstUtils::writeBin(_os, topology);
-          MstUtils::writeBin(_os, rmsdCut);
-          MstUtils::writeBin(_os, priority);
-          solSet->write(_os);
-          query.write(_os);
-        }
-
-        void read(istream &_is) {
-          MstUtils::readBin(_is, topology);
-          MstUtils::readBin(_is, rmsdCut);
-          MstUtils::readBin(_is, priority);
-          if (solSet != NULL) delete(solSet);
-          solSet = new fasstSolutionSet();
-          solSet->read(_is);
-          query.deletePointers();
-          query.read(_is);
-        }
-
-      private:
-        AtomPointerVector query;
-        vector<int> topology;
-        mstreal rmsdCut;
-        fasstSolutionSet* solSet;
-        mstreal priority;
-    };
-
-    struct compResults {
-      bool operator() (const fasstCachedResult* lhs, const fasstCachedResult* rhs) const {
-        return (*lhs < *rhs);
-      }
-    };
-
-    int maxNumResults; // max number of searches to cache
-    FASST* S;
-    set<fasstCachedResult*, compResults> cache;
-    RMSDCalculator rc;
-};
-
-void fasstCache::clear() {
-  for (auto it = cache.begin(); it != cache.end(); ++it) delete(*it);
-  cache.clear();
-}
-
-fasstSolutionSet fasstCache::search(bool verb) {
-  int n;
-  if (S->isSufficientNumMatchesSet()) MstUtils::error("cannot cache when \"sufficient\" number of matches is set", "fasstCache::search");
-  fasstSolutionSet matches;
-  mstreal cut = S->getRMSDCutoff(), rmsd;
-  bool maxSet = S->isMaxNumMatchesSet();
-  bool redSet = S->isRedundancyCutSet();
-  bool minSet = S->isMinNumMatchesSet();
-  int maxN = S->getMaxNumMatches();
-  int minN = S->getMinNumMatches();
-  mstreal redCut = S->getRedundancyCut();
-  // for some of the logic below it is convenient to assume no funny business
-  if (minSet && (minN <= 0)) MstUtils::error("min number of matches is set, but actual limit is not positive");
-  if (maxSet && (maxN <= 0)) MstUtils::error("min number of matches is set, but actual limit is not positive");
-  chrono::high_resolution_clock::time_point begin, end;
-  int searchTime;
-  AtomPointerVector queryAtoms = S->getQuerySearchedAtoms();
-
-  /* Old cached results should eventually "expire", so uniformly lower priority
-   * slightly first. This way, cached results that have not been used in a while
-   * will eventually have a lower priority than brand new searches and these
-   * will then push out these old (aparently) useless results. */
-  for (auto it = cache.begin(); it != cache.end(); it++) {
-    // NOTE: gets rid of const qualifier! This is safe to do only because I know
-    // I will monotonically lower everybody's priority (order will not change).
-    fasstCachedResult* res = &(*(*it));
-    res->elapsePriority(getMaxNumResults());
-    if (verb) cout << " " << res->getPriority();
-  }
-  if (verb) cout << endl;
-
-  /* See whether all matches for the current query, within the given cutoff, are
-   * among the list of matches of some previously cached query. */
-  vector<int> topo = fasstCache::getStructureTopology(S->getQuery());
-  auto bestComp = cache.end(); mstreal bestDist = -1, safeRadius = -1;
-  for (auto it = cache.begin(); it != cache.end(); ++it) {
-    fasstCachedResult* result = *it;
-    if (!result->isSameTopology(topo)) continue;
-    mstreal r = rc.bestRMSD(queryAtoms, result->getQuery());
-    /* If a maximum number of matches is set, then we _may_ not need to find ALL
-     * of the matches below the given cutoff, so just find the closest cached
-     * query that has hopes of having ANY matches within the cutoff. If no max
-     * is set on the number of matches, however, we will need to find all matches
-     * below the cutoff, so we must find a previously cached query guaranteed to
-     * have ALL matches to the current query under the given cutoff. */
-    if ((maxSet && (result->getRMSDCutoff() - r > 0)) || (!maxSet && (result->getRMSDCutoff() - r >= cut))) {
-      // If max is set, we want as large of a safe radius as possible. If max is
-      // not set, then all suitable queries are safe, so we want as few extra
-      // fluff to search through as possible
-      mstreal curSafeRadius = result->getRMSDCutoff() - r;
-      if ((bestComp == cache.end()) || ((maxSet && (bestDist < curSafeRadius)) || (!maxSet && (bestDist > curSafeRadius)))) {
-        bestComp = it;
-        safeRadius = curSafeRadius;
-        bestDist = safeRadius; // could optimize in terms of things other than safe radius
-      }
-    }
-  }
-
-  // first try going through matches of a close query
-  if (bestComp != cache.end()) {
-    if (verb) begin = chrono::high_resolution_clock::now();
-    // visit all matches of the most suitable cached result
-    fasstSolutionSet& sols = *((*bestComp)->getSolutions());
-    vector<mstreal> rmsds = S->matchRMSDs(sols, queryAtoms);
-    for (int k = 0; k < sols.size(); k++) {
-      // take all below the cutoff, but at least minN and at most maxN (if set)
-      if ((rmsds[k] <= cut) || (minSet && (matches.size() < minN))) {
-        rmsd = sols[k].getRMSD(); sols[k].setRMSD(rmsds[k]);      // overwrite with RMSD relative to current query
-        if (redSet) matches.insert(sols[k], S->getRedundancyCut());  // insert copies the solution
-        else matches.insert(sols[k]);
-        if (maxSet && (matches.size() > maxN)) matches.erase(--matches.end());
-        sols[k].setRMSD(rmsd);                                    // set RMSD back to the old value
-      }
-    }
-    if (verb) {
-      end = chrono::high_resolution_clock::now();
-      searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
-      if (verb) cout << "\tquick-search time " << searchTime << " ms" << std::endl;
-    }
-  }
-
-  /* We can skip doing an actual search (i.e., we are guaranteed to already have
-   * all of the relevant matches) if all of the following are true:
-   * 1. a suitable neighboring cached query was available
-   * 2. one of the following (mutually exclusive) conditions is true:
-   *    A. max was not set, in which case, the earlier requirement that the safe
-   *       RMSD be no less than the desired cutoff means we have found all
-   *       matches period.
-   *    B. max was set ADN either i) we found that many matches, all within the
-   *       safe RMSD cutoff (i.e., they are guaranteed to be the best matches
-   *       overall) or ii) we possibly found fewer matches BUT the safe radius
-   *       was no smaller than the cutoff, so these are all the matches that
-   *       there are in the full database (under the cutoff).
-   * 3. one of the following (mutually exclusive) conditions is true:
-   *    A. min was not set
-   *    B. min was set and we have at least that many matches, all of which are
-   *       under the safe RMSD cutoff.
-   * */
-  bool noNeedForNewSearch = (bestComp != cache.end()) &&
-                            (!maxSet || ((safeRadius >= cut) || ((matches.size() >= maxN) && (matches.worstRMSD() < safeRadius)))) &&
-                            (!minSet || ((matches.size() >= minN) && (matches.worstRMSD() < safeRadius)));
-  bool doNewSearch = !noNeedForNewSearch;
-  if (doNewSearch) {
-    if (verb) {
-      if (verb) cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
-      if (matches.size() > 0) cout << " (worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << ")";
-      cout << endl;
-      begin = chrono::high_resolution_clock::now();
-    }
-    // -- loosen search criteria a bit to extract maximal value from search
-    if (maxSet) {
-      S->setMaxNumMatches(MstUtils::max(int(maxN*2 + 1), maxN + 1000));
-      // S->unsetMaxNumMatches();
-    }
-    // set redundancy value to above 1 in order to accumulate sequence context,
-    // regardless of current requirements (for any future needs)
-    S->setRedundancyCut(1.1);
-    S->setRMSDCutoff(1.1*cut);
-
-    /* The minimum number of matches limit is costly to include in the search,
-     * but is sometimes not necesary (i.e., you find at least that many matches
-     * under the given RMSD cutoff anyway). So first try without it. */
-    for (int c = 0; c < (minSet ? 2 : 1); c++) {
-      if (minSet) {
-        // if removing the min requirement does not fly, bring the requirement
-        // back, by find a few more. In this way, if this type of search is
-        // repeated with a slightly different query, we will be more likely to
-        // succeed with a lookup
-        if (c) S->setMinNumMatches(minN*2);
-        else S->options().unsetMinNumMatches();
-        if (c && verb) cout << "\t\t\tDID NOT WORK without min (found only " << matches.size() << " matches, while minN = " << minN << "), so repeating search..." << endl;
-      }
-
-      // -- perform the search and cache
-      matches = S->search();
-      if (matches.size() > 0) {
-        fasstCachedResult* result = new fasstCachedResult(queryAtoms, matches, matches.rbegin()->getRMSD(), topo);
-        cache.insert(result);
-        if (verb) {
-          cout << "\t\tfound " << matches.size() << " matches, last RMSD " << matches.rbegin()->getRMSD() << ", cutoff was " << S->getRMSDCutoff() << endl;
-          cout << "\t\tcache now has " << cache.size() << " elements" << endl;
-        }
-        if (cache.size() > maxNumResults) {
-          auto leastUseful = --cache.end();
-          if (verb) cout << "\t\t\t\tERASING entry with priority " << (*leastUseful)->getPriority() << endl;
-          delete(*leastUseful);
-          cache.erase(leastUseful); // bump off the least used cached result if reached limit
-        }
-      }
-
-      // apply all needed cutoffs
-      fasstSolutionSet finalMatches;
-      // vector<fasstSolution*> orderedMatches = matches.orderByDiscovery();
-      for (int i = 0; i < matches.size(); i++) {
-        const fasstSolution& sol = matches[i];
-        bool haveMin = !minSet || (minSet && (finalMatches.size() >= minN));
-        if (haveMin && (sol.getRMSD() > cut)) continue;
-        if (redSet) finalMatches.insert(sol, redCut);
-        else finalMatches.insert(sol);
-        if (maxSet && (finalMatches.size() > maxN)) finalMatches.erase(--finalMatches.end());
-      }
-      matches = finalMatches;
-
-      // did we get the min number of matches anyway?
-      if (minSet && (c == 0) && (matches.size() >= minN)) {
-        break;
-      }
-    }
-
-    // -- reset search setting to their old values
-    S->setRedundancyCut(redCut);
-    S->setRMSDCutoff(cut);
-    if (maxSet) S->setMaxNumMatches(maxN);
-    if (minSet) S->setMinNumMatches(minN);
-    if (verb) {
-      end = chrono::high_resolution_clock::now();
-      searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
-      cout << "\t\tregular-search time " << searchTime << " ms" << endl;
-    }
-  } else {
-    // up the priority of this cached result just used
-    fasstCachedResult* result = *bestComp;
-    cache.erase(bestComp);
-    result->upPriority();
-    cache.insert(result);
-    if (verb) {
-      cout << "\tdone upping priority" << std::endl;
-      cout << "\tSUCCEEDED, NO need to search!!!" << endl;
-      if (matches.size() > 0) cout << "\tworst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << endl;
-    }
-    // update matches to reflect spacial alignment onto the new query
-    S->matchRMSDs(matches, queryAtoms, true);
-  }
-
-  return matches;
-}
-
 
 AtomPointerVector getBackbone(const Structure& S, vector<int> residues) {
   AtomPointerVector atoms;
@@ -390,36 +51,15 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
   int Nmin = need*(pow(20, seqConsts)*2 + 3);
   FASST* F = C.getFASST();
   F->setQuery(frag, false);
-  // F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
-  F->options().unsetMaxNumMatches();
-  F->options().setMinNumMatches(Nmin);
+  F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
   F->options().setMaxNumMatches(Nmin*2);
-// TODO: fix so that it _always_ reports the same results as regular searching (basically, up to removing duplicates in the right way)
-if (0) {
-  fasstSolutionSet matchesOld = F->search();
-  fasstSolutionSet matchesNew = C.search(true);
-  bool error = false;
-  if (matchesOld.size() != matchesNew.size()) { error = true; }
-  else {
-    for (int i = 0; i < matchesOld.size(); i++) {
-      if (((matchesOld[i] < matchesNew[i]) || (matchesNew[i] < matchesOld[i])) && (fabs(matchesOld[i].getRMSD()-matchesNew[i].getRMSD()) > 10E-8)) {
-        cout << matchesOld[i] << endl << "vs" << endl << matchesNew[i] << endl;
-        printf("RMSD difference = %e\n", matchesOld[i].getRMSD() - matchesNew[i].getRMSD());
-        error = true; break;
-      }
-    }
-  }
-  if (error) {
-    cout << "cutoff was " << F->getRMSDCutoff() << "\nold style:\n" << matchesOld << "\nnew style:\n" << matchesNew << endl;
-    exit(1);
-  }
-}
+  // F->options().setMinNumMatches(Nmin);
 
   vector<Structure*> matchStructures;
   // limit iterations, because it is technically possible that a match meeting
   // the sequence constraints does not exist, at which point we will just give up
-  for (int c = 0; c < 10; c++) {
-    fasstSolutionSet matches = C.search(false);
+  for (int c = 0; c < 10; c++) { // TODO: instead, iterate until consecutive searches do not increase number of hits
+    fasstSolutionSet matches = C.search(true);
     for (auto it = matches.begin(); it != matches.end(); ++it) {
       if (centIdx.size() > 0) {
         // check for sequence compatibility
@@ -443,9 +83,12 @@ if (0) {
     if (matchStructures.size() >= need) break;
     for (int i = 0; i < matchStructures.size(); i++) delete(matchStructures[i]);
     matchStructures.clear();
-    F->options().unsetMaxNumMatches();
-    F->options().setMinNumMatches(matches.size()*2);
-    F->options().setMaxNumMatches(F->options().getMinNumMatches()*2);
+    if (matches.size() == F->options().getMaxNumMatches()) {
+      F->options().setMaxNumMatches(F->options().getMaxNumMatches()*2);
+    } else {
+      F->options().setRMSDCutoff(F->options().getRMSDCutoff()*1.1);
+    }
+    cout << "\t\tinsufficient, increasing params to " << F->options().getRMSDCutoff() << " / " << F->options().getMaxNumMatches() << endl;
   }
   return matchStructures;
 }
@@ -633,7 +276,7 @@ int main(int argc, char** argv) {
   }
 
   // create a cache with size proprtional to the number of flexible residues
-  fasstCache cache(&F, (I.residueSize() - fixed.size())*100);
+  fasstCache cache(&F, (I.residueSize() - fixed.size())*10);
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order

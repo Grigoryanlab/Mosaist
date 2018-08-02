@@ -399,8 +399,15 @@ class FASST {
 
     /* Computes the RMSD of the given match to a query that is (possibly)
      * different from the one it was found with (if it even came from a search). */
-    // mstreal matchRMSD(const fasstSolution& sol, const AtomPointerVector& query);
     vector<mstreal> matchRMSDs(fasstSolutionSet& sols, const AtomPointerVector& query, bool update = false);
+
+    /* Filters out redundancy from the match set, building the local sequence
+     * context, if necessary, and returns the resulting non-redundancy solution set. */
+    fasstSolutionSet removeRedundancy(const fasstSolutionSet& matches, mstreal cut);
+
+    /* Filters out redundancy from the match set using the pre-computed redundancy
+     * property in the FASST database. */
+    fasstSolutionSet removeRedundancy(const fasstSolutionSet& matches);
 
     map<int, map<int, map<int, set<int> > > >& getRedundancyPropertyMap() { return resRelProperties[opts.getRedundancyProperty()]; }
 
