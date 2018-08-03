@@ -76,7 +76,7 @@ LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagi
 
 # target dependencies
 findBestFreedom_DEPS	:= mstcondeg mstrotlib mstsystem msttransforms msttypes
-test_DEPS			:= msttypes
+test_DEPS			:= msttypes mstsystem
 testAutofuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testConFind_DEPS		:= mstcondeg mstoptions mstrotlib mstsystem msttransforms msttypes
 testClusterer_DEPS		:= mstoptions msttypes mstfasst msttransforms mstsequence
@@ -90,7 +90,7 @@ testTransforms_DEPS		:= mstlinalg msttransforms msttypes
 testTermanal_DEPS		:= msttermanal msttypes mstfasst mstoptions mstsequence msttransforms
 findTERMs_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 renumber_DEPS			:= mstsystem msttypes
-TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic mstfasstcache
+TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic mstfasstcache mstsystem
 bind_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions mstmagic
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg
