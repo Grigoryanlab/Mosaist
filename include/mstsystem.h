@@ -2,6 +2,9 @@
 #define _MSTSYSTEM_H
 
 #include "msttypes.h"
+#include <unistd.h>
+#include <limits.h>
+
 
 /* A bunch of static routines to perform various OS-related operations */
 class MstSys {
@@ -22,6 +25,10 @@ class MstSys {
     static void cmkdir(const string& dirPath, bool makeParents = false);
     static void crmdir(const string& dirPath, bool recursive = false);
     static void crm(const string& filePath);
+    static string getMachineName();
+    static string getUserName();
+    static bool getNetLock(const string& tag, bool shared = false, const string& linuxHost = "anthill.cs.dartmouth.edu");
+    static bool releaseNetLock(const string& tag, const string& linuxHost = "anthill.cs.dartmouth.edu");
 
   private:
 };

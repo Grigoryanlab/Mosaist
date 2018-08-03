@@ -1,4 +1,5 @@
 #include "msttypes.h"
+#include "mstsystem.h"
 
 using namespace MST;
 
@@ -9,6 +10,14 @@ int main(int argc, char** argv) {
   }
   string pdbFile(argv[1]);
   string outBase(argv[2]);
+
+  // cout << "getting shared lock...\n" << MstSys::getNetLock("gevorg", true) << endl;
+  // cout << "working..." << endl; sleep(10);
+  // cout << "releasing the lock...\n" << MstSys::releaseNetLock("gevorg") << endl;
+  // cout << "getting exlusive lock...\n" << MstSys::getNetLock("gevorg") << endl;
+  // cout << "working..." << endl; sleep(10);
+  // cout << "releasing the lock...\n" << MstSys::releaseNetLock("gevorg") << endl;
+  // exit(0);
 
   // quick read and write
   printf("quick read/write test...\n");

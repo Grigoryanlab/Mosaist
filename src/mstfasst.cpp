@@ -636,20 +636,25 @@ void FASST::prepForSearch(int ti) {
 
   // mark chain beginning and end indices (if gap constraints are present)
   if (opts.gapConstraintsExist() || (opts.getRedundancyCut() != 1)) {
-    targChainBeg.clear();
-    targChainBeg.resize(atomToResIdx(target.size()), 0);
-    for (int i = 1; i < targChainBeg.size(); i++) {
-      if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i-1)]->getChain()) targChainBeg[i] = targChainBeg[i-1];
-      else targChainBeg[i] = i;
-    }
-    targChainEnd.clear();
-    targChainEnd.resize(atomToResIdx(target.size()), atomToResIdx(target.size()) - 1);
-    for (int i = targChainEnd.size() - 2; i >= 0; i--) {
-      if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i+1)]->getChain()) targChainEnd[i] = targChainEnd[i+1];
-      else targChainEnd[i] = i;
-    }
+    fillTargetChainInfo(ti);
   } else {
     targChainBeg.resize(0); targChainEnd.resize(0);
+  }
+}
+
+void FASST::fillTargetChainInfo(int ti) {
+  AtomPointerVector& target = targets[ti];
+  targChainBeg.clear();
+  targChainBeg.resize(atomToResIdx(target.size()), 0);
+  for (int i = 1; i < targChainBeg.size(); i++) {
+    if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i-1)]->getChain()) targChainBeg[i] = targChainBeg[i-1];
+    else targChainBeg[i] = i;
+  }
+  targChainEnd.clear();
+  targChainEnd.resize(atomToResIdx(target.size()), atomToResIdx(target.size()) - 1);
+  for (int i = targChainEnd.size() - 2; i >= 0; i--) {
+    if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i+1)]->getChain()) targChainEnd[i] = targChainEnd[i+1];
+    else targChainEnd[i] = i;
   }
 }
 
@@ -1096,6 +1101,7 @@ void FASST::addSequenceContext(fasstSolution& sol) {
   Sequence& targSeq = targSeqs[currentTarget];
   vector<int> alignment = sol.getAlignment();
   vector<Sequence> segs(sol.numSegments()), ntPad(sol.numSegments()), ctPad(sol.numSegments());
+  if (targChainEnd.empty()) FASST::fillTargetChainInfo(currentTarget);
   for (int i = 0; i < sol.numSegments(); i++) {
     int Li = sol.segLength(i);
     segs[i].resize(Li);
@@ -1139,6 +1145,14 @@ fasstSolution::fasstSolution(const fasstSolution& _sol) {
   else context = NULL;
 }
 
+fasstSolution::fasstSolution(const fasstSolutionAddress& addr, const vector<int> segLen) {
+  alignment = addr.alignment;
+  targetIndex = addr.targetIndex;
+  segLengths = segLen;
+  context = NULL;
+  rmsd = 0.0;
+}
+
 void fasstSolution::setSeqContext(const vector<Sequence>& _segSeq, const vector<Sequence>& _nSeq, const vector<Sequence>& _cSeq) {
   if (context == NULL) context = new solContext();
   context->segSeq = _segSeq; context->nSeq = _nSeq; context->cSeq = _cSeq;
@@ -1180,6 +1194,21 @@ void fasstSolution::read(istream& _is) {
   }
 }
 
+
+/* --------- fasstSolutionAddress --------- */
+void fasstSolutionAddress::write(ostream& _os) const {
+  MstUtils::writeBin(_os, targetIndex);
+  MstUtils::writeBin(_os, (int) alignment.size());
+  for (int i = 0; i < alignment.size(); i++) MstUtils::writeBin(_os, alignment[i]);
+}
+
+void fasstSolutionAddress::read(istream& _is) {
+  MstUtils::readBin(_is, targetIndex);
+  int len; MstUtils::readBin(_is, len);
+  alignment.resize(len);
+  for (int i = 0; i < alignment.size(); i++) MstUtils::readBin(_is, alignment[i]);
+}
+
 /* --------- fasstSolutionSet --------- */
 fasstSolutionSet::fasstSolutionSet(const fasstSolutionSet& sols) {
   *this = sols;
@@ -1188,6 +1217,11 @@ fasstSolutionSet::fasstSolutionSet(const fasstSolutionSet& sols) {
 fasstSolutionSet::fasstSolutionSet(const fasstSolution& sol) {
   updated = false;
   insert(sol);
+}
+
+fasstSolutionSet::fasstSolutionSet(const vector<fasstSolutionAddress>& addresses, const vector<int>& segLengths) {
+  updated = false;
+  for (int i = 0; i < addresses.size(); i++) insert(fasstSolution(addresses[i], segLengths));
 }
 
 fasstSolutionSet& fasstSolutionSet::operator=(const fasstSolutionSet& sols) {
@@ -1325,6 +1359,12 @@ vector<fasstSolution*> fasstSolutionSet::orderByDiscovery() {
   }
   sort(sols.begin(), sols.end(), fasstSolution::foundBefore);
   return sols;
+}
+
+vector<fasstSolutionAddress> fasstSolutionSet::extractAddresses() const {
+  vector<fasstSolutionAddress> addresses(size()); int i = 0;
+  for (auto it = begin(); it != end(); ++it, ++i) addresses[i] = it->getAddress();
+  return addresses;
 }
 
 void fasstSolutionSet::write(ostream &_os) const {

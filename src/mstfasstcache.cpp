@@ -10,6 +10,9 @@ void fasstCache::write(const string& filename) const {
 
 void fasstCache::write(ostream &_os) const {
   MstUtils::writeBin(_os, maxNumResults);
+  MstUtils::writeBin(_os, errTolPressure);
+  MstUtils::writeBin(_os, maxNumPressure);
+  MstUtils::writeBin(_os, sf);
   MstUtils::writeBin(_os, (int) cache.size());
   for (auto it = cache.begin(); it != cache.end(); ++it) (*it)->write(_os);
 }
@@ -24,6 +27,9 @@ void fasstCache::read(const string& filename) {
 void fasstCache::read(istream &_is) { // read object from a binary stream
   clear();
   MstUtils::readBin(_is, maxNumResults);
+  MstUtils::readBin(_is, errTolPressure);
+  MstUtils::readBin(_is, maxNumPressure);
+  MstUtils::readBin(_is, sf);
   int numResults; MstUtils::readBin(_is, numResults);
   for (int i = 0; i < numResults; i++) {
     fasstCachedResult* result = new fasstCachedResult();
@@ -101,15 +107,18 @@ fasstSolutionSet fasstCache::search(bool verb) {
   if (bestComp != cache.end()) {
     if (verb) begin = chrono::high_resolution_clock::now();
     // visit all matches of the most suitable cached result
-    fasstSolutionSet& sols = *((*bestComp)->getSolutions());
+    fasstSolutionSet sols((*bestComp)->getSolutions(), topo);
     vector<mstreal> rmsds = S->matchRMSDs(sols, queryAtoms);
     for (int k = 0; k < sols.size(); k++) {
       // take all below the cutoff
       if (rmsds[k] <= cut) {
         rmsd = sols[k].getRMSD(); sols[k].setRMSD(rmsds[k]);      // overwrite with RMSD relative to current query
-// TODO: if match does not already context info and redundancy is set, add context info!
-        if (redSet) matches.insert(sols[k], S->getRedundancyCut());  // insert copies the solution
-        else matches.insert(sols[k]);
+        if (redSet) {
+          // if (!sols[k].seqContextDefined()) S->addSequenceContext(sols[k]); // TODO: too slow
+          matches.insert(sols[k], S->getRedundancyCut());  // insert copies the solution
+        } else {
+          matches.insert(sols[k]);
+        }
         if (maxSet && (matches.size() > maxN)) matches.erase(--matches.end());
         sols[k].setRMSD(rmsd);                                    // set RMSD back to the old value
       }
@@ -152,11 +161,8 @@ fasstSolutionSet fasstCache::search(bool verb) {
     // -- loosen search criteria a bit to extract maximal value from search
     if (maxSet) {
       S->setMaxNumMatches(MstUtils::max(int(maxN*maxNumFactor()), maxN + 1000));
-      // S->unsetMaxNumMatches();
     }
-    // set redundancy value to above 1 in order to accumulate sequence context,
-    // regardless of current requirements (for any future needs)
-    S->setRedundancyCut(1.1); // TODO: this is probably wasteful; if redundancy is set, we can decorate only the final matches (only when needed); if not, then forget about it.
+    S->options().unsetRedundancyCut();
     S->setRMSDCutoff(cut*errTolFactor());
 
     // -- perform the search and cache
@@ -178,12 +184,14 @@ fasstSolutionSet fasstCache::search(bool verb) {
 
     // apply all needed cutoffs
     fasstSolutionSet finalMatches;
-    // vector<fasstSolution*> orderedMatches = matches.orderByDiscovery();
     for (int i = 0; i < matches.size(); i++) {
-      const fasstSolution& sol = matches[i];
-// TODO: if match does not already context info and redundancy is set, add context info!
-      if (redSet) finalMatches.insert(sol, redCut);
-      else finalMatches.insert(sol);
+      fasstSolution& sol = matches[i];
+      if (redSet) {
+        // if (!sol.seqContextDefined()) S->addSequenceContext(sol); // TODO: too slow
+        finalMatches.insert(sol, redCut);
+      } else {
+        finalMatches.insert(sol);
+      }
       if (maxSet && (finalMatches.size() > maxN)) finalMatches.erase(--finalMatches.end());
     }
     matches = finalMatches;
@@ -231,21 +239,22 @@ fasstSolutionSet fasstCache::search(bool verb) {
 /* --------- fasstCache::fasstCachedResult --------- */
 fasstCache::fasstCachedResult::fasstCachedResult(const AtomPointerVector& q, const fasstSolutionSet& sols, mstreal cut, int max, vector<int> topo) {
   q.clone(query);
-  solSet = new fasstSolutionSet(sols);
+  solSet = sols.extractAddresses();
   priority = 1.0; topology = topo;
   searchRMSDcut = cut; searchMaxNumMatches = max;
+  rmsdCut = sols.rbegin()->getRMSD();
 }
 
 fasstCache::fasstCachedResult::fasstCachedResult(const fasstCachedResult& r) {
   r.query.clone(query);
-  solSet = new fasstSolutionSet(*(r.solSet));
+  solSet = r.solSet;
   priority = r.priority; topology = r.topology;
   searchRMSDcut = r.searchRMSDcut; searchMaxNumMatches = r.searchMaxNumMatches;
+  rmsdCut = r.rmsdCut;
 }
 
 fasstCache::fasstCachedResult::~fasstCachedResult() {
   query.deletePointers();
-  delete(solSet);
 }
 
 bool fasstCache::fasstCachedResult::isSameTopology(const vector<int>& compTopo) const {
@@ -260,19 +269,33 @@ void fasstCache::fasstCachedResult::write(ostream &_os) const {
   MstUtils::writeBin(_os, topology);
   MstUtils::writeBin(_os, priority);
   MstUtils::writeBin(_os, searchRMSDcut);
+  MstUtils::writeBin(_os, rmsdCut);
   MstUtils::writeBin(_os, searchMaxNumMatches);
-  solSet->write(_os);
   query.write(_os);
+  MstUtils::writeBin(_os, (int) solSet.size());
+  for (int i = 0; i < solSet.size(); i++) solSet[i].write(_os);
+  // solSet->write(_os);
 }
 
 void fasstCache::fasstCachedResult::read(istream &_is) {
+  // MstUtils::readBin(_is, topology);
+  // MstUtils::readBin(_is, priority);
+  // MstUtils::readBin(_is, searchRMSDcut);
+  // MstUtils::readBin(_is, searchMaxNumMatches);
+  // if (solSet != NULL) delete(solSet);
+  // solSet = new fasstSolutionSet();
+  // solSet->read(_is);
+  // query.deletePointers();
+  // query.read(_is);
+
   MstUtils::readBin(_is, topology);
   MstUtils::readBin(_is, priority);
   MstUtils::readBin(_is, searchRMSDcut);
+  MstUtils::readBin(_is, rmsdCut);
   MstUtils::readBin(_is, searchMaxNumMatches);
-  if (solSet != NULL) delete(solSet);
-  solSet = new fasstSolutionSet();
-  solSet->read(_is);
   query.deletePointers();
   query.read(_is);
+  int numSols; MstUtils::readBin(_is, numSols);
+  solSet.clear(); solSet.resize(numSols);
+  for (int i = 0; i < numSols; i++) solSet[i].read(_is);
 }

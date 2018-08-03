@@ -13,6 +13,7 @@
 #include "mstcondeg.h"
 #include "mstoptions.h"
 #include "mstmagic.h"
+#include "mstsystem.h"
 
 using namespace std;
 using namespace MST;
@@ -199,6 +200,9 @@ int main(int argc, char** argv) {
   op.addOption("fs", "a selection string for residues to fix.");
   op.addOption("us", "a selection string for residues to mark as having unknown identity (i.e., their identity will not matter if accounting for sequence).");
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
+  op.addOption("c", "path to a FASST cache file to use for initializing the cache.");
+  op.addOption("w", "flag; if specified, the FASST cache will be periodically updated.");
+  op.addOption("app", "flag; if specified, will append to the output PDB file (e.g., for the purpose of accumulating a trajectory from multiple runs).");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
   MstUtils::setSignalHandlers();
   op.setOptions(argc, argv);
@@ -207,6 +211,7 @@ int main(int argc, char** argv) {
   FASST F;
   vector<int> fixed;
   F.setMemorySaveMode(true);
+  if (op.isGiven("c") && op.getString("c").empty()) MstUtils::error("--c must be a valid file path");
   if (op.isGiven("d")) {
     F.addTargets(MstUtils::fileToArray(op.getString("d")));
     if (op.isGiven("b")) {
@@ -240,10 +245,11 @@ int main(int argc, char** argv) {
   F.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
-  int Ni = 1000;
+  int Ni = 1000, lastWriteTime;
   fusionScores bestScore, currScore;
   fstream out, shellOut, dummy;
   contactList L;
+  string tag = "TERMify-" + MstSys::getUserName();
 
   // If fixed residues were defined, then not all contacts will be needed; only
   // contacts that can ultimately implicate a non-fixed residue are of interest.
@@ -277,6 +283,12 @@ int main(int argc, char** argv) {
 
   // create a cache with size proprtional to the number of flexible residues
   fasstCache cache(&F, (I.residueSize() - fixed.size())*10);
+  if (op.isGiven("c") && MstSys::fileExists(op.getString("c"))) {
+    MstSys::getNetLock(tag, true);
+    cout << "reading cache from " << op.getString("c") << "... " << endl;
+    cache.read(op.getString("c"));
+    MstSys::releaseNetLock(tag);
+  }
 
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
@@ -284,7 +296,7 @@ int main(int argc, char** argv) {
   mstreal R0 = getRadius(I);
   mstreal Rf = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
   int Ncyc = op.getInt("cyc", 10);
-  MstUtils::openFile(out, op.getString("o") + ".traj.pdb", ios::out);
+  MstUtils::openFile(out, op.getString("o") + ".traj.pdb", op.isGiven("app") ? ios::app : ios::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
   for (int c = 0; c < Ncyc; c++) {
     cout << "Cycle " << c+1 << "..." << endl;
@@ -292,6 +304,15 @@ int main(int argc, char** argv) {
       MstUtils::openFile(shellOut, op.getString("o") + ".shell.init.pdb", ios::out);
     } else if (c == Ncyc - 1) {
       MstUtils::openFile(shellOut, op.getString("o") + ".shell.pdb", ios::out);
+    }
+    if (op.isGiven("c") && op.isGiven("w")) {
+      if ((c == 0) || (time(NULL) - lastWriteTime > 5*60)) { // write every five minutes or so
+        cout << "dumping cache to " << op.getString("c") << "... " << endl;
+        MstSys::getNetLock(tag);
+        cache.write(op.getString("c"));
+        MstSys::releaseNetLock(tag);
+        lastWriteTime = time(NULL);
+      }
     }
 
     /* --- Decorate the current conformation with TERMs --- */

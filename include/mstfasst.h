@@ -10,12 +10,29 @@
 using namespace MST;
 
 class fasstSolutionSet;
+class fasstSolutionAddress {
+  public:
+    fasstSolutionAddress() { targetIndex = -1; }
+    fasstSolutionAddress(int ti, const vector<int>& al) { targetIndex = ti; alignment = al; }
+    void write(ostream& _os) const;
+    void read(istream& _is);
+
+    friend ostream& operator<<(ostream &_os, const fasstSolutionAddress& addr) {
+      _os << addr.targetIndex << " [" << MstUtils::vecToString(addr.alignment, ", ") << "]";
+      return _os;
+    }
+
+    int targetIndex;
+    vector<int> alignment;
+};
+
 class fasstSolution {
   friend class fasstSolutionSet;
   public:
     fasstSolution() { rmsd = 0.0; context = NULL; }
     fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, const Transform& _tr, const vector<int>& _segLengths, vector<int> segOrder = vector<int>());
     fasstSolution(const fasstSolution& _sol);
+    fasstSolution(const fasstSolutionAddress& addr, const vector<int> segLen);
     ~fasstSolution() { if (context != NULL) delete context; }
 
     mstreal getRMSD() const { return rmsd; }
@@ -31,6 +48,7 @@ class fasstSolution {
     void setStructContext(const vector<AtomPointerVector>& _segStr, const vector<AtomPointerVector>& _nStr, const vector<AtomPointerVector>& _cStr);
     void setRMSD(mstreal r) { rmsd = r; }
     void setTransform(const Transform& _tr) { tr = _tr; }
+    fasstSolutionAddress getAddress() const { return fasstSolutionAddress(targetIndex, alignment); }
 
     static bool foundBefore(const fasstSolution* solA, const fasstSolution* solB) {
       if (solA->targetIndex != solB->targetIndex) return solA->targetIndex < solB->targetIndex;
@@ -125,6 +143,7 @@ class fasstSolutionSet {
     fasstSolutionSet() { updated = false; }
     fasstSolutionSet(const fasstSolution& sol);
     fasstSolutionSet(const fasstSolutionSet& sols);
+    fasstSolutionSet(const vector<fasstSolutionAddress>& addresses, const vector<int>& segLengths);
     fasstSolutionSet& operator=(const fasstSolutionSet& sols);
     bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
     bool insert(const fasstSolution& sol, map<int, map<int, map<int, set<int> > > >& relMap); // returns whether the insert was performed
@@ -140,6 +159,7 @@ class fasstSolutionSet {
     mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
     mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
     vector<fasstSolution*> orderByDiscovery();
+    vector<fasstSolutionAddress> extractAddresses() const;
 
     void write(ostream &_os) const; // write fasstSolutionSet to a binary stream
     void read(istream &_os);  // read fasstSolutionSet from a binary stream
@@ -396,6 +416,7 @@ class FASST {
     vector<vector<mstreal> > getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type = matchType::REGION);
     vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
     vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type = matchType::REGION); // figure out the range of residues to excise from target structure
+    void addSequenceContext(fasstSolution& sol); // decorate the solution with sequence context
 
     /* Computes the RMSD of the given match to a query that is (possibly)
      * different from the one it was found with (if it even came from a search). */
@@ -420,13 +441,13 @@ class FASST {
     mstreal boundOnRemainder(bool compute);           // computes the lower bound expected from segments recLevel+1 and on
     Transform currentTransform();                     // tansform for the alignment corresponding to the current residual
     // void updateQueryCentroids();                      // assumes that appropriate transformation matrices were previously set with a call to currentAlignmentResidual(true)
-    int resToAtomIdx(int resIdx) { return resIdx * atomsPerRes; }
-    int atomToResIdx(int atomIdx) { return atomIdx / atomsPerRes; }
+    int resToAtomIdx(int resIdx) const { return resIdx * atomsPerRes; }
+    int atomToResIdx(int atomIdx) const { return atomIdx / atomsPerRes; }
     mstreal centToCentTol(int i);
     mstreal segCentToPrevSegCentTol(int i);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
-    void addSequenceContext(fasstSolution& sol); // decorate the solution with sequence context
+    void fillTargetChainInfo(int ti);
 
   private:
     fasstSearchOptions opts;

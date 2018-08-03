@@ -85,3 +85,77 @@ void MstSys::crm(const string& filePath) {
   int ret = MstSys::csystem("rm " + filePath, false);
   MstUtils::assert(ret == 0, "failed to remove file '" + filePath + "'");
 }
+
+string MstSys::getMachineName() {
+  int n = 1024;
+  char hostname[n];
+  hostname[n-1] = '\0';
+  gethostname(hostname, n-1);
+  return string(hostname);
+}
+
+string MstSys::getUserName() {
+  int n = 1024;
+  char username[n];
+  username[n-1] = '\0';
+  getlogin_r(username, n-1);
+  return string(username);
+}
+
+bool MstSys::getNetLock(const string& tag, bool shared, const string& linuxHost) {
+  int timeout = 60*5, waitTime = 10; // in seconds
+  string eQ = "\'\"\'\"\'";
+  string token = getMachineName() + "-" + MstUtils::toString((int) getpid());
+  string timeoutStr = MstUtils::toString(timeout);
+  string waitStr = MstUtils::toString(waitTime);
+  string base = "/tmp/.mst-" + tag;
+  string lockFile = base + ".lockfile";
+  string busyFileX = base + ".busyfile.X";
+  string busyFileS = base + ".busyfile.S";
+  string busyFiles = busyFileX + " " + busyFileS;
+  string notLockedCond = shared ? "[ ! -f " + busyFileX + " ]" : "[ ! -f " + busyFileX + " ] && [ ! -f " + busyFileS + " ] ";
+  string doLock = shared ? "echo " + token + " >> " + busyFileS : "echo " + token + " > " + busyFileX;
+  string timeCheck = "if ( [ ! -f " + busyFileX + " ] || [ $((`date +%s` - `stat -c %Y " + busyFileX + "`)) -gt " + timeoutStr + " ] ) && "
+                        "( [ ! -f " + busyFileS + " ] || [ $((`date +%s` - `stat -c %Y " + busyFileS + "`)) -gt " + timeoutStr + " ] ); then "
+                          "rm -f " + busyFiles + "; " + doLock + "; exit 3; else exit 2; fi";
+  string touchCmd = "if " + notLockedCond + "; then " + doLock + " ; exit 0; else " + timeCheck + "; fi";
+  string remoteCmd = "flock -w " + waitStr + " " + lockFile + " -c " + eQ + touchCmd + eQ;
+  string cmd = "ssh " + linuxHost + " '" + remoteCmd + "'";
+  for (int i = 0; i < int(1.0*timeout/waitTime + 1); i++) {
+    int ret = system(cmd.c_str());
+    ret = WEXITSTATUS(ret);    // this gets the exit status of the command
+    if (ret == 0) return true; // got lock fine
+    if (ret == 3) return true; // got lock, but got impatient and had to overwrite the old one
+    if (ret == 2) sleep(waitTime); // could not get lock, somebody else's lock is not yet released
+    // (ret == 1) means getting a lock failed; not clear how to recover from that
+  }
+  return false;
+}
+
+bool MstSys::releaseNetLock(const string& tag, const string& linuxHost) {
+  int timeout = 60*5, waitTime = 10; // in seconds
+  string eQ = "\'\"\'\"\'";
+  string token = getMachineName() + "-" + MstUtils::toString((int) getpid());
+  string timeoutStr = MstUtils::toString(timeout);
+  string waitStr = MstUtils::toString(waitTime);
+  string base = "/tmp/.mst-" + tag;
+  string lockFile = base + ".lockfile";
+  string busyFileX = base + ".busyfile.X";
+  string busyFileS = base + ".busyfile.S";
+  string sed = "sed -i " + eQ + "/^" + token +"$/d" + eQ + " ";
+  string removeTokenX = "if [ -f " + busyFileX + " ]; then " + sed + busyFileX + "; fi; ";
+  string removeTokenS = "if [ -f " + busyFileS + " ]; then " + sed + busyFileS + "; fi; ";
+  string removeToken = removeTokenX + removeTokenS; // there should never be BOTH an exclusive and a shared lock
+  string cleanX = "if [ ! -s " + busyFileX + " ]; then rm -f " + busyFileX + "; fi; ";
+  string cleanS = "if [ ! -s " + busyFileS + " ]; then rm -f " + busyFileS + "; fi; ";
+  string clean = cleanX + cleanS;
+  string remoteCmd = "flock -w " + waitStr + " " + lockFile + " -c \"" + removeToken + clean + "\"; exit 0;";
+  string cmd = "ssh " + linuxHost + " '" + remoteCmd + "'";
+  for (int i = 0; i < int(1.0*timeout/waitTime + 1); i++) {
+    int ret = system(cmd.c_str());
+    ret = WEXITSTATUS(ret);    // this gets the exit status of the command
+    if (ret == 0) return true; // got lock fine
+    // (ret == 1) means getting a lock failed; not clear how to recover from that
+  }
+  return false;
+}
