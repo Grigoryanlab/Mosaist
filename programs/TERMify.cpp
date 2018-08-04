@@ -59,7 +59,7 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
   vector<Structure*> matchStructures;
   // limit iterations, because it is technically possible that a match meeting
   // the sequence constraints does not exist, at which point we will just give up
-  for (int c = 0; c < 10; c++) { // TODO: instead, iterate until consecutive searches do not increase number of hits
+  for (int c = 0; c < 10; c++) {
     fasstSolutionSet matches = C.search(true);
     for (auto it = matches.begin(); it != matches.end(); ++it) {
       if (centIdx.size() > 0) {

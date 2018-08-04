@@ -53,15 +53,18 @@ fasstSolutionSet fasstCache::search(bool verb) {
   int n;
   if (S->isSufficientNumMatchesSet()) MstUtils::error("cannot cache when \"sufficient\" number of matches is set", "fasstCache::search");
   if (S->isMinNumMatchesSet()) MstUtils::error("cannot cache when \"minimum\" number of matches is set", "fasstCache::search");
+  chrono::high_resolution_clock::time_point begin, end;
+  int searchTime;
   fasstSolutionSet matches;
+
+  fasstSearchOptions origOpts = S->options();
   mstreal cut = S->getRMSDCutoff(), rmsd;
   bool maxSet = S->isMaxNumMatchesSet();
   bool redSet = S->isRedundancyCutSet();
   bool redPropSet = S->isRedundancyPropertySet();
   int maxN = S->getMaxNumMatches();
   mstreal redCut = S->getRedundancyCut();
-  chrono::high_resolution_clock::time_point begin, end;
-  int searchTime;
+  string redProp = S->getRedundancyProperty();
   AtomPointerVector queryAtoms = S->getQuerySearchedAtoms();
 
   /* Old cached results should eventually "expire", so uniformly lower priority
@@ -73,9 +76,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     // I will monotonically lower everybody's priority (order will not change).
     fasstCachedResult* res = &(*(*it));
     res->elapsePriority(getMaxNumResults());
-    // if (verb) cout << " " << res->getPriority();
   }
-  // if (verb) cout << endl;
 
   /* See whether all matches for the current query, within the given cutoff, are
    * among the list of matches of some previously cached query. */
@@ -83,9 +84,15 @@ fasstSolutionSet fasstCache::search(bool verb) {
   auto bestComp = cache.end(); mstreal bestDist = -1, safeRadius = -1;
   for (auto it = cache.begin(); it != cache.end(); ++it) {
     fasstCachedResult* result = *it;
+    // TODO: should consider permutations! Both when comparing and when calculating
+    // best RMSD. isSameTopology should compare sets. Then, depending on which
+    // permutation has the best RMSD, return the order, and remap query atoms.
+    // Need to write combinatorialAlign(const Structure& A, const Structure& B),
+    // which will align one set of chains onto another. OR
+    // combinatorialAlign(const vector<AtomPointerVector>& A, const vector<AtomPointerVector>& B)
     if (!result->isSameTopology(topo)) continue;
     mstreal r = rc.bestRMSD(queryAtoms, result->getQuery());
-    /* If a maximum number of matches is set, then we _may_ not need to find ALL
+    /* If a maximum number of matches is set, then we may not need to find ALL
      * of the matches below the given cutoff, so just find the closest cached
      * query that has hopes of having ANY matches within the cutoff. If no max
      * is set on the number of matches, however, we will need to find all matches
@@ -109,7 +116,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     if (verb) begin = chrono::high_resolution_clock::now();
     // visit all matches of the most suitable cached result
     fasstSolutionSet sols((*bestComp)->getSolutions(), topo);
-    S->addSequenceContext(sols);
+    if (redSet) S->addSequenceContext(sols);
     vector<mstreal> rmsds = S->matchRMSDs(sols, queryAtoms);
     for (int k = 0; k < sols.size(); k++) {
       // If max was set and i already found maxN solutions, i only care to insert
@@ -133,7 +140,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     if (verb) {
       end = chrono::high_resolution_clock::now();
       searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
-      if (verb) cout << "\tquick-search time " << searchTime << " ms" << std::endl;
+      if (verb) cout << "\tquick-search time " << searchTime << " ms to go over " << sols.size() << " solutions" << endl;
     }
   }
 
@@ -170,6 +177,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
       S->setMaxNumMatches(MstUtils::max(int(maxN*maxNumFactor()), maxN + 1000));
     }
     S->options().unsetRedundancyCut();
+    S->options().unsetRedundancyProperty();
     S->setRMSDCutoff(cut*errTolFactor());
 
     // -- perform the search and cache
@@ -191,7 +199,8 @@ fasstSolutionSet fasstCache::search(bool verb) {
 
     // apply all needed cutoffs
     fasstSolutionSet finalMatches;
-    S->addSequenceContext(matches);
+    if (redPropSet) S->options().setRedundancyProperty(redProp);
+    if (redSet) S->addSequenceContext(matches);
     for (int i = 0; i < matches.size(); i++) {
       fasstSolution& sol = matches[i];
       if (redPropSet) {
@@ -208,9 +217,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     matches = finalMatches;
 
     // -- reset search setting to their old values
-    S->setRedundancyCut(redCut);
-    S->setRMSDCutoff(cut);
-    if (maxSet) S->setMaxNumMatches(maxN);
+    S->setOptions(origOpts);
     if (verb) {
       end = chrono::high_resolution_clock::now();
       searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
@@ -236,7 +243,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
     if (verb) {
       cout << "\tdone upping priority" << std::endl;
       cout << "\tSUCCEEDED, NO need to search!!!" << endl;
-      if (matches.size() > 0) cout << "\tworst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << endl;
+      if (matches.size() > 0) cout << "\t\tfound " << matches.size() << " matches, worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << endl;
       cout << endl << "\tnew tollerance factors for maxN and RMSD are: " << maxNumFactor() << " and " << errTolFactor() << endl;
     }
     // update matches to reflect spacial alignment onto the new query
