@@ -1105,6 +1105,7 @@ void FASST::addSequenceContext(fasstSolution& sol) {
   Sequence& targSeq = targSeqs[currentTarget];
   vector<int> alignment = sol.getAlignment();
   vector<Sequence> segs(sol.numSegments()), ntPad(sol.numSegments()), ctPad(sol.numSegments());
+  if (targChainEnd.empty()) FASST::fillTargetChainInfo(currentTarget);
   for (int i = 0; i < sol.numSegments(); i++) {
     int Li = sol.segLength(i);
     segs[i].resize(Li);
