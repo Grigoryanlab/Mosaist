@@ -380,6 +380,10 @@ mstreal FASST::isResiduePairPropertyPopulated(const string& propType) {
   return (resPairProperties.find(propType) != resPairProperties.end());
 }
 
+mstreal FASST::isResidueRelationshipPopulated(const string& propType) {
+  return (resRelProperties.find(propType) != resRelProperties.end());
+}
+
 map<int, mstreal> FASST::getResiduePairProperties(int ti, const string& propType, int ri) {
   return hasResiduePairProperties(ti, propType, ri) ? resPairProperties[propType][ti][ri] : map<int, mstreal>();
 }
@@ -1101,7 +1105,6 @@ void FASST::addSequenceContext(fasstSolution& sol) {
   Sequence& targSeq = targSeqs[currentTarget];
   vector<int> alignment = sol.getAlignment();
   vector<Sequence> segs(sol.numSegments()), ntPad(sol.numSegments()), ctPad(sol.numSegments());
-  if (targChainEnd.empty()) FASST::fillTargetChainInfo(currentTarget);
   for (int i = 0; i < sol.numSegments(); i++) {
     int Li = sol.segLength(i);
     segs[i].resize(Li);
@@ -1123,6 +1126,18 @@ void FASST::addSequenceContext(fasstSolution& sol) {
     }
   }
   sol.setSeqContext(segs, ntPad, ctPad);
+}
+
+void FASST::addSequenceContext(fasstSolutionSet& sols) {
+  map<int, vector<int> > solsFromTarget; int i = 0;
+  for (auto it = sols.begin(); it != sols.end(); ++it, ++i) solsFromTarget[it->getTargetIndex()].push_back(i);
+  for (auto it = solsFromTarget.begin(); it != solsFromTarget.end(); ++it) {
+    FASST::fillTargetChainInfo(it->first);
+    vector<int>& solInds = it->second;
+    for (int i = 0; i < solInds.size(); i++) {
+      addSequenceContext(sols[solInds[i]]);
+    }
+  }
 }
 
 

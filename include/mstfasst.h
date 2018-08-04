@@ -361,6 +361,7 @@ class FASST {
     bool hasResiduePairProperties(int ti, const string& propType, int ri);
     mstreal isResiduePairPropertyPopulated(const string& propType);
     map<int, mstreal> getResiduePairProperties(int ti, const string& propType, int ri);
+    mstreal isResidueRelationshipPopulated(const string& propType);
 
     // access to search options
     fasstSearchOptions& options() { return opts; }
@@ -416,7 +417,7 @@ class FASST {
     vector<vector<mstreal> > getResidueProperties(fasstSolutionSet& sols, const string& propType, matchType type = matchType::REGION);
     vector<mstreal> getResidueProperties(const fasstSolution& sol, const string& propType, matchType type = matchType::REGION);
     vector<int> getMatchResidueIndices(const fasstSolution& sol, matchType type = matchType::REGION); // figure out the range of residues to excise from target structure
-    void addSequenceContext(fasstSolution& sol); // decorate the solution with sequence context
+    void addSequenceContext(fasstSolutionSet& sols); // decorate all solutions in the set with sequence context
 
     /* Computes the RMSD of the given match to a query that is (possibly)
      * different from the one it was found with (if it even came from a search). */
@@ -447,6 +448,7 @@ class FASST {
     mstreal segCentToPrevSegCentTol(int i);
     void rebuildProximityGrids();
     void addTargetStructure(Structure* targetStruct);
+    void addSequenceContext(fasstSolution& sol); // decorate the solution with sequence context
     void fillTargetChainInfo(int ti);
 
   private:

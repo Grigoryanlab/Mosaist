@@ -57,6 +57,7 @@ fasstSolutionSet fasstCache::search(bool verb) {
   mstreal cut = S->getRMSDCutoff(), rmsd;
   bool maxSet = S->isMaxNumMatchesSet();
   bool redSet = S->isRedundancyCutSet();
+  bool redPropSet = S->isRedundancyPropertySet();
   int maxN = S->getMaxNumMatches();
   mstreal redCut = S->getRedundancyCut();
   chrono::high_resolution_clock::time_point begin, end;
@@ -108,13 +109,19 @@ fasstSolutionSet fasstCache::search(bool verb) {
     if (verb) begin = chrono::high_resolution_clock::now();
     // visit all matches of the most suitable cached result
     fasstSolutionSet sols((*bestComp)->getSolutions(), topo);
+    S->addSequenceContext(sols);
     vector<mstreal> rmsds = S->matchRMSDs(sols, queryAtoms);
     for (int k = 0; k < sols.size(); k++) {
-      // take all below the cutoff
-      if (rmsds[k] <= cut) {
+      // If max was set and i already found maxN solutions, i only care to insert
+      // those solutions that are better than the last solution found. NOTE: insert
+      // can incur the cost of redundancy removal with respect to all previous
+      // matches, so can be a costly operation
+      bool foundMax = (maxSet && (matches.size() >= maxN));
+      if ((foundMax && (rmsds[k] < matches.worstRMSD())) || (!foundMax && (rmsds[k] <= cut))) {
         rmsd = sols[k].getRMSD(); sols[k].setRMSD(rmsds[k]);      // overwrite with RMSD relative to current query
-        if (redSet) {
-          // if (!sols[k].seqContextDefined()) S->addSequenceContext(sols[k]); // TODO: too slow
+        if (redPropSet) {
+          matches.insert(sols[k], S->getRedundancyPropertyMap());
+        } else if (redSet) {
           matches.insert(sols[k], S->getRedundancyCut());  // insert copies the solution
         } else {
           matches.insert(sols[k]);
@@ -184,15 +191,19 @@ fasstSolutionSet fasstCache::search(bool verb) {
 
     // apply all needed cutoffs
     fasstSolutionSet finalMatches;
+    S->addSequenceContext(matches);
     for (int i = 0; i < matches.size(); i++) {
       fasstSolution& sol = matches[i];
-      if (redSet) {
-        // if (!sol.seqContextDefined()) S->addSequenceContext(sol); // TODO: too slow
+      if (redPropSet) {
+        finalMatches.insert(sol, S->getRedundancyPropertyMap());
+      } else if (redSet) {
         finalMatches.insert(sol, redCut);
       } else {
         finalMatches.insert(sol);
       }
-      if (maxSet && (finalMatches.size() > maxN)) finalMatches.erase(--finalMatches.end());
+      // since these are matches found specifically by searching for this qiery,
+      // they are ordered by decreasing RMSD and if we already have maxN, we are done
+      if (maxSet && (finalMatches.size() == maxN)) break;
     }
     matches = finalMatches;
 
@@ -210,11 +221,11 @@ fasstSolutionSet fasstCache::search(bool verb) {
     // enough, reduce pressure on the tollerance parameters: redcuce more on the
     // inactive parameter and less on the active one.
     if ((*bestComp)->isLimitedByMaxNumMatches()) {
-      decMaxNumPressure(0.1);
-      decErrTolPressure(0.2);
+      decMaxNumPressure(0.01);
+      decErrTolPressure(0.02);
     } else {
-      decMaxNumPressure(0.2);
-      decErrTolPressure(0.1);
+      decMaxNumPressure(0.02);
+      decErrTolPressure(0.01);
     }
 
     // up the priority of this cached result just used

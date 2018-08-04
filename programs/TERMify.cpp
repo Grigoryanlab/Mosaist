@@ -242,7 +242,8 @@ int main(int argc, char** argv) {
   }
   int numPerTERM = op.getInt("n", 1);
 
-  F.setRedundancyCut(0.5);
+  if (F.isResidueRelationshipPopulated("sim")) F.setRedundancyProperty("sim");
+  else F.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000, lastWriteTime;
