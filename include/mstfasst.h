@@ -147,15 +147,16 @@ class fasstSolutionSet {
     fasstSolutionSet& operator=(const fasstSolutionSet& sols);
     bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
     bool insert(const fasstSolution& sol, map<int, map<int, map<int, set<int> > > >& relMap); // returns whether the insert was performed
+    void erase(fasstSolution& sol);
+    set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it);
     set<fasstSolution>::iterator begin() const { return solsSet.begin(); }
     set<fasstSolution>::reverse_iterator rbegin() const { return solsSet.rbegin(); }
     set<fasstSolution>::iterator end() const { return solsSet.end(); }
     set<fasstSolution>::reverse_iterator rend() const { return solsSet.rend(); }
-    set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it) { return solsSet.erase(it); updated = true; }
     // const fasstSolution& operator[] (int i) const;
     fasstSolution& operator[] (int i);
     int size() const { return solsSet.size(); }
-    void clear() { solsSet.clear(); updated = true; }
+    void clear() { solsSet.clear(); solsByTarget.clear(); updated = true; }
     mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
     mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
     vector<fasstSolution*> orderByDiscovery();
@@ -181,6 +182,7 @@ class fasstSolutionSet {
     // to its elements (i.e., it does not copy them upon resizing like vector).
     set<fasstSolution> solsSet;
     vector<fasstSolution*> solsVec;
+    map<int, set<fasstSolution*> > solsByTarget;
     bool updated;
 };
 

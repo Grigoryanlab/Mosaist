@@ -26,7 +26,6 @@ void FASST::optList::setOptions(const vector<mstreal>& _costs, bool add) {
 }
 
 void FASST::optList::addOption(int k) {
-  // if ((k < 0) || (k >= costs.size())) MstUtils::error("out-of-range index specified: " + MstUtils::toString(k), "FASST::optList::insertOption(int)");
   if (!isIn[k]) {
     numIn++;
     isIn[k] = true;
@@ -1298,14 +1297,18 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
           if (psol->getRMSD() <= sol.getRMSD()) { return false; } // sol got trumped by a better previous solution
           else {
             // sol is staying, but psol will need to be removed
-            psol = solsSet.erase(psol); psolStays = false; break; // no need to check other segments
+            // psol = solsSet.erase(psol);
+            psol = erase(psol);
+            psolStays = false;
+            break; // no need to check other segments
           }
         }
       }
       if (psolStays) psol++;
     }
   }
-  solsSet.insert(sol);
+  pair<set<fasstSolution>::iterator, bool> ins = solsSet.insert(sol);
+  solsByTarget[sol.getTargetIndex()].insert((fasstSolution*) &(*(ins.first)));
   updated = true;
   return true;
 }
@@ -1315,33 +1318,65 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, map<int, map<int, map<in
   int ti = sol.getTargetIndex();
   bool advance = true;
   if (relMap.find(ti) != relMap.end()) {
-    map<int, map<int, set<int> > >& relMapI = relMap[ti];
-    // compare this solution to each previously accepted solution
-    for (auto psol = solsSet.begin(); psol != solsSet.end(); (advance ? psol++ : psol)) {
-      advance = true;
-      int tj = psol->getTargetIndex();
-      if (relMapI.find(tj) == relMapI.end()) continue; // do the two targets have any related residues?
-      map<int, set<int> >& relMapIJ = relMapI[tj];
+    fasstSolution* toRemove = NULL;
+    map<int, map<int, set<int> > >& relMapA = relMap[ti];
+    // go over all targets with which the target of the current match has redundancy
+    for (auto it = relMapA.begin(); it != relMapA.end(); ++it) {
+      // do we have any matches from this potentially redundant target?
+      if (solsByTarget.find(it->first) == solsByTarget.end()) continue;
+      set<fasstSolution*> sols = solsByTarget[it->first];
+      map<int, set<int> >& relMapAB = it->second;
 
-      // compare each segment
+      // compare each segment to each solution from this target
       for (int i = 0; i < sol.numSegments(); i++) {
-        int ri = sol[i] + sol.segLength(i)/2;              // index of "central" residue of the segmet in the new solution
-        if (relMapIJ.find(ri) == relMapIJ.end()) continue; // does the residue have any related ones in the previous target?
-        int rj = (*psol)[i] + psol->segLength(i)/2;        // index of "central" residue of the segmet in the old solution
-        if (relMapIJ[ri].find(rj) == relMapIJ[ri].end()) continue; // are the two central residues related?
+        // index of the "central" residue of this segmet in the new solution
+        int ri = sol[i] + sol.segLength(i)/2;
+        // does this residue have any related ones in the previous target? If
+        // not, we can skip comparing this segment with any solutions from the target
+        if (relMapAB.find(ri) == relMapAB.end()) continue;
+        // otherwise, compare the segment to each solution from this target
+        for (auto solIt = sols.begin(); solIt != sols.end(); ++solIt) {
+          fasstSolution& psol = **solIt;
+          // index of "central" residue of the segmet in the old solution
+          int rj = psol[i] + psol.segLength(i)/2;
+          // are the two central residues related?
+          if (relMapAB[ri].find(rj) == relMapAB[ri].end()) continue;
 
-        // psol and sol are redundant. Which should go?
-        if (psol->getRMSD() <= sol.getRMSD()) return false; // sol got trumped by a better previous solution
-        else {
-          // sol is staying, but psol will need to be removed
-          psol = solsSet.erase(psol); advance = false; break; // no need to check other segments
+          // psol and sol are redundant. Which should go?
+          if (psol.getRMSD() <= sol.getRMSD()) return false; // sol got trumped by a better previous solution
+          else {
+            // psol gets trumped by sol; need to find the "earliest" psol (the
+            // one with the lowest RMSD) for which this is true, and remove it
+            // (unless sol gets trumped by something else before that happens)
+            if ((toRemove == NULL) || (toRemove->getRMSD() > psol.getRMSD())) {
+              toRemove = &psol;
+            }
+          }
         }
       }
     }
+    if (toRemove != NULL) {
+      erase(*toRemove);
+    }
   }
-  solsSet.insert(sol);
+  pair<set<fasstSolution>::iterator, bool> ins = solsSet.insert(sol);
+  solsByTarget[sol.getTargetIndex()].insert((fasstSolution*) &(*(ins.first)));
   updated = true;
   return true;
+}
+
+void fasstSolutionSet::erase(fasstSolution& sol) {
+  int ti = sol.getTargetIndex();
+  solsByTarget[ti].erase(&sol);
+  solsSet.erase(sol);
+  updated = true;
+}
+
+set<fasstSolution>::iterator fasstSolutionSet::erase(const set<fasstSolution>::iterator it) {
+  int ti = it->getTargetIndex();
+  solsByTarget[ti].erase((fasstSolution*) &(*it));
+  updated = true;
+  return solsSet.erase(it);
 }
 
 fasstSolution& fasstSolutionSet::operator[] (int i) {
