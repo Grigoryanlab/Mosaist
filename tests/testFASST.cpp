@@ -14,6 +14,7 @@ int main(int argc, char *argv[]) {
   op.addOption("redProp", "set redundancy property name. If defined, will assume the FASST database encodes this relational property and will define redundancy via it.");
   op.addOption("min", "min number of matches.");
   op.addOption("max", "max number of matches.");
+  op.addOption("seq", "specify sequence constraints as a semicolon-separated list of specifications. E.g., '0 3 LEU,ALA' means residue index 3 from the first query segment must be either LEU or ALA. Or, '0 3 LEU,ALA; 1 2 LYS' additionally specifies that residue index 2 from the second segment must be LYS..");
   op.addOption("strOut", "dump structures into this directory.");
   op.addOption("pp", "store phi/psi properties in the database, if creating a new one from PDB files.");
   op.setOptions(argc, argv);
@@ -60,6 +61,19 @@ int main(int argc, char *argv[]) {
   // S.setMaxGap(0, 1, 6); S.setMinGap(0, 1, 0);
   S.setRedundancyCut(op.getReal("red", 100.0)/100.0);
   if (op.isGiven("redProp")) S.setRedundancyProperty(op.getString("redProp"));
+  fasstSeqConstSimple seqConst(S.getNumQuerySegments());
+  if (op.isGiven("seq")) {
+    vector<string> cons = MstUtils::split(op.getString("seq"), ";");
+    for (int i = 0; i < cons.size(); i++) {
+      vector<string> con = MstUtils::split(MstUtils::trim(cons[i]), " ");
+      MstUtils::assert(con.size() == 3, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("seq"));
+      int segIdx = MstUtils::toInt(con[0]);
+      int resIdx = MstUtils::toInt(con[1]);
+      vector<string> aas = MstUtils::split(MstUtils::trim(con[2]), "|");
+      seqConst.addConstraint(segIdx, resIdx, aas);
+    }
+    S.options().setSequenceConstraints(&seqConst);
+  }
   auto end = chrono::high_resolution_clock::now();
   cout << "DB reading took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
   cout << "Searching..." << endl;

@@ -9,7 +9,7 @@ void FASST::optList::setOptions(const vector<mstreal>& _costs, bool add) {
   sort(rankToIdx.begin(), rankToIdx.end(), [this](int i, int j) { return costs[i] < costs[j]; });
   for (int i = 0; i < rankToIdx.size(); i++) costs[i] = _costs[rankToIdx[i]];
 
-  // sort the the rank-to-index mapping and keep track of indices to know the index-to-rank mapping
+  // sort the rank-to-index mapping and keep track of indices to know the index-to-rank mapping
   idxToRank.resize(costs.size());
   for (int i = 0; i < idxToRank.size(); i++) idxToRank[i] = i;
   sort(idxToRank.begin(), idxToRank.end(), [this](int i, int j) { return rankToIdx[i] < rankToIdx[j]; });
@@ -88,10 +88,16 @@ void FASST::optList::copyIn(const FASST::optList& opt) {
 }
 
 void FASST::optList::intersectOptions(const vector<int>& opts) {
-  vector<bool> isGiven(isIn.size(), false);
-  for (int i = 0; i < opts.size(); i++) isGiven[opts[i]] = true;
+  vector<bool> isOK(isIn.size(), false);
+  for (int i = 0; i < opts.size(); i++) isOK[opts[i]] = true;
   for (int i = 0; i < isIn.size(); i++) {
-    if (isIn[i] && !isGiven[i]) removeOption(i);
+    if (isIn[i] && !isOK[i]) removeOption(i);
+  }
+}
+
+void FASST::optList::intersectOptions(const vector<bool>& isOK) {
+  for (int i = 0; i < isIn.size(); i++) {
+    if (isIn[i] && !isOK[i]) removeOption(i);
   }
 }
 
@@ -576,13 +582,22 @@ void FASST::prepForSearch(int ti) {
   // align every segment onto every admissible location on the target
   mstreal xc, yc, zc;
   segmentResiduals.resize(query.size());
+  vector<vector<bool> > okAlignments(query.size());
   for (int i = 0; i < query.size(); i++) {
+    bool seqConst = options().sequenceConstraintsSet() && options().getSequenceConstraints()->isSegmentConstrained(qSegOrd[i]);
     ps[i]->dropAllPoints();
     AtomPointerVector& seg = query[i];
     int Na = atomToResIdx(target.size()) - atomToResIdx(seg.size()) + 1; // number of possible alignments
-    segmentResiduals[i].resize(MstUtils::max(Na, 0));
+    // make the default bad, so alignments skipped due to sequence constraints
+    // get sorted to the bottom of the options list before they are removed
+    segmentResiduals[i].resize(MstUtils::max(Na, 0), 9999.0);
+    if (seqConst) {
+      okAlignments[i].resize(segmentResiduals[i].size());
+      options().getSequenceConstraints()->evalConstraint(qSegOrd[i], targSeqs[ti], okAlignments[i]);
+    }
     AtomPointerVector targSeg(query[i].size(), NULL);
     for (int j = 0; j < Na; j++) {
+      if (seqConst && !okAlignments[i][j]) continue; // save on calculating RMSDs for disallowed segment alignments
       // NOTE: can save on this in several ways:
       // 1. the centroid calculation is effectively already done inside RMSDCalculator::bestRMSD
       // 2. updating just one atom involves a simple centroid adjustment, rather than recalculation
@@ -607,6 +622,7 @@ void FASST::prepForSearch(int ti) {
       // it won't be used and it is more convenient to access without thinking
       // of offsets (a tiny bit of memory waste for convenience)
       remOptions[L][i].setOptions(segmentResiduals[i], L == 0);
+      if (!okAlignments[i].empty()) remOptions[L][i].intersectOptions(okAlignments[i]);
     }
   }
 
@@ -1431,5 +1447,24 @@ void fasstSolutionSet::read(istream &_is) {
     fasstSolution sol;
     sol.read(_is);
     insert(sol);
+  }
+}
+
+
+/* --------- fasstSeqConstSimple --------- */
+void fasstSeqConstSimple::evalConstraint(int segIdx, const Sequence& target, vector<bool>& alignments) {
+  vector<int>& segPositions = positions[segIdx];
+  if (segPositions.empty()) {
+    for (int i = 0; i < alignments.size(); i++) alignments[i] = true;
+    return;
+  }
+  vector<set<res_t> > segAminoAcids = aminoAcids[segIdx];
+  for (int i = 0; i < alignments.size(); i++) {
+    bool ok = true;
+    for (int j = 0; j < segPositions.size(); j++) {
+      int k = i + segPositions[j];
+      ok = ok && (segAminoAcids[j].find(target[k]) != segAminoAcids[j].end());
+    }
+    alignments[i] = ok;
   }
 }

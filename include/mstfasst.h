@@ -186,6 +186,41 @@ class fasstSolutionSet {
     bool updated;
 };
 
+/* A general virtual class for representing per-segment sequence constraints. */
+class fasstSeqConst {
+  public:
+    /* vector alignments is assumed to be pre-allocated. Upon exit, alignments[i]
+     * will be true if the alignment of segment segIdx with the target starting
+     * at with position i meets all sequence constraints, and false otherwise. */
+    virtual void evalConstraint(int segIdx, const Sequence& target, vector<bool>& alignments) = 0;
+    virtual bool isSegmentConstrained(int segIdx) = 0;
+};
+
+/* A simple implementation of per-segment sequence constraints that allows only
+ * for positional constraints to a fixed set of amino acids. */
+class fasstSeqConstSimple : public fasstSeqConst {
+  public:
+    fasstSeqConstSimple(int numSegs) { positions.resize(numSegs); aminoAcids.resize(numSegs); }
+    void evalConstraint(int segIdx, const Sequence& target, vector<bool>& alignments);
+    bool isSegmentConstrained(int segIdx) { return !positions[segIdx].empty(); }
+
+    void addConstraint(int segIdx, int posIdx, const vector<string>& aas) {
+      positions[segIdx].push_back(posIdx);
+      aminoAcids[segIdx].push_back(set<res_t>());
+      for (int i = 0; i < aas.size(); i++) aminoAcids[segIdx].back().insert(SeqTools::aaToIdx(aas[i]));
+    }
+
+  private:
+    /* positions is of size equal to the number of query segments, positions[i]
+     * is the set of indices within the i-th query segment that have constraints
+     * defined for them. So if positions[i][j] is some index within the i-th
+     * segment that is constrained, then aminoAcids[i][j] is the corresponding
+     * set of amino acids allowed at this position. If positions[i] is empty,
+     * then no constraints are present for the i-th segment. */
+    vector<vector<int> > positions;
+    vector<vector<set<res_t> > > aminoAcids;
+};
+
 class fasstSearchOptions {
   public:
     fasstSearchOptions() {
@@ -194,6 +229,7 @@ class fasstSearchOptions {
       gapConstSet = false;
       contextLength = 30;
       redundancyCut = 1.0;
+      seqConst = NULL;
     }
 
     /* -- getters -- */
@@ -206,6 +242,7 @@ class fasstSearchOptions {
     int getContextLength() const { return contextLength; }
     mstreal getRedundancyCut() const { return redundancyCut; }
     string getRedundancyProperty() const { return redundancyProp; }
+    fasstSeqConst* getSequenceConstraints() const { return seqConst; }
 
     /* -- setters -- */
     void setMinNumMatches(int _min);
@@ -222,6 +259,7 @@ class fasstSearchOptions {
      * for redundancy will need to be applied later. */
     void setRedundancyCut(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
     void setRedundancyProperty(const string& _redProp) { redundancyProp = _redProp; }
+    void setSequenceConstraints(fasstSeqConst* c) { seqConst = c; }
 
     /* -- unsetters (resetters) -- */
     void unsetMinNumMatches() { minNumMatches = -1; }
@@ -230,6 +268,7 @@ class fasstSearchOptions {
     void resetGapConstraints(int numQuerySegs);
     void unsetRedundancyCut() { redundancyCut = 1; }
     void unsetRedundancyProperty() { redundancyProp = ""; }
+    void unsetSequenceConstraints() { seqConst = NULL; }
 
     /* -- queriers -- */
     bool isMinNumMatchesSet() const { return (minNumMatches > 0); }
@@ -241,6 +280,7 @@ class fasstSearchOptions {
     bool gapConstraintsExist() const { return gapConstSet; }
     bool isRedundancyCutSet() const { return redundancyCut < 1; }
     bool isRedundancyPropertySet() const { return !redundancyProp.empty(); }
+    bool sequenceConstraintsSet() const { return seqConst != NULL; }
 
     /* -- validators -- */
     bool validateGapConstraints(int numQuerySegs) const;
@@ -257,6 +297,7 @@ class fasstSearchOptions {
     vector<vector<bool> > minGapSet, maxGapSet;
     bool gapConstSet;
     int maxNumMatches, minNumMatches, suffNumMatches;
+    fasstSeqConst* seqConst;
 };
 
 /* FASST -- Fast Algorithm for Searching STructure */
@@ -301,6 +342,9 @@ class FASST {
         // after this, the only remaining allowed options will be those that were
         // allowed before AND are in the specified list
         void intersectOptions(const vector<int>& opts);
+        // same as above, but instead of a list of okay options, takes a vector
+        // indicating whether any of the previously known options are okay.
+        void intersectOptions(const vector<bool>& isOK);
         // keep only options with indices less than or equal to the given one
         void constrainLE(int idx);
         // keep only options with indices greater than or equal to the given one
@@ -344,6 +388,7 @@ class FASST {
     void setQuery(const string& pdbFile, bool autoSplitChains = true);
     void setQuery(const Structure& Q, bool autoSplitChains = true);
     Structure getQuery() const { return queryStruct; }
+    int getNumQuerySegments() const { return queryStruct.chainSize(); }
     AtomPointerVector getQuerySearchedAtoms() const;
     void addTarget(const Structure& T);
     void addTarget(const string& pdbFile);

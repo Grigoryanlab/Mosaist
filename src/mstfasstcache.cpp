@@ -167,7 +167,8 @@ fasstSolutionSet fasstCache::search(bool verb) {
       else { incErrTolPressure(); }
     }
     if (verb) {
-      cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)...";
+      cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)";
+      if (maxSet) cout << " (" << maxN << " was the max) ";
       if (matches.size() > 0) cout << " (worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << ", search params: " << (*bestComp)->getSearchRMSDCutoff() << " / " << (*bestComp)->getSearchMaxNumMatches() << ")";
       cout << endl << "\tnew pressures/tollerance factors for maxN and RMSD are: " << getMaxNumPressure() << " and " << getErrTolPressure() << " / " << maxNumFactor() << " and " << errTolFactor() << endl;
       begin = chrono::high_resolution_clock::now();
