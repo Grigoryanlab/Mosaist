@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
       vector<string> aas = MstUtils::split(MstUtils::trim(con[2]), "|");
       seqConst.addConstraint(segIdx, resIdx, aas);
     }
-    S.options().setSequenceConstraints(&seqConst);
+    S.options().setSequenceConstraints(seqConst);
   }
   auto end = chrono::high_resolution_clock::now();
   cout << "DB reading took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;

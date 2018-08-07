@@ -194,6 +194,7 @@ class fasstSeqConst {
      * at with position i meets all sequence constraints, and false otherwise. */
     virtual void evalConstraint(int segIdx, const Sequence& target, vector<bool>& alignments) = 0;
     virtual bool isSegmentConstrained(int segIdx) = 0;
+    virtual ~fasstSeqConst() {}
 };
 
 /* A simple implementation of per-segment sequence constraints that allows only
@@ -231,6 +232,7 @@ class fasstSearchOptions {
       redundancyCut = 1.0;
       seqConst = NULL;
     }
+    ~fasstSearchOptions() { if (seqConst != NULL) delete(seqConst); }
 
     /* -- getters -- */
     int getMinNumMatches() const { return minNumMatches; }
@@ -259,7 +261,8 @@ class fasstSearchOptions {
      * for redundancy will need to be applied later. */
     void setRedundancyCut(mstreal _redundancyCut = 0.5) { redundancyCut = _redundancyCut; }
     void setRedundancyProperty(const string& _redProp) { redundancyProp = _redProp; }
-    void setSequenceConstraints(fasstSeqConst* c) { seqConst = c; }
+    template<class T>
+    void setSequenceConstraints(const T& c) { if (seqConst != NULL) delete(seqConst); seqConst = new T(c); }
 
     /* -- unsetters (resetters) -- */
     void unsetMinNumMatches() { minNumMatches = -1; }
@@ -268,7 +271,7 @@ class fasstSearchOptions {
     void resetGapConstraints(int numQuerySegs);
     void unsetRedundancyCut() { redundancyCut = 1; }
     void unsetRedundancyProperty() { redundancyProp = ""; }
-    void unsetSequenceConstraints() { seqConst = NULL; }
+    void unsetSequenceConstraints() { if (seqConst != NULL) delete(seqConst); seqConst = NULL; }
 
     /* -- queriers -- */
     bool isMinNumMatchesSet() const { return (minNumMatches > 0); }
