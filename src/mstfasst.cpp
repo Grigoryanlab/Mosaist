@@ -597,7 +597,10 @@ void FASST::prepForSearch(int ti) {
     }
     AtomPointerVector targSeg(query[i].size(), NULL);
     for (int j = 0; j < Na; j++) {
-      if (seqConst && !okAlignments[i][j]) continue; // save on calculating RMSDs for disallowed segment alignments
+      if (seqConst && !okAlignments[i][j]) { // save on calculating RMSDs for disallowed segment alignments
+        if (query.size() > 1) ps[i]->addPoint(0, 0, 0, j); // add a dummy point, so point indexing is preserved
+        continue;
+      }
       // NOTE: can save on this in several ways:
       // 1. the centroid calculation is effectively already done inside RMSDCalculator::bestRMSD
       // 2. updating just one atom involves a simple centroid adjustment, rather than recalculation
