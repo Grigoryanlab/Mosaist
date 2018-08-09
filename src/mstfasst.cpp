@@ -102,7 +102,7 @@ void FASST::optList::intersectOptions(const vector<bool>& isOK) {
 }
 
 void FASST::optList::constrainLE(int idx) {
-  for (int i = idx+1; i < isIn.size(); i++) removeOption(i);
+  for (int i = MstUtils::max(idx+1, 0); i < isIn.size(); i++) removeOption(i);
 }
 
 void FASST::optList::constrainGE(int idx) {
@@ -761,7 +761,7 @@ fasstSolutionSet FASST::search() {
               if (opts.minGapConstrained(qSegOrd[j], qSegOrd[i]))
                 remOptions[nextLevel][i].constrainGE(currAlignment[j] + opts.getMinGap(qSegOrd[j], qSegOrd[i]) + segLen[j]);
               if (opts.maxGapConstrained(qSegOrd[j], qSegOrd[i]))
-                remOptions[nextLevel][i].constrainLE(currAlignment[j] + opts.getMaxGap(qSegOrd[i], qSegOrd[j]) + segLen[j]);
+                remOptions[nextLevel][i].constrainLE(currAlignment[j] + opts.getMaxGap(qSegOrd[j], qSegOrd[i]) + segLen[j]);
               // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
               // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
               // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
