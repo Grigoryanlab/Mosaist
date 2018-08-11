@@ -3331,7 +3331,7 @@ void MstUtils::openFile (fstream& fs, string filename, ios_base::openmode mode, 
   }
 }
 
-void MstUtils::fileToArray(string _filename, vector<string>& lines) {
+void MstUtils::fileToArray(const string& _filename, vector<string>& lines) {
   fstream inp;
   MstUtils::openFile(inp, _filename, ios_base::in, "MstUtils::fileToArray");
   string line;
@@ -3444,12 +3444,12 @@ vector<string> MstUtils::trim(const vector<string>& strings, string delimiters) 
 }
 
 
-void MstUtils::warn(string message, string from) {
+void MstUtils::warn(const string& message, string from) {
   string head = from.empty() ? "Warning: " : "Warning in " + from + ": ";
   cerr << head << wrapText(message, 100, 0, head.length()) << endl;
 }
 
-void MstUtils::error(string message, string from, int code) {
+void MstUtils::error(const string& message, string from, int code) {
   string head = from.empty() ? "Error: " : "Error in " + from + ": ";
   cerr << head << wrapText(message, 100, 0, head.length()) << endl;
 
@@ -3481,7 +3481,7 @@ void MstUtils::assert(bool condition, string message, string from, int exitCode)
   }
 }
 
-string MstUtils::wrapText(string message, int width, int leftSkip, int startingOffset) {
+string MstUtils::wrapText(const string& message, int width, int leftSkip, int startingOffset) {
   string text;
   int b = 0, e, off = startingOffset, word = 0;
   while (b < message.size()) {
@@ -3509,23 +3509,23 @@ char* MstUtils::copyStringC(const char* str) {
   return copy;
 }
 
-int MstUtils::toInt(string num, bool strict) {
+int MstUtils::toInt(const string& num, bool strict) {
   int ret = 0;
   if ((sscanf(num.c_str(), "%d", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
   return ret;
 }
 
-bool MstUtils::isInt(string num) {
+bool MstUtils::isInt(const string& num) {
   int ret;
   return (sscanf(num.c_str(), "%d", &ret) == 1);
 }
 
-bool MstUtils::isReal(string num) {
+bool MstUtils::isReal(const string& num) {
   double ret;
   return (sscanf(num.c_str(), "%lf", &ret) == 1);
 }
 
-MST::mstreal MstUtils::toReal(string num, bool strict) {
+MST::mstreal MstUtils::toReal(const string& num, bool strict) {
   double ret = 0.0;
   if ((sscanf(num.c_str(), "%lf", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to mstreal", "MstUtils::toReal");
   return (mstreal) ret;

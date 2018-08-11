@@ -4,6 +4,20 @@
 #include "msttypes.h"
 #include "mstfasst.h"
 
+// TODO:
+// 1. fasstCache should derive from FASST and should simply override the search function
+// 2. that way, all old functions are still accessible and FASST* and FASS& can refer to
+//    either instances of FASST of fasstCache.
+// 3. consider renaming fasstCache to cFASST or cacheFASST
+// 4. add two logical flags to fasstCache: readCache and writeCache. By default
+//    these would be true. If set to false, the first one would make sure the
+//    cache is not accessed. And the second one that it is not updated. This way,
+//    there can be programs that mere "use" a cache and never update it.
+// 5. make a logical flag that forces matches to be exactly the same as in a
+//    regular search, including when redundancy is removed. This can be used
+//    in testing.
+// 6. write a test function for the cache.
+
 class fasstCache {
   public:
     fasstCache(FASST* s, int max = 1000) {

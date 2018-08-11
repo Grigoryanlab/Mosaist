@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
   }
   S.setMaxNumMatches(op.getInt("max", -1));
   S.setMinNumMatches(op.getInt("min", -1));
-  S.setMaxGap(1, 0, 6); S.setMinGap(1, 0, 0);
+  // S.setMaxGap(1, 0, 6); S.setMinGap(1, 0, 0);
   S.setRedundancyCut(op.getReal("red", 100.0)/100.0);
   if (op.isGiven("redProp")) S.setRedundancyProperty(op.getString("redProp"));
   fasstSeqConstSimple seqConst(S.getNumQuerySegments());

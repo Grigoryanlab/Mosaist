@@ -878,23 +878,23 @@ class MstTimer {
 class MstUtils {
   public:
     static void openFile(fstream& fs, string filename, ios_base::openmode mode = ios_base::in, string from = "");
-    static void fileToArray(string _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
-    static vector<string> fileToArray(string _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
+    static void fileToArray(const string& _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
+    static vector<string> fileToArray(const string& _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
     static FILE* openFileC (const char* filename, const char* mode, string from = "");
     static vector<string> trim(const vector<string>& strings, string delimiters = " \t\n\v\f\r");
     static string trim(const string& str, string delimiters = " \t\n\v\f\r");
-    static void warn(string message, string from = "");
-    static void error(string message, string from = "", int code = -1);
+    static void warn(const string& message, string from = "");
+    static void error(const string& message, string from = "", int code = -1);
     static void assert(bool condition, string message = "error: assertion failed", string from = "", int exitCode = -1);
     static string uc(const string& str);                        // returns an upper-case copy of the input string
     static string lc(const string& str);                        // returns an lower-case copy of the input string
     static bool stringsEqual(const string& A, const string& B, bool caseInsensitive = true);
-    static string wrapText(string message, int width, int leftSkip = 0, int startingOffset = 0);
+    static string wrapText(const string& message, int width, int leftSkip = 0, int startingOffset = 0);
     static char* copyStringC(const char* str);
-    static int toInt(string num, bool strict = true);
-    static bool isInt(string num);
-    static MST::mstreal toReal(string num, bool strict = true);
-    static bool isReal(string num);
+    static int toInt(const string& num, bool strict = true);
+    static bool isInt(const string& num);
+    static MST::mstreal toReal(const string& num, bool strict = true);
+    static bool isReal(const string& num);
     static MST::mstreal mod(MST::mstreal num, MST::mstreal den);
     static MST::mstreal sign(MST::mstreal val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
