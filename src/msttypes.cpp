@@ -1931,7 +1931,10 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
     for (int i = 0; i < atoms.size(); i++) {
       switch(tree->getProperty()) {
         case (expressionTree::selProperty::RESID):
-          if (residues[i]->getNum() == tree->getNum()) sel.push_back(atoms[i]);
+          if ((tree->hasNums() && (residues[i]->getNum() >= tree->getNumByIdx(0)) && (residues[i]->getNum() <= tree->getNumByIdx(1))) ||
+              (!tree->hasNums() && (residues[i]->getNum() == tree->getNum()))) {
+            sel.push_back(atoms[i]);
+          }
           break;
         case (expressionTree::selProperty::RESNAME):
           if (residues[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
@@ -2019,10 +2022,15 @@ expressionTree* selector::buildExpressionTree(string selStr) {
     return tree;
   } else if (MstUtils::stringsEqual(token, "resid")) {
     string str = getNextSelectionToken(selStr);
-    if (!MstUtils::isInt(str)) MstUtils::error("bad selection, expected number when saw " + str, "selector::buildExpressionTree(string)");
     tree->setLogicalOperator(expressionTree::logicalOp::IS);
     tree->setProperty(expressionTree::selProperty::RESID);
-    tree->setNum(MstUtils::toInt(str));
+    if (MstUtils::isInt(str)) {
+      tree->setNum(MstUtils::toInt(str));
+    } else {
+      vector<string> range = MstUtils::split(str, "-");
+      if ((range.size() != 2) || (!MstUtils::isInt(range[0])) || (!MstUtils::isInt(range[1]))) MstUtils::error("bad selection, expected number or range when saw " + str, "selector::buildExpressionTree(string)");
+      tree->setNums({MstUtils::toInt(range[0]), MstUtils::toInt(range[1])});
+    }
   } else if (MstUtils::stringsEqual(token, "resname")) {
     string str = getNextSelectionToken(selStr);
     tree->setLogicalOperator(expressionTree::logicalOp::IS);
@@ -3511,13 +3519,30 @@ char* MstUtils::copyStringC(const char* str) {
 
 int MstUtils::toInt(const string& num, bool strict) {
   int ret = 0;
-  if ((sscanf(num.c_str(), "%d", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
+  try { ret = stoi(num); }
+  catch (...) {
+    if (strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
+  }
   return ret;
+  // int ret = 0;
+  // if ((sscanf(num.c_str(), "%d", &ret) != 1) && strict) MstUtils::error("failed to convert '" + num + "' to integer", "MstUtils::toInt");
+  // return ret;
 }
 
 bool MstUtils::isInt(const string& num) {
-  int ret;
-  return (sscanf(num.c_str(), "%d", &ret) == 1);
+  string::size_type k;
+  try {
+    stoi(num, &k);
+  }
+  catch (...) { // no matter what exception, fail
+    return false;
+  }
+  bool period = false;
+  for (int i = k; i < num.size(); i++) {
+    if ((num[i] == '.') && !period) { period = true; continue; } // one period is okay (e.g., "12." is an int)
+    if (!isspace(num[i])) return false;
+  }
+  return true;
 }
 
 bool MstUtils::isReal(const string& num) {
