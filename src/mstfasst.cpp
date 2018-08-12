@@ -106,7 +106,8 @@ void FASST::optList::constrainLE(int idx) {
 }
 
 void FASST::optList::constrainGE(int idx) {
-  for (int i = 0; i < MstUtils::min(idx, (int) isIn.size()); i++) removeOption(i);
+  int UB = MstUtils::min(idx, (int) isIn.size());
+  for (int i = 0; i < UB; i++) removeOption(i);
 }
 
 void FASST::optList::constrainRange(int idxLow, int idxHigh) {

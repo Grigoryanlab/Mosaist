@@ -50,21 +50,20 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
     if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) seqConsts++;
   }
   int Nmin = need*(pow(20, seqConsts)*2 + 3);
-  FASST* F = C.getFASST();
-  F->setQuery(frag, false);
-  F->setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
-  F->options().setMaxNumMatches(Nmin*2);
-  // F->options().setMinNumMatches(Nmin);
+  C.setQuery(frag, false);
+  C.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
+  C.options().setMaxNumMatches(Nmin*2);
+  // C.options().setMinNumMatches(Nmin);
 
   vector<Structure*> matchStructures;
   // limit iterations, because it is technically possible that a match meeting
   // the sequence constraints does not exist, at which point we will just give up
   for (int c = 0; c < 10; c++) {
-    fasstSolutionSet matches = C.search(true);
+    fasstSolutionSet matches = C.search();
     for (auto it = matches.begin(); it != matches.end(); ++it) {
       if (centIdx.size() > 0) {
         // check for sequence compatibility
-        Sequence mseq = F->getMatchSequence(*it);
+        Sequence mseq = C.getMatchSequence(*it);
         bool comp = true;
         for (int i = 0; i < centIdx.size(); i++) {
           Residue& res = frag.getResidue(centIdx[i]);
@@ -73,7 +72,7 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
         }
         if (!comp) continue; // skip non-compatible solutions
       }
-      matchStructures.push_back(new Structure(F->getMatchStructure(*it, false, FASST::matchType::REGION)));
+      matchStructures.push_back(new Structure(C.getMatchStructure(*it, false, FASST::matchType::REGION)));
       Structure& match = *(matchStructures.back());
       MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
       for (int k = 0; k < match.residueSize(); k++) {
@@ -84,12 +83,12 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
     if (matchStructures.size() >= need) break;
     for (int i = 0; i < matchStructures.size(); i++) delete(matchStructures[i]);
     matchStructures.clear();
-    if (matches.size() == F->options().getMaxNumMatches()) {
-      F->options().setMaxNumMatches(F->options().getMaxNumMatches()*2);
+    if (matches.size() == C.options().getMaxNumMatches()) {
+      C.options().setMaxNumMatches(C.options().getMaxNumMatches()*2);
     } else {
-      F->options().setRMSDCutoff(F->options().getRMSDCutoff()*1.1);
+      C.options().setRMSDCutoff(C.options().getRMSDCutoff()*1.1);
     }
-    cout << "\t\tinsufficient, increasing params to " << F->options().getRMSDCutoff() << " / " << F->options().getMaxNumMatches() << endl;
+    cout << "\t\tinsufficient, increasing params to " << C.options().getRMSDCutoff() << " / " << C.options().getMaxNumMatches() << endl;
   }
   return matchStructures;
 }
@@ -208,20 +207,7 @@ int main(int argc, char** argv) {
   op.setOptions(argc, argv);
   RMSDCalculator rc;
   Structure I(op.getString("p"));
-  FASST F;
   vector<int> fixed;
-  F.setMemorySaveMode(true);
-  if (op.isGiven("c") && op.getString("c").empty()) MstUtils::error("--c must be a valid file path");
-  if (op.isGiven("d")) {
-    F.addTargets(MstUtils::fileToArray(op.getString("d")));
-    if (op.isGiven("b")) {
-      F.writeDatabase(op.getString("b"));
-    }
-  } else if (op.isGiven("b")) {
-    F.readDatabase(op.getString("b"));
-  } else {
-    MstUtils::error("either --b or --d must be given!");
-  }
   if (op.isGiven("f")) {
     fixed = MstUtils::splitToInt(op.getString("f"));
     cout << "fix specification gave " << fixed.size() << " residues, fixing..." << endl;
@@ -234,6 +220,21 @@ int main(int argc, char** argv) {
     fixed.resize(fixedResidues.size());
     for (int i = 0; i < fixedResidues.size(); i++) fixed[i] = indices[fixedResidues[i]];
   }
+  fasstCache cache((I.residueSize() - fixed.size())*10);
+  cache.setStrictEquivalence(true);
+  cache.setVerbose(true);
+  cache.setMemorySaveMode(true);
+  if (op.isGiven("c") && op.getString("c").empty()) MstUtils::error("--c must be a valid file path");
+  if (op.isGiven("d")) {
+    cache.addTargets(MstUtils::fileToArray(op.getString("d")));
+    if (op.isGiven("b")) {
+      cache.writeDatabase(op.getString("b"));
+    }
+  } else if (op.isGiven("b")) {
+    cache.readDatabase(op.getString("b"));
+  } else {
+    MstUtils::error("either --b or --d must be given!");
+  }
   if (op.isGiven("us")) {
     selector sel(I);
     vector<Residue*> unkResidues = sel.selectRes(op.getString("us"));
@@ -242,8 +243,8 @@ int main(int argc, char** argv) {
   }
   int numPerTERM = op.getInt("n", 1);
 
-  if (F.isResidueRelationshipPopulated("sim")) F.setRedundancyProperty("sim");
-  else F.setRedundancyCut(0.5);
+  if (cache.isResidueRelationshipPopulated("sim")) cache.setRedundancyProperty("sim");
+  else cache.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000, lastWriteTime;
@@ -282,8 +283,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  // create a cache with size proprtional to the number of flexible residues
-  fasstCache cache(&F, (I.residueSize() - fixed.size())*10);
+  // read initial cache
   if (op.isGiven("c") && MstSys::fileExists(op.getString("c"))) {
     MstSys::getNetLock(tag, true);
     cout << "reading cache from " << op.getString("c") << "... " << endl;
@@ -327,7 +327,7 @@ int main(int argc, char** argv) {
         vector<int> centIdx = TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
-        F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
+        cache.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
         vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
         if (!matches.empty()) allMatches.push_back(matches);
       }
@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
       vector<int> centIdx = TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
-      F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
+      cache.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
       vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
       if (!matches.empty()) allMatches.push_back(matches);
     }

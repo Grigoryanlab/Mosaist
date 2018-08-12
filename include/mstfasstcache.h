@@ -5,40 +5,51 @@
 #include "mstfasst.h"
 
 // TODO:
-// 1. fasstCache should derive from FASST and should simply override the search function
-// 2. that way, all old functions are still accessible and FASST* and FASS& can refer to
-//    either instances of FASST of fasstCache.
-// 3. consider renaming fasstCache to cFASST or cacheFASST
-// 4. add two logical flags to fasstCache: readCache and writeCache. By default
-//    these would be true. If set to false, the first one would make sure the
-//    cache is not accessed. And the second one that it is not updated. This way,
-//    there can be programs that mere "use" a cache and never update it.
-// 5. make a logical flag that forces matches to be exactly the same as in a
-//    regular search, including when redundancy is removed. This can be used
-//    in testing.
-// 6. write a test function for the cache.
+// 1. write a test function for the cache.
 
-class fasstCache {
+class cFASST : public FASST {
   public:
-    fasstCache(FASST* s, int max = 1000) {
-      S = s; maxNumResults = max;
+    cFASST(int max = 1000) : FASST() {
+      maxNumResults = max;
       sf = 10.0;
       maxNumPressure = (exp(1.0) - 1.0)*maxNumResults/sf; // so that max factor is 2.0 at the start
       errTolPressure = (exp(0.1) - 1.0)*maxNumResults/sf; // so that error factor is 1.1 at the start
+      verb = false; readPerm = modPerm = true;
+      /* Because removal of redundancy is done on-the-fly in FASST (as matches
+       * are discovered) and after the fact in cFASST (after fully redundant
+       * matches are first fetched from the cache), the precise set of matches
+       * may be slightly different in the two cases when redundancy filter is
+       * turned on. We can, of course, make sure that cFASST returns the same
+       * exact results as FASST when redundancy is on, but this takes a bit of
+       * extra computation (not too much, but still). Considering that it is
+       * conceptually cleaner to do after-the-fact filtering (as it is indepedent
+       * of the order in which matches are discovered and thus indepedent of the
+       * order in which the database is listed), it does not seem worth ensuring
+       * this exact equivalence in most cases. But in some cases, like when we
+       * are testing the implementation of the cache for correctness, this may
+       * be desired. Setting this flag to true will have this effect. */
+      strictEquiv = false;
     }
-    ~fasstCache() { clear(); }
+    ~cFASST() { clear(); }
     void clear(); // clears cache (removes all solutions)
-    FASST* getFASST() const { return S; }
-    fasstSolutionSet search(bool verb = false);
+    fasstSolutionSet search();
     int getMaxNumResults() const { return maxNumResults; }
     void incErrTolPressure(mstreal del = 1.0) { errTolPressure += fabs(del); }
     void incMaxNumPressure(mstreal del = 1.0) { maxNumPressure += fabs(del); }
     void decErrTolPressure(mstreal del = 1.0) { errTolPressure -= fabs(del); if (errTolPressure < 0) errTolPressure = 0; }
     void decMaxNumPressure(mstreal del = 1.0) { maxNumPressure -= fabs(del); if (maxNumPressure < 0) maxNumPressure = 0; }
+    void setVerbose(bool _verb) { verb = _verb; }
+    void setReadPermission(bool _perm) { readPerm = _perm; }
+    void setModifyPermission(bool _perm) { modPerm = _perm; }
+    void setStrictEquivalence(bool _eq) { strictEquiv = _eq; }
     mstreal getErrTolPressure() const { return errTolPressure; }
     mstreal getMaxNumPressure() const { return maxNumPressure; }
     mstreal maxNumFactor() const { return log(sf*maxNumPressure/maxNumResults + 1.0) + 1.5; }
     mstreal errTolFactor() const { return log(sf*errTolPressure/maxNumResults + 1.0) + 1.05; }
+    bool isVerbose() const { return verb; }
+    bool readPermission() const { return readPerm; }
+    bool modifyPermission() const { return modPerm; }
+    bool strictEquivalence() const { return strictEquiv; }
 
     // write/read cache object to/from a binary file
     void write(const string& filename) const;
@@ -50,13 +61,13 @@ class fasstCache {
     static vector<int> getStructureTopology(const Structure& S);
 
   private:
-    class fasstCachedResult {
-      friend class fasstCache;
+    class cachedResult {
+      friend class cFASST;
       public:
-        fasstCachedResult() { priority = 1.0; searchRMSDcut = rmsdCut = 0.0; searchMaxNumMatches = 0; }
-        fasstCachedResult(const AtomPointerVector& q, const fasstSolutionSet& sols, mstreal cut, int max, vector<int> topo);
-        fasstCachedResult(const fasstCachedResult& r);
-        ~fasstCachedResult();
+        cachedResult() { priority = 1.0; searchRMSDcut = rmsdCut = 0.0; searchMaxNumMatches = 0; }
+        cachedResult(const AtomPointerVector& q, const fasstSolutionSet& sols, mstreal cut, int max, vector<int> topo);
+        cachedResult(const cachedResult& r);
+        ~cachedResult();
         void upPriority(mstreal del = 1.0) { priority += del; }
         void elapsePriority(int Thalf) { priority *= pow(0.5, 1.0/Thalf); }
 
@@ -70,14 +81,14 @@ class fasstCache {
         bool isSameTopology(const vector<int>& compTopo) const;
         bool isLimitedByMaxNumMatches() const { return solSet.size() == searchMaxNumMatches; }
 
-        friend bool operator<(const fasstCachedResult& ri, const fasstCachedResult& rj) {
+        friend bool operator<(const cachedResult& ri, const cachedResult& rj) {
           if (ri.priority != rj.priority) return (ri.priority > rj.priority);
           if (ri.solSet.size() != rj.solSet.size()) return ri.solSet.size() < rj.solSet.size();
           if (ri.query.size() != rj.query.size()) return ri.query.size() < rj.query.size();
           return &ri < &rj;
         }
 
-        friend ostream& operator<<(ostream &_os, const fasstCachedResult& _res) {
+        friend ostream& operator<<(ostream &_os, const cachedResult& _res) {
           _os << "[" << MstUtils::vecToString(_res.topology) << "] " << _res.searchRMSDcut << "/" << _res.searchMaxNumMatches << " (" << _res.priority << ")" << endl;
           _os << _res.query << endl << MstUtils::vecToString(_res.solSet) << endl;
           return _os;
@@ -97,16 +108,18 @@ class fasstCache {
     };
 
     struct compResults {
-      bool operator() (const fasstCachedResult* lhs, const fasstCachedResult* rhs) const {
+      bool operator() (const cachedResult* lhs, const cachedResult* rhs) const {
         return (*lhs < *rhs);
       }
     };
 
     int maxNumResults; // max number of searches to cache
-    FASST* S;
-    set<fasstCachedResult*, compResults> cache;
+    set<cachedResult*, compResults> cache;
     RMSDCalculator rc;
     mstreal errTolPressure, maxNumPressure, sf;
+    bool verb, readPerm, modPerm, strictEquiv;
 };
+
+typedef cFASST fasstCache; // cFASST seems to be a better name, but the initial one was cFASST
 
 #endif
