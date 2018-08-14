@@ -20,7 +20,14 @@ void dTERMen::init() {
   selfResidualMaxN = 5000;
   selfCorrMinN = 200;
   selfCorrMinN = 5000;
+  pairMinN = 1000;
+  pairMaxN = 5000;
   setAminoAcidMap();
+
+  // set up FASST base options
+  F.setOptions(fasstSearchOptions());
+  F.setRedundancyProperty("sim");
+  foptsBase = F.options();
 }
 
 void dTERMen::readConfigFile(const string& configFile) {
@@ -155,6 +162,10 @@ int dTERMen::aaToIndex(const string& aa) const {
 int dTERMen::aaToIndex(res_t aa) const {
   if (aaIdx.find(aa) != aaIdx.end()) return aaIdx.at(aa);
   return -1;
+}
+
+bool dTERMen::aaIndexKnown(int aaIdx) const {
+  return aaIdx >= 0;
 }
 
 string dTERMen::indexToResName(int idx) const {
@@ -648,17 +659,22 @@ mstreal dTERMen::selfEnergy(Residue* R, const string& aa) {
 }
 
 vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
-  if (R->getStructure() == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergy");
-  if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
-  Structure& S = *(R->getStructure());
+  if (R->getStructure() == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergies(Residue*, bool)");
+  ConFind C(&RL, *(R->getStructure()));
+  return selfEnergies(R, C, verbose);
+}
+
+vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   auto rmsdCutSelfRes = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20); };
   auto rmsdCutSelfCor = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.1, 15); };
+  if (R->getStructure() == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergies(Residue*, ConFind&, bool)");
+  Structure& S = *(R->getStructure());
 
   // -- get contacts
-  ConFind C(&RL, S);
+  if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
   contactList cL = C.getContacts(R, cdCut);
   cL.sortByDegree();
-  vector<Residue*> contResidues = cL.dstResidues();
+  vector<Residue*> contResidues = cL.destResidues();
 
   // -- simple environment components
   if (verbose) cout << "\tdTERMen::selfEnergies -> trivial statistical components..." << endl;
@@ -668,11 +684,6 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
   for (int aai = 0; aai < naa; aai++) {
     selfE[aai] = backEner(aai) + bbOmegaEner(R->getOmega(), aai) + bbPhiPsiEner(R->getPhi(), R->getPsi(), aai) + envEner(C.getFreedom(R), aai);
   }
-
-  // set up FASST base options
-  F.setOptions(fasstSearchOptions());
-  F.setRedundancyProperty("sim");
-  fasstSearchOptions foptsBase = F.options();
 
   // -- self residual
   if (verbose) cout << "\tdTERMen::selfEnergies -> self residual..." << endl;
@@ -799,45 +810,129 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, bool verbose) {
   return selfE;
 }
 
-CartesianPoint dTERMen::singleBodyStatEnergy(fasstSolutionSet& matches, int cInd, int pc) {
-  int naa = globalAlphabetSize();
-  CartesianPoint selfE(naa, 0.0);
-  vector<mstreal> No(naa, pc), Ne(naa, pc);
-  vector<mstreal> p(naa, 0);
-  mstreal phi, psi, omg, env, ener;
-  for (int i = 0; i < matches.size(); i++) {
-    // see what amino acid is actually observed at the position
-    const fasstSolution& m = matches[i];
-    res_t aa = F.getMatchSequence(m)[cInd];
-    int aaIdx = dTERMen::aaToIndex(aa);
-    if (aaIdx < 0) continue; // this match has some amino acid that is not known in the current alphabet
-    No[aaIdx] += 1.0;
+mstreal dTERMen::pairEnergy(Residue* Ri, Residue* Rj, const string& aai, const string& aaj) {
+  return (pairEnergies(Ri, Rj))[dTERMen::aaToIndex(aai.empty() ? Ri->getName() : aai)]
+                               [dTERMen::aaToIndex(aaj.empty() ? Rj->getName() : aaj)];
+}
 
-    // now try out all amino acids at this position and compute expectations
-    phi = F.getResidueProperties(m, "phi")[cInd];
-    psi = F.getResidueProperties(m, "psi")[cInd];
-    omg = F.getResidueProperties(m, "omega")[cInd];
-    env = F.getResidueProperties(m, "env")[cInd];
-    for (int aai = 0; aai < naa; aai++) {
-      p[aai] = backEner(aai) + bbOmegaEner(omg, aai) + bbPhiPsiEner(phi, psi, aai) + envEner(env, aai);
-    }
-    p = dTERMen::enerToProb(p);
-    for (int aai = 0; aai < naa; aai++) Ne[aai] += p[aai];
-  }
+vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool verbose) {
+  auto rmsdCutPair = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20); };
+  if ((Ri->getStructure() == NULL) || (Rj->getStructure() == NULL)) MstUtils::error("cannot operate on a disembodied residues!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
+  if (Ri->getStructure() != Rj->getStructure()) MstUtils::error("specified residues belong to different structures!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
+  Structure& S = *(Ri->getStructure());
+
+  // isolate TERM and get matches
+  int naa = globalAlphabetSize();
+  Structure pairTERM;
+  vector<int> fragResIdx;
+  vector<int> cInd = TERMUtils::selectTERM({Ri, Rj}, pairTERM, pmPair, &fragResIdx);
+  int cIndI = cInd[0]; int cIndJ = cInd[1];
+  F.setOptions(foptsBase);
+  F.setQuery(pairTERM);
+  F.setRMSDCutoff(rmsdCutPair(fragResIdx, S));
+  F.setMinNumMatches(pairMinN);
+  F.setMaxNumMatches(pairMaxN);
+  fasstSolutionSet matches = F.search();
+
+  // for each of the two positions, compute expectation of every amino acid in
+  // the context of every match, based on background "trivial" energies and
+  // normalizing the totals of each amino acid across all matches to be equal to
+  // the number observed
+  vector<CartesianPoint> Pi, Pj;
+  vector<vector<mstreal> > pairE(naa, vector<mstreal>(naa, 0.0));
+  CartesianPoint NoI = dTERMen::singleBodyObservations(matches, cIndI);
+  CartesianPoint NeI = dTERMen::singleBodyExpectations(matches, cIndI, &Pi);
+  CartesianPoint NoJ = dTERMen::singleBodyObservations(matches, cIndJ);
+  CartesianPoint NeJ = dTERMen::singleBodyExpectations(matches, cIndJ, &Pj);
+  CartesianPoint NoIJ = dTERMen::twoBodyObservations(matches, cIndI, cIndJ);
   for (int aai = 0; aai < naa; aai++) {
-    selfE[aai] = -kT*log(No[aai]/Ne[aai]);
+    for (int aaj = 0; aaj < naa; aaj++) {
+      mstreal Ne = 0;
+      for (int k = 0; k < matches.size(); k++) {
+        Ne += Pi[k][aai] * Pj[k][aaj];
+      }
+      Ne *= (NoI[aai]/NeI[aai])*(NoJ[aaj]/NeJ[aaj]); // normalize to preserve marginals
+      mstreal No = NoIJ[dTERMen::pairToIdx(aai, aaj)];
+      mstreal pc = naa/MstUtils::max((vector<mstreal>) {No, Ne, 1.0});
+      pairE[aai][aaj] = -kT*log((No + pc)/(Ne + pc));
+    }
+  }
+
+  return pairE;
+}
+
+CartesianPoint dTERMen::singleBodyStatEnergy(fasstSolutionSet& matches, int cInd, int pc) {
+  CartesianPoint selfE(globalAlphabetSize(), 0.0);
+  CartesianPoint Ne = dTERMen::singleBodyExpectations(matches, cInd);
+  CartesianPoint No = singleBodyObservations(matches, cInd);
+  for (int aai = 0; aai < selfE.size(); aai++) {
+    selfE[aai] = -kT*log((No[aai] + pc)/(Ne[aai] + pc));
   }
 
   return selfE;
 }
 
-vector<mstreal> dTERMen::enerToProb(const vector<mstreal>& ener) {
+CartesianPoint dTERMen::singleBodyObservations(fasstSolutionSet& matches, int cInd) {
+  CartesianPoint No(globalAlphabetSize(), 0.0);
+  for (int i = 0; i < matches.size(); i++) {
+    int aaIdx = dTERMen::aaToIndex(F.getMatchSequence(matches[i])[cInd]);
+    if (!aaIndexKnown(aaIdx)) continue; // this match has some amino acid that is not known in the current alphabet
+    No[aaIdx] += 1.0;
+  }
+  return No;
+}
+
+CartesianPoint dTERMen::twoBodyObservations(fasstSolutionSet& matches, int cIndI, int cIndJ) {
+  CartesianPoint No(globalAlphabetSize()*globalAlphabetSize(), 0.0);
+  for (int i = 0; i < matches.size(); i++) {
+    int aaiIdx = dTERMen::aaToIndex(F.getMatchSequence(matches[i])[cIndI]);
+    int aajIdx = dTERMen::aaToIndex(F.getMatchSequence(matches[i])[cIndJ]);
+    if (!aaIndexKnown(aaiIdx) || !aaIndexKnown(aajIdx)) continue;
+    No[dTERMen::pairToIdx(aaiIdx, aajIdx)] += 1.0;
+  }
+  return No;
+}
+
+CartesianPoint dTERMen::singleBodyExpectations(fasstSolutionSet& matches, int cInd, vector<CartesianPoint>* breakDown) {
+  CartesianPoint Ne(globalAlphabetSize(), 0.0);
+  if (breakDown != NULL) { breakDown->clear(); breakDown->resize(matches.size()); }
+  for (int i = 0; i < matches.size(); i++) {
+    int aaIdx = dTERMen::aaToIndex(F.getMatchSequence(matches[i])[cInd]);
+    if (!aaIndexKnown(aaIdx)) continue; // this match has some amino acid that is not known in the current alphabet
+    CartesianPoint inMatchExp = backExpectation(matches[i], cInd);
+    if (breakDown != NULL) (*breakDown)[i] = inMatchExp;
+    Ne += inMatchExp;
+  }
+  return Ne;
+}
+
+CartesianPoint dTERMen::backExpectation(const fasstSolution& m, int cInd) {
+  CartesianPoint p(globalAlphabetSize(), 0);
+  mstreal phi = F.getResidueProperties(m, "phi")[cInd];
+  mstreal psi = F.getResidueProperties(m, "psi")[cInd];
+  mstreal omg = F.getResidueProperties(m, "omega")[cInd];
+  mstreal env = F.getResidueProperties(m, "env")[cInd];
+  for (int aai = 0; aai < globalAlphabetSize(); aai++) {
+    p[aai] = backEner(aai) + bbOmegaEner(omg, aai) + bbPhiPsiEner(phi, psi, aai) + envEner(env, aai);
+  }
+  return dTERMen::enerToProb(p);
+}
+
+CartesianPoint dTERMen::enerToProb(const vector<mstreal>& ener) {
   mstreal minEner = MstUtils::min(ener);
   mstreal Z = 0;
   vector<mstreal> p(ener.size(), 0);
   for (int i = 0; i < ener.size(); i++) Z += exp(-(ener[i] - minEner)/kT);
   for (int i = 0; i < ener.size(); i++) p[i] = exp(-(ener[i] - minEner)/kT)/Z;
   return p;
+}
+
+int dTERMen::pairToIdx(int aai, int aaj) const {
+  return aai*globalAlphabetSize() + aaj;
+}
+
+pair<int, int> dTERMen::idxToPair(int idx) const {
+  return pair<int, int>(idx / globalAlphabetSize(), idx % globalAlphabetSize());
 }
 
 /* ----------- EnergyTable --------------- */

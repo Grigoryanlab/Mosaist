@@ -1550,6 +1550,13 @@ CartesianPoint CartesianPoint::cross(CartesianPoint other) const {
   return C;
 }
 
+CartesianPoint CartesianPoint::elemProd(CartesianPoint other) const {
+  if (size() != other.size()) MstUtils::error("vector size mismatch", "CartesianPoint::elemProd");
+  CartesianPoint P(size());
+  for (int i = 0; i < size(); i++) P[i] = (*this)[i] * other[i];
+  return P;
+}
+
 mstreal CartesianPoint::dot(CartesianPoint other) const {
   if (size() != other.size()) MstUtils::error("vector size mismatch", "CartesianPoint::dot");
 

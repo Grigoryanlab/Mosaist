@@ -436,6 +436,7 @@ class CartesianPoint : public vector<mstreal> {
     CartesianPoint cross(CartesianPoint other) const;
     mstreal dot(CartesianPoint other) const;
     CartesianPoint getUnit() const { double L = norm(); return (*this/L); };
+    CartesianPoint elemProd(CartesianPoint other) const; // element-wise product
 
     // a few special access operations
     mstreal getX() const { return (*this)[0]; }

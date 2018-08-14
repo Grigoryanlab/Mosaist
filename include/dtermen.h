@@ -36,6 +36,7 @@ class dTERMen {
     // the following four functions convert to and from the "internal" amino-acid index
     int aaToIndex(const string& aa) const;
     int aaToIndex(res_t aa) const;
+    bool aaIndexKnown(int aaIdx) const;
     string indexToResName(int idx) const;
     res_t indexToAA(int idx) const;
 
@@ -109,10 +110,18 @@ class dTERMen {
 
     /* Compute the dTERMen self energy of a given Residue; identifies relevant
      * contacts using ConFind. The first form computes the value for a specific
-     * amino acid at the given position (by default the one actually there), and
-     * the second form returns values for all amino acids at the position. */
+     * amino acid at the given position (by default the one actually there), the
+     * second form returns values for all amino acids at the position, and the
+     * third form works as the second, but accepts a pre-built ConFind object.
+     * When multiple energies are needed from the same structure and, passing the
+     * same ConFind object will make it so that contacts and freedoms will only
+     * need to be computed once. */
     mstreal selfEnergy(Residue* R, const string& aa = "");
     vector<mstreal> selfEnergies(Residue* R, bool verbose = false);
+    vector<mstreal> selfEnergies(Residue* R, ConFind& C, bool verbose = false);
+
+    mstreal pairEnergy(Residue* Ri, Residue* Rj, const string& aai = "", const string& aaj = "");
+    vector<vector<mstreal> > pairEnergies(Residue* Ri, Residue* Rj, bool verbose = false);
 
   protected:
     int findBin(const vector<mstreal>& binEdges, mstreal x); // do a binary search to find the bin into which the value falls
@@ -126,10 +135,37 @@ class dTERMen {
      * all "trivial" background statistical contributions at this position
      * accross all of the matches. */
     CartesianPoint singleBodyStatEnergy(fasstSolutionSet& matches, int cInd, int pc);
-    vector<mstreal> enerToProb(const vector<mstreal>& ener);
+
+    /* For a given match, compute the expectation of any given amino acid at the
+     * specified position based on "trivial" background statistical contributions. */
+    CartesianPoint backExpectation(const fasstSolution& m, int cInd);
+
+    /* Counts observations at the given positions across all matches. */
+    CartesianPoint singleBodyObservations(fasstSolutionSet& matches, int cInd);
+
+    /* Same as above, but for amino-acid observations at two sites. */
+    CartesianPoint twoBodyObservations(fasstSolutionSet& matches, int cIndI, int cIndJ);
+
+    /* Computes the number of times each amino acid is expected to be found at
+     * the given position, across all matches. NOTE: skips any matches that have
+     * an unknown residue in the position. This is because when comparing to the
+     * observed counts, such matches would have no "vote", so it would be unfair
+     * to given them a vote in computing the expectation. The optional pointer
+     * can be specified to collect the expectation in each match. */
+    CartesianPoint singleBodyExpectations(fasstSolutionSet& matches, int cInd, vector<CartesianPoint>* breakDown = NULL);
+
+    CartesianPoint enerToProb(const vector<mstreal>& ener);
+
+    /* Amino-acid indices provide a convenient way to index into a array, while
+     * also encoding the amino-acid type. For amino-acid pairs, this is tricky,
+     * because a 2D array is needed. These functions convert between two amino-
+     * acid indices and a single index that uniquely identifies the pair. */
+    int pairToIdx(int aai, int aaj) const;
+    pair<int, int> idxToPair(int idx) const;
 
   private:
     FASST F;
+    fasstSearchOptions foptsBase; // base FASST options that will be used with every search
     RotamerLibrary RL;
     string fasstdbPath, backPotFile, rotLibFile;
     zeroDimPotType bkPot;
@@ -137,7 +173,7 @@ class dTERMen {
     twoDimPotType ppPot;
     mstreal kT, cdCut, selfResidualPC, selfCorrPC;
     int pmSelf, pmPair;
-    int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN;
+    int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN, pairMinN, pairMaxN;
 
     /* We may want to deal with different "universal" alphabets (separate from
      * the design alphabet). We may want to interpret SEC (selenocysteine), for

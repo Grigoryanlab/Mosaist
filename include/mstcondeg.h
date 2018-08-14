@@ -41,7 +41,7 @@ class contactList {
     Residue* srcResidue(int i) { return resi[i]; }
     Residue* dstResidue(int i) { return resj[i]; }
     vector<Residue*> srcResidues() { return resi; }
-    vector<Residue*> dstResidues(){ return resj; }
+    vector<Residue*> destResidues() { return resj; }
     mstreal degree(int i) { return degrees[i]; }
     mstreal degree(Residue* _resi, Residue* _resj);
     string info(int i) { return infos[i]; }

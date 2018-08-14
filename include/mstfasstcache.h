@@ -6,6 +6,14 @@
 
 // TODO:
 // 1. write a test function for the cache.
+// 2. write a "build" function for cache to build up a "good" cache.
+// 3. consider all permutations of segment elements when looking for a cached search:
+//    * would it be better to keep all queries as a separate place FASST database?
+//    * if so, we will want to search against it and recover ALL matches (or set maxN to say 10000)
+//    * then, if the new query fits within the old query, but has room left, then the RMSD radius and so on will need to be updated
+//      (and usually, it would be highly disadvantageous to have room left, because we can assume nothing about those atoms)
+// 4. test the impact of doing #3 above
+// 5. re-introduce minN capability back inot cFASST
 
 class cFASST : public FASST {
   public:
