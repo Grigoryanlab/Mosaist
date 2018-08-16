@@ -734,12 +734,11 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     c.centResIdx = TERMUtils::selectTERM(c.residues, term, pmSelf, &fragResIdx)[0];
     F.setOptions(foptsBase);
     F.setQuery(term);
-    mstreal cut = rmsdCutSelfCor(fragResIdx, S);
-    F.setRMSDCutoff(cut);
+    F.setRMSDCutoff(rmsdCutSelfCor(fragResIdx, S));
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
     c.matches = F.search();
-    if (matches[selfCorrMinN - 1].getRMSD() > cut) { finalCliques.push_back(c); }
+    if (matches[selfCorrMinN - 1].getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
     else { cliquesToGrow[contResidues[i]] = c; }
   }
 
@@ -755,6 +754,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     remConts.erase(remConts.begin());
     clique grownClique;
     if (verbose) cout << "\t\tdTERMen::selfEnergies -> will try to grow [" << parentClique.toString() << "]..." << endl;
+    if (remConts.empty()) grownClique = parentClique;
     while (!remConts.empty()) {
       // try to add every remaining contact
       for (int j = 0; j < remConts.size(); j++) {
@@ -849,6 +849,7 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
     for (int aaj = 0; aaj < naa; aaj++) {
       mstreal Ne = 0;
       for (int k = 0; k < matches.size(); k++) {
+        if (Pi[k].empty() || Pj[k].empty()) continue; // e.g., relevant positions in this match had unknown identities
         Ne += Pi[k][aai] * Pj[k][aaj];
       }
       Ne *= (NoI[aai]/NeI[aai])*(NoJ[aaj]/NeJ[aaj]); // normalize to preserve marginals

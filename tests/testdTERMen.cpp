@@ -7,7 +7,12 @@ int main(int argc, char *argv[]) {
   MstOptions op;
   op.setTitle("Tests the dTERMen class. Options:");
   op.addOption("t", "test files directory.", true);
+  op.addOption("s", "random seed.");
   op.setOptions(argc, argv);
+  long int x = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+  if (op.isGiven("s")) x = op.getInt("s");
+  cout << "seed = " << x << endl;
+  srand(x);
 
   Structure S(op.getString("t") + "/2ZTA.pdb");
 
@@ -26,8 +31,30 @@ int main(int argc, char *argv[]) {
   cout << "phi/psi energy for PRO in [-45, -65] is: " << D.bbPhiPsiEner(-45, -65, "PRO") << endl;
   cout << "phi/psi energy for LYS in [-45, -65] is: " << D.bbPhiPsiEner(-45, -65, "LYS") << endl;
 
+  ConFind C(D.getRotamerLibrary(), S);
+  Residue* Ri = &(S.getResidue(MstUtils::randInt(S.residueSize())));
+  vector<Residue*> cRes = C.getContactingResidues(Ri, 0.01);
+  Residue* Rj = cRes[MstUtils::randInt(cRes.size())];
+  int dt = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+  vector<vector<mstreal> > pairE = D.pairEnergies(Ri, Rj);
+  dt = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - dt;
+  cout << "computing pair energies took: " << dt << " seconds" << endl;
+  cout << "pair energies for " << *Ri << " x " << *Rj << " are:" << endl;
+  for (int i = 0; i < D.globalAlphabetSize(); i++) cout << " " << D.indexToResName(i);
+  cout << endl;
+  for (int i = 0; i < D.globalAlphabetSize(); i++) {
+    for (int j = 0; j < D.globalAlphabetSize(); j++) {
+      cout << pairE[i][j] << " ";
+    }
+    cout << endl;
+  }
+
+  // test pair energies
   Residue* R = &(S.getResidue(MstUtils::randInt(S.residueSize())));
+  dt = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
   vector<mstreal> selfE = D.selfEnergies(R, true);
+  dt = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - dt;
+  cout << "computing self energies took: " << dt << " seconds" << endl;
   cout << "self energies at site " << *R << ":" << endl;
   for (int i = 0; i < D.globalAlphabetSize(); i++) {
     cout << D.indexToResName(i) << " => " << selfE[i] << endl;

@@ -79,7 +79,7 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
         match.getResidue(k).setNum(fragResIdx[k]); // make residue numbers store indices into the original structure
       }
     }
-    cout << "\tfound " << matchStructures.size() << " matches" << endl;
+    if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
     if (matchStructures.size() >= need) break;
     for (int i = 0; i < matchStructures.size(); i++) delete(matchStructures[i]);
     matchStructures.clear();
@@ -88,7 +88,7 @@ vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragR
     } else {
       C.options().setRMSDCutoff(C.options().getRMSDCutoff()*1.1);
     }
-    cout << "\t\tinsufficient, increasing params to " << C.options().getRMSDCutoff() << " / " << C.options().getMaxNumMatches() << endl;
+    if (C.isVerbose()) cout << "\t\tinsufficient, increasing params to " << C.options().getRMSDCutoff() << " / " << C.options().getMaxNumMatches() << endl;
   }
   return matchStructures;
 }
@@ -202,6 +202,7 @@ int main(int argc, char** argv) {
   op.addOption("c", "path to a FASST cache file to use for initializing the cache.");
   op.addOption("w", "flag; if specified, the FASST cache will be periodically updated.");
   op.addOption("app", "flag; if specified, will append to the output PDB file (e.g., for the purpose of accumulating a trajectory from multiple runs).");
+  op.addOption("v", "set verbose output flag.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
   MstUtils::setSignalHandlers();
   op.setOptions(argc, argv);
@@ -222,7 +223,7 @@ int main(int argc, char** argv) {
   }
   fasstCache cache((I.residueSize() - fixed.size())*10);
   cache.setStrictEquivalence(true);
-  cache.setVerbose(true);
+  cache.setVerbose(op.isGiven("v"));
   cache.setMemorySaveMode(true);
   if (op.isGiven("c") && op.getString("c").empty()) MstUtils::error("--c must be a valid file path");
   if (op.isGiven("d")) {
@@ -329,7 +330,12 @@ int main(int argc, char** argv) {
         cout << "TERM around " << C[ri] << endl;
         cache.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
         vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
-        if (!matches.empty()) allMatches.push_back(matches);
+        if (!matches.empty()) {
+          allMatches.push_back(matches);
+          int lastIdx = MstUtils::min(numPerTERM, (int) matches.size());
+          Structure* last = matches[lastIdx - 1];
+          if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx + 1 << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
+        }
       }
     }
 
@@ -353,7 +359,12 @@ int main(int argc, char** argv) {
       cout << "TERM around " << *resA << " x " << *resB << endl;
       cache.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
       vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
-      if (!matches.empty()) allMatches.push_back(matches);
+      if (!matches.empty()) {
+        allMatches.push_back(matches);
+        int lastIdx = MstUtils::min(numPerTERM, (int) matches.size());
+        Structure* last = matches[lastIdx - 1];
+        if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx + 1 << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
+      }
     }
     // fuser options
     fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
@@ -413,14 +424,14 @@ int main(int argc, char** argv) {
       AtomPointerVector init = getCorrespondingAtoms(S, propFused);
       cout << "\titeration " << it << " => "; totalScore(propScore, propFused, init, true); cout << endl;
       if ((it == 0) || mc(totalScore(currScore, currFused, init), totalScore(propScore, propFused, init), kT)) {
-        cout << "\t\taccepted" << endl;
+        if (op.isGiven("v")) cout << "\t\taccepted" << endl;
         currFused = propFused;
         currTopo = propTopo;
         currScore = propScore;
         currPicks = propPicks;
       }
       if ((it == 0) || (totalScore(propScore, propFused, init) < totalScore(bestScore, bestFused, init))) {
-        cout << "\t\t\tnew best" << endl;
+        if (op.isGiven("v")) cout << "\t\t\tnew best" << endl;
         bestFused = propFused;
         bestTopo = propTopo;
         bestScore = propScore;

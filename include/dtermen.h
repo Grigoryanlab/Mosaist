@@ -27,6 +27,7 @@ class dTERMen {
 
     mstreal getkT() const { return kT; }
     FASST* getFASST() { return &F; }
+    RotamerLibrary* getRotamerLibrary() { return &RL; }
     void setAminoAcidMap();
     void printAminoAcidMap();
     int globalAlphabetSize() const { return globAlph.size(); }
@@ -263,7 +264,7 @@ class EnergyTable {
     int getResidueIndex(int si, const string& aa) { return aaIndices[si][aa]; }
 
   private:
-    /* siteIndices["A,1"] is the indices corresponding to site "A,1" (or however
+    /* siteIndices["A,1"] is the index corresponding to site "A,1" (or however
      * sites are designated). */
     map<string, int> siteIndices;
 
