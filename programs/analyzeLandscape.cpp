@@ -138,6 +138,7 @@ int main(int argc, char** argv) {
   op.addOption("k", "number of sequences to sub-sample in each interval at the end to compute an embedding. Default is 1000.");
   op.addOption("nat", "native sequence, single-letter.");
   op.setOptions(argc, argv);
+  MstUtils::setSignalHandlers();
 
   mstreal dE = op.getReal("s", 1.0);
   int N = op.getInt("n", 40);

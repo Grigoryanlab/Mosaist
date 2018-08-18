@@ -8,6 +8,8 @@
 #include "mstmagic.h"
 using namespace MST;
 
+class EnergyTable;
+
 /* Remaining questions:
  * TODO: when there is no +/- pmSelf or +/- pmPair on one side, extend on the other side (current dTERMen)!
  * TODO: make terminus-specific trivial potentials (probably all of them)
@@ -16,6 +18,14 @@ using namespace MST;
  *       - pre-compute self residual for all residues in the database; would take a long time, but could be
  *         shortened considerably via FASST cache. With a pre-computed self residual we can always take it
  *         out of the contributions from the mathces (just like we do for phi/psi).
+ *   IDEA: instead of splitting into residual, correct, and pair, simply do like we did in the PLoS One paper.
+ *         Gather lots of TERM matches (split, but keep as much of the context as possible) and then optimize
+ *         19 self energies for each site and 19x19 pair energies for each pair. Do this one site at a time,
+ *         meaning that each split into sub-TERMs happens specifically for one site. Can either keep the method
+ *         in the paper or do some other split, but the underlying function to tease out self and pair energies
+ *         would be the same. One issue of that method is that when a residue is missing in some sub-TERM, it may
+ *         still be present in many of its matches. Though by the nature of our decomposition, it should not be
+ *         present in too many of the matches, because we actually try to keep as large of a TERM as possible.
  */
 
 class dTERMen {
@@ -24,6 +34,12 @@ class dTERMen {
     dTERMen(const string& configFile);
     void init();
     void readConfigFile(const string& configFile);
+
+    /* Builds an energy table for design, given a list of mutable positions and,
+     * optionally, a list of allowed amino acids at each. If the latter is not
+     * given, the entire amino-acid alphabet known to the dTERMen object will be
+     * allowed at each site. */
+    EnergyTable buildEnergyTable(const vector<Residue*>& variable, const vector<vector<string> >& allowed = vector<vector<string> >());
 
     mstreal getkT() const { return kT; }
     FASST* getFASST() { return &F; }
@@ -210,15 +226,31 @@ class dTERMen {
 
 class EnergyTable {
   public:
+    EnergyTable() {}
     EnergyTable(const string& tabFile);
+    void clear(); // resets the table to empty
     void readFromFile(const string& tabFile);
-    void addSite(const string& siteName); // TODO
-    void addSites(const vector<string>& siteNames); // TODO
+    void writeToFile(const string& tabFile);
+    void addSite(const string& siteName);
+    void addSites(const vector<string>& siteNames);
     int numSites() const { return siteIndices.size(); }
+    int siteIndex(const string& siteName) { return siteIndices[siteName]; }
+    bool siteExists(const string& siteName) { return siteIndices.find(siteName) != siteIndices.end(); }
+    void setSiteAlphabet(const string& siteName, const vector<string>& alpha) { setSiteAlphabet(siteIndex(siteName), alpha); }
+    void setSiteAlphabet(int siteIdx, const vector<string>& alpha);
+    vector<string> getSiteAlphabet(int siteIdx) { return aaAlpha[siteIdx]; }
+    int addToSiteAlphabet(int siteIdx, const string& aa);
+    bool inSiteAlphabet(int siteIdx, const string& aa) { return aaIndices[siteIdx].find(aa) != aaIndices[siteIdx].end(); }
+    int indexInSiteAlphabet(int siteIdx, const string& aa) { return aaIndices[siteIdx][aa]; }
+    bool empty() const { return selfE.empty() && pairE.empty(); }
 
-    // -- some simple evaluation routines
+    // -- get/set energy-table components
     mstreal selfEnergy(int s, int aa);
     mstreal pairEnergy(int si, int sj, int aai, int aaj);
+    void setSelfEnergy(int s, int aa, mstreal ener);
+    void setPairEnergy(int si, int sj, int aai, int aaj, mstreal ener);
+
+    // -- some simple evaluation routines
     mstreal scoreSolution(const vector<int>& seq);
     mstreal scoreSequence(const Sequence& seq);
     mstreal scoreMutation(const vector<int>& seq, int mutSite, int mutAA);
@@ -268,29 +300,30 @@ class EnergyTable {
      * sites are designated). */
     map<string, int> siteIndices;
 
+    /* sites[k] is the name of the site with index k. */
+    vector<string> sites; // TODO
+
     /* aaIndices[0]["ALA"] is the index corresponding to "ALA" at the first
      * encountered site. */
     vector<map<string, int> > aaIndices;
 
-    /* indToAA[0][1] is the amino-acid string (e.g., "ALA") that corresponds to
+    /* aaAlpha[0][1] is the amino-acid string (e.g., "ALA") that corresponds to
      * residue index 1 at the first site. */
-    vector<map<int, string> > indToAA;
+    vector<vector<string> > aaAlpha;
 
     /* selfE[0][3] is the self energy for the amino acid with index 3 at site 0 */
     vector<vector<mstreal> > selfE;
 
-    /* pairs[i] -- list of site indices that site i has interactions with */
-    vector<vector<int> > pairs;
+    /* pairMaps[i] -- a map, whose keys represent all site indices with which
+     * site i has interactions with. If k is some such site, and i < k, then
+     * pairMaps[i][k] is the index into pairE[i] at which interactions between
+     * sites i and k are stored. If, i > k, then pairMaps[i][k] is the index
+     * into pairE[k], at which interactions between sites k and i are stored. */
+    vector<map<int, int> > pairMaps;
 
-    /* pairsMap[i] -- same as above, but the list is stored as an int->bool map,
-     * and every pair entry exists with either true (the pair does have
-     * interactions) or false (the pair does not have interactions). */
-    vector<map<int, bool> > pairMaps;
-
-    /* pairE[i][pairs[i][j]][aai][aaj] -- pair energy for sites (i -- pairs[i][j])
-     * occupied with aai-th and aaj-th amino acid in each site, respectively,
-     * assuming that i < pairs[i][j]. NOTE: this assumes energies are stored in
-     * one direction only! */
+    /* pairE[i][pairMaps[i][k]][aai][aaj] -- pair energy for site i occupied with
+     * amino acid aai interacting with site k occupied with amino acid aaj,
+     * assuming that i < pairMaps[i][k]. */
     vector<vector<vector<vector<mstreal > > > > pairE;
 };
 

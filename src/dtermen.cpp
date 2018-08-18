@@ -59,6 +59,61 @@ void dTERMen::readConfigFile(const string& configFile) {
   }
 }
 
+EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const vector<vector<string> >& allowed) {
+  EnergyTable E;
+  if (variable.empty()) return E;
+  Structure* S = variable[0]->getStructure();
+  map<Residue*, string> siteNames;
+  for (int i = 0; i < variable.size(); i++) {
+    if (variable[i]->getStructure() != S) MstUtils::error("mutable positions belong to different Structure objects", "dTERMen::buildEnergyTable");
+    string siteName = variable[i]->getChain()->getID() + "," + MstUtils::toString(variable[i]->getNum());
+    siteNames[variable[i]] = siteName;
+    E.addSite(siteName);
+    if (allowed.empty()) {
+      for (int k = 0; k < globAlph.size(); k++) E.addToSiteAlphabet(i, SeqTools::idxToTriple(globAlph[k]));
+    } else {
+      for (int k = 0; k < allowed[i].size(); k++) {
+        int aai = aaToIndex(allowed[i][k]);
+        if (!aaIndexKnown(aai)) MstUtils::error("error in alphabet specification, amino acid '" + allowed[i][k] + "' at site " + siteName + " not known", "dTERMen::buildEnergyTable");
+        E.addToSiteAlphabet(i, indexToResName(aai));
+      }
+    }
+  }
+  ConFind C(&RL, *S); // make a ConFind object that will keep getting reused in energy calculations
+
+  // compute self energies
+  for (int i = 0; i < variable.size(); i++) {
+    cout << "computing self energy for position " << *(variable[i]) << ", " << i+1 << "/" << variable.size() << endl;
+    vector<mstreal> selfE = selfEnergies(variable[i], C, true);
+    vector<string> alpha = E.getSiteAlphabet(i);
+    for (int k = 0; k < alpha.size(); k++) {
+      int aai = aaToIndex(alpha[k]);
+      E.setSelfEnergy(i, k, selfE[aai]);
+    }
+  }
+
+  // compute pair energies
+  contactList cL = C.getContacts(*S, cdCut);
+  vector<pair<Residue*, Residue*> > conts = cL.getOrderedContacts();
+  for (int i = 0; i < conts.size(); i++) {
+    cout << "computing pair energy for positions " << *(conts[i].first) << " x " << *(conts[i].second) << ", " << i+1 << "/" << conts.size() << endl;
+    vector<vector<mstreal> > pairE = pairEnergies(conts[i].first, conts[i].second, true);
+    int si = E.siteIndex(siteNames[conts[i].first]);
+    int sj = E.siteIndex(siteNames[conts[i].second]);
+    vector<string> alphaA = E.getSiteAlphabet(si);
+    vector<string> alphaB = E.getSiteAlphabet(sj);
+    for (int a = 0; a < alphaA.size(); a++) {
+      int ai = aaToIndex(alphaA[a]);
+      for (int b = 0; b < alphaB.size(); b++) {
+        int bi = aaToIndex(alphaB[b]);
+        E.setPairEnergy(si, sj, a, b, pairE[ai][bi]);
+      }
+    }
+  }
+
+  return E;
+}
+
 void dTERMen::setAminoAcidMap() {
   /* Perfectly corresponding to standard residues. */
   map<string, string> standard = {{"HSD", "HIS"}, {"HSE", "HIS"}, {"HSC", "HIS"}, {"HSP", "HIS"}};
@@ -257,7 +312,7 @@ mstreal dTERMen::lookupTwoDimPotential(const twoDimPotType& P, mstreal x, mstrea
   int kx = findBin(P.xBinEdges, x);
   if (kx < 0) return 0;
   int ky = findBin(P.yBinEdges, y);
-  if (kx < 0) return 0;
+  if (ky < 0) return 0;
   return P.aaEnergies[kx][ky][aa];
 }
 
@@ -941,53 +996,101 @@ EnergyTable::EnergyTable(const string& tabFile) {
   readFromFile(tabFile);
 }
 
+void EnergyTable::addSite(const string& siteName) {
+  if (siteIndices.find(siteName) != siteIndices.end()) MstUtils::error("site '" + siteName + "' is already present!", "EnergyTable::addSite(const string&)");
+  siteIndices[siteName] = sites.size();
+  sites.push_back(siteName);
+  aaAlpha.resize(aaAlpha.size() + 1);
+  aaIndices.resize(aaIndices.size() + 1);
+  selfE.resize(selfE.size() + 1);
+  pairE.resize(pairE.size() + 1);
+  pairMaps.resize(pairMaps.size() + 1);
+}
+
+void EnergyTable::addSites(const vector<string>& siteNames) {
+  for (int i = 0; i < siteNames.size(); i++) addSite(siteNames[i]);
+}
+
+void EnergyTable::setSiteAlphabet(int siteIdx, const vector<string>& alpha) {
+  if (!empty()) MstUtils::error("site alphabets must be set before populating energies", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
+  if (aaAlpha.size() < siteIdx + 1) MstUtils::error("site index out of range", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
+  aaAlpha[siteIdx] = alpha;
+  for (int i = 0; i < alpha.size(); i++) aaIndices[siteIdx][alpha[i]] = i;
+  selfE[siteIdx].clear(); selfE[siteIdx].resize(alpha.size(), 0.0);
+}
+
+int EnergyTable::addToSiteAlphabet(int siteIdx, const string& aa) {
+  if (aaIndices[siteIdx].find(aa) != aaIndices[siteIdx].end()) MstUtils::error("tried to add an amino acid that already exists at the site!", "EnergyTable::addToSiteAlphabet(int, const string&)");
+  int a = aaIndices[siteIdx].size();
+  aaIndices[siteIdx][aa] = a;
+  aaAlpha[siteIdx].push_back(aa);
+  selfE[siteIdx].push_back(0.0);
+  return a;
+}
+
+void EnergyTable::clear() {
+  siteIndices.clear();
+  sites.clear();
+  aaIndices.clear();
+  aaAlpha.clear();
+  selfE.clear();
+  pairMaps.clear();
+  pairE.clear();
+}
+
 void EnergyTable::readFromFile(const string& tabFile) {
+  clear();
   vector<string> lines = MstUtils::fileToArray(tabFile);
-  int i = 0, s, a;
+  int i = 0, a;
 
   /* read self energies and site addresses */
   for (; i < lines.size(); i++) {
     vector<string> line = MstUtils::split(lines[i]);
     if (line.size() != 3) break;
-    if (siteIndices.find(line[0]) == siteIndices.end()) {
-      s = siteIndices.size();
-      siteIndices[line[0]] = s;
-      aaIndices.push_back(map<string, int>());
-      selfE.push_back(vector<mstreal>());
-      indToAA.push_back(map<int, string>());
-    } else { s = siteIndices[line[0]]; }
-    a = aaIndices[s].size();
-    aaIndices[s][line[1]] = a;
-    indToAA[s][a] = line[1];
-    selfE[s].push_back(MstUtils::toReal(line[2]));
+    if (!siteExists(line[0])) addSite(line[0]);
+    int siteIdx = siteIndex(line[0]);
+    int aaIdx = addToSiteAlphabet(siteIdx, line[1]);
+    setSelfEnergy(siteIdx, aaIdx, MstUtils::toReal(line[2]));
   }
 
   /* read pair energies */
-  pairs.clear(); pairs.resize(siteIndices.size());
-  pairMaps.clear(); pairMaps.resize(siteIndices.size());
-  pairE.clear(); pairE.resize(siteIndices.size());
   for (; i < lines.size(); i++) {
     vector<string> line = MstUtils::split(lines[i]);
     if (line.size() != 5) MstUtils::error("could not parse line '" + lines[i] + "'");
-    if ((siteIndices.find(line[0]) == siteIndices.end()) || (siteIndices.find(line[1]) == siteIndices.end())) {
-      MstUtils::error("unexpected site names in pair line: " + lines[i]);
-    }
-    int si = siteIndices[line[0]];
-    int sj = siteIndices[line[1]];
-    if ((aaIndices[si].find(line[2]) == aaIndices[si].end()) || (aaIndices[sj].find(line[3]) == aaIndices[sj].end())) {
-      MstUtils::error("unexpected amino-acid names in pair line: " + lines[i]);
-    }
-    int aai = aaIndices[si][line[2]];
-    int aaj = aaIndices[si][line[3]];
-    pairMaps[si][sj] = true; pairMaps[sj][si] = true;
-    // the first time we encounter a site pair, fill them up with all-by-all amino-acid zero energies
-    if (pairE[si].size() == 0) pairE[si].resize(siteIndices.size());
-    if (pairE[si][sj].size() == 0) {
-      pairE[si][sj].resize(aaIndices[si].size(), vector<mstreal>(aaIndices[sj].size(), 0));
-    }
-    pairE[si][sj][aai][aaj] = MstUtils::toReal(line[4]);
+    if (!siteExists(line[0]) || !siteExists(line[1])) MstUtils::error("unexpected site names in pair line: " + lines[i]);
+    int si = siteIndex(line[0]);
+    int sj = siteIndex(line[1]);
+    if (!inSiteAlphabet(si, line[2]) || !inSiteAlphabet(si, line[3])) MstUtils::error("unexpected amino-acid names in pair line: " + lines[i]);
+    int aai = indexInSiteAlphabet(si, line[2]);
+    int aaj = indexInSiteAlphabet(si, line[3]);
+    setPairEnergy(si, sj, aai, aaj, MstUtils::toReal(line[4]));
   }
-  for (i = 0; i < pairMaps.size(); i++) pairs[i] = MstUtils::keys(pairMaps[i]);
+}
+
+void EnergyTable::writeToFile(const string& tabFile) {
+  fstream of;
+  MstUtils::openFile(of, tabFile, ios::out);
+  for (int si = 0; si < sites.size(); si++) {
+    for (int aai = 0; aai < aaAlpha[si].size(); aai++) {
+      of << sites[si] << " " << aaAlpha[si][aai] << " " << selfE[si][aai] << endl;
+    }
+  }
+
+  for (int si = 0; si < sites.size(); si++) {
+    for (auto it = pairMaps[si].begin(); it != pairMaps[si].end(); ++it) {
+      int sj = it->first;
+      if (sj < si) continue;
+      int k = it->second;
+      for (int aai = 0; aai < aaAlpha[si].size(); aai++) {
+        for (int aaj = 0; aaj < aaAlpha[sj].size(); aaj++) {
+          mstreal ener = pairE[si][k][aai][aaj];
+          if (ener == 0.0) continue;
+          of << sites[si] << " " << sites[sj] << " " << aaAlpha[si][aai] << " " << aaAlpha[sj][aaj] << " " << ener << endl;
+        }
+      }
+    }
+  }
+  of.close();
 }
 
 mstreal EnergyTable::meanEnergy() const {
@@ -1025,19 +1128,50 @@ mstreal EnergyTable::selfEnergy(int s, int aa) {
 }
 
 mstreal EnergyTable::pairEnergy(int si, int sj, int aai, int aaj) {
-  if (si < sj) return pairE[si][sj][aai][aaj];
-  return pairE[sj][si][aaj][aai];
+  if (sj < si) {
+    int tmp = si; si = sj; sj = tmp;
+    tmp = aai; aai = aaj; aaj = tmp;
+  }
+  if (pairMaps[si].find(sj) == pairMaps[si].end()) return 0.0;
+  return pairE[si][pairMaps[si][sj]][aai][aaj];
+}
+
+void EnergyTable::setSelfEnergy(int s, int aa, mstreal ener) {
+  selfE[s][aa] = ener;
+}
+
+void EnergyTable::setPairEnergy(int si, int sj, int aai, int aaj, mstreal ener) {
+  // store each interaction energy in one order only
+  if (sj < si) {
+    int tmp = si; si = sj; sj = tmp;
+    tmp = aai; aai = aaj; aaj = tmp;
+  }
+  if (pairMaps[si].find(sj) == pairMaps[si].end()) {
+    pairMaps[si][sj] = pairE[si].size();
+    // we store index pairs in both directions, to make it easy to look up all
+    // interactors of a given site, but we access in only one direction
+    pairMaps[sj][si] = pairE[si].size();
+    pairE[si].resize(pairE[si].size() + 1);
+  }
+  int k = pairMaps[si][sj];
+
+  // the first time we encounter a site pair, fill them up with all-by-all amino-acid zero energies
+  if (pairE[si][k].size() == 0) {
+    pairE[si][k].resize(aaIndices[si].size(), vector<mstreal>(aaIndices[sj].size(), 0));
+  }
+
+  // finally set the energy
+  pairE[si][k][aai][aaj] = ener;
 }
 
 mstreal EnergyTable::scoreSolution(const vector<int>& sol) {
   if (sol.size() != selfE.size()) MstUtils::error("solution of wrong length for table", "EnergyTable::scoreSolution(const vector<int>&)");
   mstreal ener = 0;
   for (int si = 0; si < selfE.size(); si++) {
-    ener += selfEnergy(si, sol[si]);
-    const vector<int>& sj = pairs[si];
-    for (int j = 0; j < sj.size(); j++) {
-      if (sj[j] < si) continue; // do not double-count interactions
-      ener += pairEnergy(si, sj[j], sol[si], sol[sj[j]]);
+    ener += selfE[si][sol[si]];
+    for (auto it = pairMaps[si].begin(); it != pairMaps[si].end(); ++it) {
+      if (it->first < si) continue; // do not overcount pairs
+      ener += pairE[si][it->second][sol[si]][sol[it->first]];
     }
   }
   return ener;
@@ -1052,10 +1186,16 @@ mstreal EnergyTable::scoreMutation(const vector<int>& sol, int mutSite, int mutA
   if ((mutSite < 0) || (mutSite >= selfE.size())) MstUtils::error("mutation site index out of range for table", "EnergyTable::scoreMutation(const vector<int>&, int, const string&)");
 
   mstreal dE = selfE[mutSite][mutAA] - selfE[mutSite][sol[mutSite]];
-  const vector<int>& intSites = pairs[mutSite];
-  for (int j = 0; j < intSites.size(); j++) {
-    int intSite = intSites[j];
-    dE += pairEnergy(mutSite, intSite, mutAA, sol[intSite]) - pairEnergy(mutSite, intSite, sol[mutSite], sol[intSite]);
+  if (!pairMaps[mutSite].empty()) {
+    for (auto it = pairMaps[mutSite].begin(); it != pairMaps[mutSite].end(); ++it) {
+      int intSite = it->first; // interacting site index
+      int k = it->second;      // index at which this site's interactions will be stored
+      if (intSite > mutSite) {
+        dE += pairE[mutSite][k][mutAA][sol[intSite]] - pairE[mutSite][k][sol[mutSite]][sol[intSite]];
+      } else {
+        dE += pairE[intSite][k][sol[intSite]][mutAA] - pairE[intSite][k][sol[intSite]][sol[mutSite]];
+      }
+    }
   }
   return dE;
 }
@@ -1167,5 +1307,5 @@ vector<int> EnergyTable::sequenceToSolution(const Sequence& seq) {
 }
 
 string EnergyTable::getResidueString(int si, int ri) {
-  return indToAA[si][ri];
+  return aaAlpha[si][ri];
 }
