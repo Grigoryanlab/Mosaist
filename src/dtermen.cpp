@@ -13,6 +13,7 @@ void dTERMen::init() {
   kT = 1.0;
   aaMapType = 1;
   cdCut = 0.01;
+  intCut = 0.05; // set to a value over 1.0 to not count sidechain-backbone contacts via interference
   pmSelf = 1;
   pmPair = 1;
   selfResidualPC = selfCorrPC = 1.0;
@@ -725,12 +726,6 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   if (R->getStructure() == NULL) MstUtils::error("cannot operate on a disembodied residue!", "dTERMen::selfEnergies(Residue*, ConFind&, bool)");
   Structure& S = *(R->getStructure());
 
-  // -- get contacts
-  if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
-  contactList cL = C.getContacts(R, cdCut);
-  cL.sortByDegree();
-  vector<Residue*> contResidues = cL.destResidues();
-
   // -- simple environment components
   if (verbose) cout << "\tdTERMen::selfEnergies -> trivial statistical components..." << endl;
   int naa = globalAlphabetSize();
@@ -774,6 +769,18 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
         return ss.str();
       }
   };
+
+  // -- get contacts
+  if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
+  contactList cL = C.getContacts(R, cdCut);
+  cL.sortByDegree();
+  vector<Residue*> contResidues = cL.destResidues();
+  if (verbose) cout << "\t\tdTERMen::selfEnergies -> found " << contResidues.size() << " contact-degree contacts..." << endl;
+  if (intCut <= 1.0) {
+    vector<Residue*> bbscConts = (C.getInterference({R}, intCut)).destResidues();
+    contResidues.insert(contResidues.end(), bbscConts.begin(), bbscConts.end());
+    if (verbose) cout << "\t\tdTERMen::selfEnergies -> added " << bbscConts.size() << " interference contacts..." << endl;
+  }
 
   // consider each contacting residue with the central one and see if there are
   // enough matches. If so, create a clique to be grown later. If not, still

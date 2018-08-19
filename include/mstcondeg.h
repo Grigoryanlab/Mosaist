@@ -28,7 +28,7 @@ class contactList {
       degrees.push_back(_degree);
       infos.push_back(_info);
       inContact[_resi][_resj] = resi.size() - 1;
-      inContact[_resj][_resi] = resi.size() - 1;
+      if (!directional) inContact[_resj][_resi] = resi.size() - 1;
       if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
         orderedContacts.insert(pair<Residue*, Residue*>(_resj, _resi));
       } else {
@@ -97,8 +97,8 @@ class ConFind {
     contactList getContacts(Structure& S, mstreal cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(const vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, mstreal cdcut = 0.0);
-    contactList getInterference(vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
-    contactList getInterference(Structure& S, mstreal incut = 0.0, contactList* list = NULL);
+    contactList getInterference(const vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
+    contactList getInterference(const Structure& S, mstreal incut = 0.0, contactList* list = NULL);
 
     mstreal getCrowdedness(Residue* res);
     vector<mstreal> getCrowdedness(vector<Residue*>& residues);
@@ -135,7 +135,7 @@ class ConFind {
     fastmap<Residue*, fastmap<rotamerID*, mstreal> > collProb;
     fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
     fastmap<Residue*, fastmap<Residue*, mstreal> > interference; // interferance[resA][resB] will store home much the backbone of
-                                                              // resB can potentially interfere with the amino-acid choice at resA
+                                                                 // resB can potentially interfere with the amino-acid choice at resA
 
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
     mstreal dcut;                  // CA-CA distance cutoff beyond which we do not consider pairwise interactions

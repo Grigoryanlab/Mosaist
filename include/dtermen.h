@@ -188,7 +188,7 @@ class dTERMen {
     zeroDimPotType bkPot;
     oneDimPotType omPot, envPot;
     twoDimPotType ppPot;
-    mstreal kT, cdCut, selfResidualPC, selfCorrPC;
+    mstreal kT, cdCut, intCut, selfResidualPC, selfCorrPC;
     int pmSelf, pmPair;
     int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN, pairMinN, pairMaxN;
 
@@ -301,7 +301,7 @@ class EnergyTable {
     map<string, int> siteIndices;
 
     /* sites[k] is the name of the site with index k. */
-    vector<string> sites; // TODO
+    vector<string> sites;
 
     /* aaIndices[0]["ALA"] is the index corresponding to "ALA" at the first
      * encountered site. */

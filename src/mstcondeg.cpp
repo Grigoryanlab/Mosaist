@@ -295,7 +295,7 @@ contactList ConFind::getContacts(const vector<Residue*>& residues, mstreal cdcut
   return *list;
 }
 
-contactList ConFind::getInterference(vector<Residue*>& residues, mstreal incut, contactList* list) {
+contactList ConFind::getInterference(const vector<Residue*>& residues, mstreal incut, contactList* list) {
   cache(residues);
   contactList L;
   if (list == NULL) list = &L;
@@ -319,7 +319,7 @@ contactList ConFind::getInterference(vector<Residue*>& residues, mstreal incut, 
   return *list;
 }
 
-contactList ConFind::getInterference(Structure& S, mstreal incut, contactList* list) {
+contactList ConFind::getInterference(const Structure& S, mstreal incut, contactList* list) {
   contactList L;
   if (list == NULL) list = &L;
   vector<Residue*> allRes = S.getResidues();
