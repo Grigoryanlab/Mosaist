@@ -19,7 +19,7 @@ void dTERMen::init() {
   selfResidualMinN = 1000;
   selfResidualMaxN = 5000;
   selfCorrMinN = 200;
-  selfCorrMinN = 5000;
+  selfCorrMaxN = 5000;
   pairMinN = 1000;
   pairMaxN = 5000;
   setAminoAcidMap();
@@ -793,7 +793,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
     c.matches = F.search();
-    if (matches[selfCorrMinN - 1].getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
+    if (c.matches[selfCorrMinN - 1].getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
     else { cliquesToGrow[contResidues[i]] = c; }
   }
 

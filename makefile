@@ -94,7 +94,7 @@ TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms m
 bind_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions mstmagic
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg
-testdTERMen_DEPS		:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic
+testdTERMen_DEPS		:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 analyzeLandscape_DEPS		:= msttypes msttransforms mstsequence mstoptions mstfasst dtermen mstcondeg mstrotlib mstmagic
 
 # MST library dependencies

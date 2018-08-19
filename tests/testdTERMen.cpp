@@ -1,6 +1,8 @@
 #include "msttypes.h"
 #include "dtermen.h"
 #include "mstoptions.h"
+#include "mstsystem.h"
+#include "mstrotlib.h"
 #include <chrono>
 
 int main(int argc, char *argv[]) {
@@ -12,16 +14,36 @@ int main(int argc, char *argv[]) {
   op.setOptions(argc, argv);
 
   Structure S(op.getString("p"));
-  dTERMen D(op.getString("t") + "/dtermen.conf");
+  vector<Residue*> residues = S.getResidues();
+  string etabFile = op.getString("o") + ".etab";
+  EnergyTable E;
 
-  EnergyTable E = D.buildEnergyTable(S.getResidues());
+  // build the energy table
+  if (!MstSys::fileExists(etabFile)) {
+    dTERMen D(op.getString("t") + "/dtermen.conf");
+    E = D.buildEnergyTable(residues);
+    E.writeToFile(etabFile);
+  } else {
+    cout << "reading previous energy table from " << etabFile << endl;
+    E.readFromFile(etabFile);
+    if (E.numSites() != residues.size()) MstUtils::error("pre-existing energy table has " + MstUtils::toString(E.numSites()) + " sites, while "  + MstUtils::toString(residues.size()) + " are selected for design");
+  }
+
   vector<int> bestSol = E.mc(100, 1000000, 1.0, 0.01);
   mstreal lowE = E.scoreSolution(bestSol);
   cout << "lowest energy found is " << lowE << endl;
-  cout << "lowest-energy sequence: " << (E.solutionToSequence(bestSol)).toString() << endl;
+  Sequence bestSeq = E.solutionToSequence(bestSol);
+  cout << "lowest-energy sequence: " << bestSeq.toString() << endl;
   cout << "mean energy is " << E.meanEnergy() << endl;
   cout << "estimated energy standard deviation is " << E.energyStdEst() << endl;
-  E.writeToFile(op.getString("o") + ".etab");
+
+  // make a redesigned file, ready for repacking
+  for (int i = 0; i < residues.size(); i++) {
+    vector<Atom*> sidechain = MstUtils::setdiff(residues[i]->getAtoms(), RotamerLibrary::getBackbone(*(residues[i])));
+    residues[i]->replaceAtoms(vector<Atom*>(), sidechain);
+    residues[i]->setName(bestSeq.getResidue(i, true));
+  }
+  S.writePDB(op.getString("o") + ".red.pdb");
 }
 
 // cout << "-----" << endl;
