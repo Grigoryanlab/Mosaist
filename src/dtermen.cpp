@@ -13,7 +13,7 @@ void dTERMen::init() {
   kT = 1.0;
   aaMapType = 1;
   cdCut = 0.01;
-  intCut = 0.05; // set to a value over 1.0 to not count sidechain-backbone contacts via interference
+  intCut = 0.01; // set to a value over 1.0 to not count sidechain-backbone contacts via interference
   pmSelf = 1;
   pmPair = 1;
   selfResidualPC = selfCorrPC = 1.0;
@@ -24,11 +24,24 @@ void dTERMen::init() {
   pairMinN = 1000;
   pairMaxN = 5000;
   setAminoAcidMap();
+  setEnergyFunction("35");
 
   // set up FASST base options
   F.setOptions(fasstSearchOptions());
   F.setRedundancyProperty("sim");
   foptsBase = F.options();
+}
+
+void dTERMen::setEnergyFunction(const string& ver) {
+  efunVer = ver;
+  if (efunVer.compare("35") == 0) {
+    // this is the default
+  } else if (efunVer.compare("35.f") == 0) {
+    // do not use interference-based contacts
+    intCut = 1.1;
+  } else {
+    MstUtils::error("unknown energy function version '" + efunVer + "'");
+  }
 }
 
 void dTERMen::readConfigFile(const string& configFile) {
@@ -42,6 +55,8 @@ void dTERMen::readConfigFile(const string& configFile) {
       fasstdbPath = ents[1];
     } else if (ents[0].compare("rotlib") == 0) {
       rotLibFile = ents[1];
+    } else if (ents[0].compare("efun") == 0) {
+      setEnergyFunction(ents[0]);
     } else {
       MstUtils::error("unknown parameter name '" + ents[0] + "'", "dTERMen::dTERMen(const string&)");
     }
@@ -730,10 +745,10 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   if (verbose) cout << "\tdTERMen::selfEnergies -> trivial statistical components..." << endl;
   int naa = globalAlphabetSize();
   CartesianPoint selfE(naa, 0.0);
-  // vector<mstreal> selfE(naa, 0.0);
   for (int aai = 0; aai < naa; aai++) {
     selfE[aai] = backEner(aai) + bbOmegaEner(R->getOmega(), aai) + bbPhiPsiEner(R->getPhi(), R->getPsi(), aai) + envEner(C.getFreedom(R), aai);
   }
+  if (verbose) printSelfComponent(selfE, "\t");
 
   // -- self residual
   if (verbose) cout << "\tdTERMen::selfEnergies -> self residual..." << endl;
@@ -746,7 +761,9 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   F.setMinNumMatches(selfResidualMinN);
   F.setMaxNumMatches(selfResidualMaxN);
   fasstSolutionSet matches = F.search();
-  selfE += singleBodyStatEnergy(matches, cInd, selfResidualPC);
+  CartesianPoint selfResidual = singleBodyStatEnergy(matches, cInd, selfResidualPC);
+  if (verbose) printSelfComponent(selfResidual, "\t");
+  selfE += selfResidual;
 
   // -- self correction
   if (verbose) cout << "\tdTERMen::selfEnergies -> self correction..." << endl;
@@ -775,11 +792,20 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   contactList cL = C.getContacts(R, cdCut);
   cL.sortByDegree();
   vector<Residue*> contResidues = cL.destResidues();
-  if (verbose) cout << "\t\tdTERMen::selfEnergies -> found " << contResidues.size() << " contact-degree contacts..." << endl;
+  if (verbose) {
+    cout << "\t\tdTERMen::selfEnergies -> found " << contResidues.size() << " contact-degree contacts:";
+    for (int ii = 0; ii < contResidues.size(); ii++) cout << " " << *(contResidues[ii]);
+    cout << endl;
+  }
   if (intCut <= 1.0) {
-    vector<Residue*> bbscConts = (C.getInterference({R}, intCut)).destResidues();
-    contResidues.insert(contResidues.end(), bbscConts.begin(), bbscConts.end());
-    if (verbose) cout << "\t\tdTERMen::selfEnergies -> added " << bbscConts.size() << " interference contacts..." << endl;
+    vector<Residue*> bbscConts = (C.getInterfering({R}, intCut)).destResidues();
+    if (verbose) {
+      cout << "\t\tadding interfering residues:";
+      for (int ii = 0; ii < bbscConts.size(); ii++) cout << " " << *(bbscConts[ii]);
+      cout << endl;
+    }
+    contResidues = MstUtils::setunion(contResidues, bbscConts);
+    if (verbose) cout << "\t\tdTERMen::selfEnergies -> in total " << contResidues.size() << " contacts..." << endl;
   }
 
   // consider each contacting residue with the central one and see if there are
@@ -866,7 +892,9 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   if (verbose) cout << "\tdTERMen::selfEnergies -> final cliques:" << endl;
   for (int i = 0; i < finalCliques.size(); i++) {
     if (verbose) cout << "\t\t" << finalCliques[i].toString() << endl;
-    selfE += singleBodyStatEnergy(finalCliques[i].matches, finalCliques[i].centResIdx, selfCorrPC);
+    CartesianPoint cliqueDelta = singleBodyStatEnergy(finalCliques[i].matches, finalCliques[i].centResIdx, selfCorrPC);
+    if (verbose) printSelfComponent(cliqueDelta, "\t\t\t");
+    selfE += cliqueDelta;
   }
 
   return selfE;
@@ -924,10 +952,18 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
   return pairE;
 }
 
+void dTERMen::printSelfComponent(const CartesianPoint& ener, const string& prefix) {
+  cout << prefix;
+  for (int i = 0; i < globAlph.size(); i++) printf("%8s", indexToResName(i).c_str());
+  cout << endl << prefix;
+  for (int i = 0; i < ener.size(); i++) printf("%8.3f", ener[i]);
+  cout << endl;
+}
+
 CartesianPoint dTERMen::singleBodyStatEnergy(fasstSolutionSet& matches, int cInd, int pc) {
   CartesianPoint selfE(globalAlphabetSize(), 0.0);
   CartesianPoint Ne = dTERMen::singleBodyExpectations(matches, cInd);
-  CartesianPoint No = singleBodyObservations(matches, cInd);
+  CartesianPoint No = dTERMen::singleBodyObservations(matches, cInd);
   for (int aai = 0; aai < selfE.size(); aai++) {
     selfE[aai] = -kT*log((No[aai] + pc)/(Ne[aai] + pc));
   }

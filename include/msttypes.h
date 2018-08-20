@@ -952,10 +952,16 @@ class MstUtils {
     template <class T>
     static map<T, int> indexMap(const vector<T>& vec);
 
-    /* The returned vector has all of the elements in vector A, in their original
+    /* Returns a vector with all of the elements in vector A, in their original
      * relative order, that do not appear in vector B. */
     template <class T>
     static vector<T> setdiff(const vector<T>& A, const vector<T>& B);
+
+    /* Returns a vector with all of the elements in vector A, in their original
+     * relative order, followed by any elements in B that are not in A, in their
+     * original order. */
+    template <class T>
+    static vector<T> setunion(const vector<T>& A, const vector<T>& B);
 
     template <class T>
     static vector<T> range(const T& from, const T& to, const T& step = 1);
@@ -1144,6 +1150,16 @@ vector<T> MstUtils::setdiff(const vector<T>& A, const vector<T>& B) {
     if (setB.find(A[i]) == setB.end()) diff.push_back(A[i]);
   }
   return diff;
+}
+
+template <class T>
+vector<T> MstUtils::setunion(const vector<T>& A, const vector<T>& B) {
+  vector<T> U = A;
+  set<T> setA = MstUtils::contents(A);
+  for (int i = 0; i < B.size(); i++) {
+    if (setA.find(B[i]) == setA.end()) U.push_back(B[i]);
+  }
+  return U;
 }
 
 template <class T>

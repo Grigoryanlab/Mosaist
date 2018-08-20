@@ -97,8 +97,22 @@ class ConFind {
     contactList getContacts(Structure& S, mstreal cdcut = 0.0, contactList* list = NULL);
     contactList getContacts(const vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
     vector<Residue*> getContactingResidues(Residue* res, mstreal cdcut = 0.0);
+
+    /* Interference is a directional sidechain-to-backbone contact. If A and B
+     * are listed as the source and destination residues, respectively, of a
+     * contact in the resulting contactList, then some fraction of rotamers at A
+     * are clashing with the backbone of B; this fraction is the interference.
+     * The first set of functions returns a contact list, where the specified
+     * residues act as either intefering residues (i.e., their backbones clash
+     * with somebody else's sidechains) or the interfered residues (i.e., their
+     * sidechains clash with somebody else's backbone). The second set returns
+     * only those contacts, in which the specified residues are being interfered
+     * with (and hence, what is effectively being returned are the interfering
+     * residues, which is why the functions are named as they are). */
     contactList getInterference(const vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
     contactList getInterference(const Structure& S, mstreal incut = 0.0, contactList* list = NULL);
+    contactList getInterfering(const vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
+    contactList getInterfering(const Structure& S, mstreal incut = 0.0, contactList* list = NULL);
 
     mstreal getCrowdedness(Residue* res);
     vector<mstreal> getCrowdedness(vector<Residue*>& residues);

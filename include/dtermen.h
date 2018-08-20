@@ -34,6 +34,7 @@ class dTERMen {
     dTERMen(const string& configFile);
     void init();
     void readConfigFile(const string& configFile);
+    void setEnergyFunction(const string& ver); // sets the energy function version and alters any necessary parameters
 
     /* Builds an energy table for design, given a list of mutable positions and,
      * optionally, a list of allowed amino acids at each. If the latter is not
@@ -146,6 +147,7 @@ class dTERMen {
     mstreal bbOmegaEner(mstreal omg, int aai) { return lookupOneDimPotential(omPot, omg, aai); }
     mstreal bbPhiPsiEner(mstreal phi, mstreal psi, int aai) { return lookupTwoDimPotential(ppPot, phi, psi, aai); }
     mstreal envEner(mstreal env, int aai) { return lookupOneDimPotential(envPot, env, aai); }
+    void printSelfComponent(const CartesianPoint& ener, const string& prefix);
 
     /* Given a list of FASST solutions, computes the residual statistical energy
      * for all amino acids at the position with index cInd, after accounting for
@@ -184,7 +186,7 @@ class dTERMen {
     FASST F;
     fasstSearchOptions foptsBase; // base FASST options that will be used with every search
     RotamerLibrary RL;
-    string fasstdbPath, backPotFile, rotLibFile;
+    string fasstdbPath, backPotFile, rotLibFile, efunVer;
     zeroDimPotType bkPot;
     oneDimPotType omPot, envPot;
     twoDimPotType ppPot;

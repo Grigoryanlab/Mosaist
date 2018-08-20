@@ -328,6 +328,37 @@ contactList ConFind::getInterference(const Structure& S, mstreal incut, contactL
   return *list;
 }
 
+contactList ConFind::getInterfering(const vector<Residue*>& residues, mstreal incut, contactList* list) {
+  cache(residues);
+  contactList L;
+  if (list == NULL) list = &L;
+  set<Residue*> wanted;
+  for (int i = 0; i < residues.size(); i++) wanted.insert(residues[i]);
+
+  // check only in one direction, where one the specified residues is the source
+  for (int i = 0; i < residues.size(); i++) {
+    Residue* resA = residues[i];
+    if (interference.find(resA) == interference.end()) continue;
+    fastmap<Residue*, mstreal>& interB = interference[resA];
+    for (auto itB = interB.begin(); itB != interB.end(); ++itB) {
+      mstreal in = itB->second;
+      if (in >= incut) {
+        list->addContact(resA, itB->first, in, "", true);
+      }
+    }
+  }
+  return *list;
+}
+
+contactList ConFind::getInterfering(const Structure& S, mstreal incut, contactList* list) {
+  contactList L;
+  if (list == NULL) list = &L;
+  vector<Residue*> allRes = S.getResidues();
+  getInterference(allRes, incut, list);
+
+  return *list;
+}
+
 contactList ConFind::getContacts(Structure& S, mstreal cdcut, contactList* list) {
   contactList L;
   if (list == NULL) list = &L;
