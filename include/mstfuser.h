@@ -12,7 +12,7 @@ using namespace MST;
 class fusionParams {
   public:
     enum coorInitType { meanCoor = 1, meanIC };
-    enum minimizerType { gradDescent = 1, conjGrad, NelderMead };
+    enum minimizerType { gradDescent = 1, conjGrad, NelderMead, langevinDyna };
     fusionParams() { // default optimization params
       startType = fusionParams::coorInitType::meanCoor;
       verbose = false;
@@ -49,7 +49,7 @@ class fusionParams {
     bool isStartingStructureGiven() const { return (startStruct.chainSize() != 0); }
     bool normalizeRMSD() const { return normRMSD; }
     bool fragRedundancyWeighting() const { return fragRedWeighting; }
-    int setMinimizerType() const { return minMethod; }
+    int getMinimizerType() const { return minMethod; }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }

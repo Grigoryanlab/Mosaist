@@ -945,30 +945,63 @@ mstreal fusionEvaluator::atomRadius(const Atom& a) {
 
 Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fusionParams& params) {
   fusionEvaluator E(topo, params); E.setVerbose(false);
-  vector<mstreal> bestSolution; mstreal score, bestScore;
-  if (params.setMinimizerType() == fusionParams::gradDescent) {
-    bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
-  } else if (params.setMinimizerType() == fusionParams::conjGrad) {
-    bestScore = Optim::conjGradMin(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
-  } else {
-    mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution, params.isVerbose());
-  }
-  int bestAnchor = E.getBuildOrigin();
-  if (params.isVerbose()) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
-  for (int i = 0; i < params.numCycles() - 1; i++) {
-    E.noisifyGuessPoint(0.2);
+  vector<mstreal> bestSolution; mstreal score, bestScore; int bestAnchor;
+  for (int i = 0; i < params.numCycles(); i++) {
+    if (i > 0) {
+      E.noisifyGuessPoint(0.2);
+      E.chooseBuildOrigin(true);
+    }
     vector<mstreal> solution;
-    E.chooseBuildOrigin(true);
-    if (params.setMinimizerType() == fusionParams::gradDescent) {
+    if (params.getMinimizerType() == fusionParams::gradDescent) {
       score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
-    } else if (params.setMinimizerType() == fusionParams::conjGrad) {
+    } else if (params.getMinimizerType() == fusionParams::conjGrad) {
       score = Optim::conjGradMin(E, solution, params.numIters(), params.errTol(), params.isVerbose());
+    } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
+      vector<vector<mstreal> > trajectory;
+      vector<mstreal> masses(E.numDF(), 10);
+      mstreal gamma = 10, kT = 1, timeStep = 10E-6; // gamma*timeStep should be no less than 10^-5
+      vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, -1, true);
+      bestScore = trajScores.back();
+      bestSolution = trajectory.back();
     } else {
       score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
     }
-    if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigin(); }
+    if ((i == 0) || (score < bestScore)) { bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigin(); }
     if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
   }
+
+  // if (params.getMinimizerType() == fusionParams::gradDescent) {
+  //   bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
+  // } else if (params.getMinimizerType() == fusionParams::conjGrad) {
+  //   bestScore = Optim::conjGradMin(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
+  // } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
+  //   vector<vector<mstreal> > trajectory;
+  //   vector<mstreal> masses(E.numDF(), 10);
+  //   mstreal gamma = 10, kT = 0.1, timeStep = 10E-6; // gamma*timeStep should be no less than 10^-5
+  //   vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, -1, true);
+  //   bestScore = trajScores.back();
+  //   bestSolution = trajectory.back();
+  // } else {
+  //   mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution, params.isVerbose());
+  // }
+  // int bestAnchor = E.getBuildOrigin();
+  // if (params.isVerbose()) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
+  // for (int i = 0; i < params.numCycles() - 1; i++) {
+  //   E.noisifyGuessPoint(0.2);
+  //   vector<mstreal> solution;
+  //   E.chooseBuildOrigin(true);
+  //   if (params.getMinimizerType() == fusionParams::gradDescent) {
+  //     score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
+  //   } else if (params.getMinimizerType() == fusionParams::conjGrad) {
+  //     score = Optim::conjGradMin(E, solution, params.numIters(), params.errTol(), params.isVerbose());
+  //   } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
+  //     MstUtils::error("you should probably not repeat this much code!", "Fuser::fuse");
+  //   } else {
+  //     score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
+  //   }
+  //   if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigin(); }
+  //   if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
+  // }
   E.setBuildOrigin(bestAnchor);
   if (params.isVerbose()) {
     cout << "best score = " << bestScore << ":" << endl;

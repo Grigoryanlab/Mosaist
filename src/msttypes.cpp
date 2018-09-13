@@ -1538,7 +1538,7 @@ mstreal CartesianPoint::median() const {
   return vec[vec.size() / 2];
 }
 
-CartesianPoint CartesianPoint::cross(CartesianPoint other) const {
+CartesianPoint CartesianPoint::cross(const CartesianPoint& other) const {
   if (size() != 3) MstUtils::error("don't know how to compute cross produces for dimensions other than 3", "CartesianPoint::cross");
   if (size() != other.size()) MstUtils::error("vector size mismatch", "CartesianPoint::cross");
 
@@ -1550,14 +1550,14 @@ CartesianPoint CartesianPoint::cross(CartesianPoint other) const {
   return C;
 }
 
-CartesianPoint CartesianPoint::elemProd(CartesianPoint other) const {
+CartesianPoint CartesianPoint::elemProd(const CartesianPoint& other) const {
   if (size() != other.size()) MstUtils::error("vector size mismatch", "CartesianPoint::elemProd");
   CartesianPoint P(size());
   for (int i = 0; i < size(); i++) P[i] = (*this)[i] * other[i];
   return P;
 }
 
-mstreal CartesianPoint::dot(CartesianPoint other) const {
+mstreal CartesianPoint::dot(const CartesianPoint& other) const {
   if (size() != other.size()) MstUtils::error("vector size mismatch", "CartesianPoint::dot");
 
   mstreal d = 0;
@@ -3474,6 +3474,13 @@ void MstUtils::error(const string& message, string from, int code) {
   backtrace_symbols_fd(array, size, STDERR_FILENO);
 
   exit(code);
+}
+
+MST::mstreal MstUtils::randNormal(MST::mstreal mu, MST::mstreal sig) {
+  MST::mstreal x = MstUtils::randUnit();
+  MST::mstreal y = MstUtils::randUnit();
+  MST::mstreal n = sqrt(-2*log(x))*cos(2*M_PI*y); // can also be sqrt(-2*log(x))*sin(2*M_PI*y)
+  return n*sig + mu;
 }
 
 void MstUtils::errorHandler(int sig) {

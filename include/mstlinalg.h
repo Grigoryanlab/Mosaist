@@ -50,16 +50,19 @@ class Matrix {
 
     // when typecast as a vector<real>, appends all rows together
     operator vector<mstreal>() const;
+    // TODO: typecast as a Vector (fail if neither dimension is 1)
 
     Matrix inverse();
     Matrix transpose();
-    Matrix sum(int dim = 1, bool norm = false);
-    Matrix mean(int dim = 1) { return sum(dim, true); }
+    Matrix sum(int dim = -1, bool norm = false) const;
+    Matrix mean(int dim = -1) const { return sum(dim, true); }
     mstreal norm() const;   // Euclidean norm of the matrix
     mstreal norm2() const;  // Euclidean norm squared
     mstreal max() const;
     mstreal min() const;
     Matrix abs() const;
+    Matrix mult(const Matrix& other) const; // element-wise multiply
+    Matrix div(const Matrix& other) const;  // element-wise divide
 
     friend ostream & operator<<(ostream &_os, const Matrix& _M) {
       for (int i = 0; i < _M.numRows(); i++) {

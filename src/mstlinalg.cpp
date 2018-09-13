@@ -51,6 +51,7 @@ void Matrix::clear() {
       delete(M[i][j]);
     }
   }
+  M.clear();
 }
 
 Matrix::Matrix(const Matrix& _M) {
@@ -303,7 +304,12 @@ Matrix Matrix::transpose() {
   return R;
 }
 
-Matrix Matrix::sum(int dim, bool norm) {
+Matrix Matrix::sum(int dim, bool norm) const {
+  // if not specified, sum along the first dimension unless this is a vector
+  if (dim < 0) {
+    if (size(1) == 1) dim = 2;
+    else dim = 1;
+  }
   switch(dim) {
     case 1: {
       Matrix S(1, numCols(), 0);
@@ -375,6 +381,32 @@ Matrix Matrix::abs() const {
     }
   }
   return Ma;
+}
+
+Matrix Matrix::mult(const Matrix& other) const {
+  if ((this->size(1) != other.size(1)) || (this->size(2) != other.size(2))) {
+    MstUtils::error("matrix dimensions do not agree", "Matrix::mult");
+  }
+  Matrix M(*this);
+  for (int i = 0; i < M.size(1); i++) {
+    for (int j = 0; j < M.size(2); j++) {
+      M(i, j) *= other(i, j);
+    }
+  }
+  return M;
+}
+
+Matrix Matrix::div(const Matrix& other) const {
+  if ((this->size(1) != other.size(1)) || (this->size(2) != other.size(2))) {
+    MstUtils::error("matrix dimensions do not agree", "Matrix::div");
+  }
+  Matrix M(*this);
+  for (int i = 0; i < M.size(1); i++) {
+    for (int j = 0; j < M.size(2); j++) {
+      M(i, j) /= other(i, j);
+    }
+  }
+  return M;
 }
 
 mstreal Vector::dot(const Vector& v) const {

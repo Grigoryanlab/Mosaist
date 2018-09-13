@@ -433,10 +433,10 @@ class CartesianPoint : public vector<mstreal> {
     mstreal var() const;
     mstreal median() const;
     mstreal sum() const;
-    CartesianPoint cross(CartesianPoint other) const;
-    mstreal dot(CartesianPoint other) const;
+    CartesianPoint cross(const CartesianPoint& other) const;
+    mstreal dot(const CartesianPoint& other) const;
     CartesianPoint getUnit() const { double L = norm(); return (*this/L); };
-    CartesianPoint elemProd(CartesianPoint other) const; // element-wise product
+    CartesianPoint elemProd(const CartesianPoint& other) const; // element-wise product
 
     // a few special access operations
     mstreal getX() const { return (*this)[0]; }
@@ -920,6 +920,8 @@ class MstUtils {
     static int randInt(int upper) { return randInt(0, upper - 1); }
     // random number in the unit range 0 and 1
     static MST::mstreal randUnit() { return ((MST::mstreal) rand() / RAND_MAX); }
+    // normally-distributed random number with mean mu and standard deviation sig
+    static MST::mstreal randNormal(MST::mstreal mu = 0.0, MST::mstreal sig = 1.0);
 
     template <class T>
     static T pow2(const T& A) { return A*A; }

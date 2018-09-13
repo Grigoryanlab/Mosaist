@@ -202,6 +202,7 @@ int main(int argc, char** argv) {
   op.addOption("c", "path to a FASST cache file to use for initializing the cache.");
   op.addOption("w", "flag; if specified, the FASST cache will be periodically updated.");
   op.addOption("app", "flag; if specified, will append to the output PDB file (e.g., for the purpose of accumulating a trajectory from multiple runs).");
+  op.addOption("dyn", "use dynamics rather than optimization to search for a solution.");
   op.addOption("v", "set verbose output flag.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
   MstUtils::setSignalHandlers();
@@ -334,7 +335,7 @@ int main(int argc, char** argv) {
           allMatches.push_back(matches);
           int lastIdx = MstUtils::min(numPerTERM, (int) matches.size());
           Structure* last = matches[lastIdx - 1];
-          if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx + 1 << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
+          if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
         }
       }
     }
@@ -363,12 +364,17 @@ int main(int argc, char** argv) {
         allMatches.push_back(matches);
         int lastIdx = MstUtils::min(numPerTERM, (int) matches.size());
         Structure* last = matches[lastIdx - 1];
-        if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx + 1 << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
+        if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
       }
     }
     // fuser options
     fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
-    opts.setMinimizerType(fusionParams::gradDescent);
+    if (op.isGiven("dyn")) {
+      opts.setMinimizerType(fusionParams::langevinDyna);
+      opts.setNumIters(10*Ni);
+    } else {
+      opts.setMinimizerType(fusionParams::gradDescent);
+    }
     opts.setRepFC(1);
     opts.setCompFC(0.1);
     mstreal compactnessRadius = Rf;
