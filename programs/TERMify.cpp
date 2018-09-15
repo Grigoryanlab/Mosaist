@@ -369,12 +369,7 @@ int main(int argc, char** argv) {
     }
     // fuser options
     fusionParams opts; opts.setNumIters(Ni); opts.setVerbose(false);
-    if (op.isGiven("dyn")) {
-      opts.setMinimizerType(fusionParams::langevinDyna);
-      opts.setNumIters(10*Ni);
-    } else {
-      opts.setMinimizerType(fusionParams::gradDescent);
-    }
+    opts.setMinimizerType(fusionParams::gradDescent);
     opts.setRepFC(1);
     opts.setCompFC(0.1);
     mstreal compactnessRadius = Rf;
@@ -416,6 +411,16 @@ int main(int argc, char** argv) {
       fusionTopology propTopo = getTopo(I.residueSize(), allMatches, propPicks, (it == 0) ? shellOut : dummy, op.isGiven("m") ? &S : NULL);
       propTopo.addFixedPositions(fixed);
       Structure propFused;
+      if (op.isGiven("dyn")) {
+        opts.setMinimizerType(fusionParams::langevinDyna);
+        opts.setNumIters(10*Ni);
+        opts.setLogBase(op.getString("o"));
+        opts.setAdaptiveWeighting(true);
+        propFused = Fuser::fuse(propTopo, propScore, opts);
+        opts.setMinimizerType(fusionParams::gradDescent);
+        opts.setNumIters(Ni);
+        opts.setStartingStructure(propFused);
+      }
       if (op.isGiven("a")) {
         vector<mstreal> ics = opts.getIntCoorFCs();
         opts.setIntCoorFCs({0, 0, 0});

@@ -18,7 +18,8 @@ class fusionParams {
       verbose = false;
       optimCartesian = true;
       minMethod = fusionParams::gradDescent;
-      normRMSD = true; fragRedWeighting = false;
+      normRMSD = true; fragRedWeighting = adapRedWeighting = false;
+      aBeta = 100;
       noise = 0;
       Ni = 100;
       Nc = 1;
@@ -28,6 +29,7 @@ class fusionParams {
       kh = 0.001;
       krep = kcomp = 0;
       Rcomp = 1000;
+      outLogBase = "";
     }
     mstreal getNoise() const { return noise; }
     fusionParams::coorInitType getCoorInitType() const { return startType; }
@@ -49,7 +51,11 @@ class fusionParams {
     bool isStartingStructureGiven() const { return (startStruct.chainSize() != 0); }
     bool normalizeRMSD() const { return normRMSD; }
     bool fragRedundancyWeighting() const { return fragRedWeighting; }
+    bool adaptiveWeighting() const { return adapRedWeighting; }
     int getMinimizerType() const { return minMethod; }
+    string getLogBase() const { return outLogBase; }
+    bool logBaseDefined() const { return !(outLogBase.empty()); }
+    mstreal adaptiveBeta() const { return aBeta; }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }
@@ -68,13 +74,16 @@ class fusionParams {
     void setStartingStructure(const Structure& _S);
     void setNormalizeRMSD(bool flag) { normRMSD = flag; }
     void setFragRedundancyWeighting(bool flag) { fragRedWeighting = flag; }
+    void setAdaptiveWeighting(bool flag) { adapRedWeighting = flag; }
     void setMinimizerType(minimizerType _type) { minMethod = _type; }
+    void setLogBase(const string& _base) { outLogBase = _base; }
+    void setAdaptiveBeta(mstreal beta) { aBeta = beta; }
 
   private:
     // start optimization from the averaged Cartesian structure or the structure
     // that results from average internal coordinates?
     fusionParams::coorInitType startType;
-    bool verbose, optimCartesian, normRMSD, fragRedWeighting;
+    bool verbose, optimCartesian, normRMSD, fragRedWeighting, adapRedWeighting;
     mstreal noise; // noise level for initalizing the starting point
     int Ni, Nc;    // number of iterations per cycle and number of cycles
     minimizerType minMethod; // optimization method to use
@@ -82,7 +91,9 @@ class fusionParams {
     mstreal kb, ka, kh; // force constants for enforcing bonds, angles, and dihedrals
     mstreal krep, kcomp; // force constants for repulsive and attractive "compactness" interactions
     mstreal Rcomp;       // desired compactness radius
+    mstreal aBeta;       // (1/kT) factor used in adapting weighting to compute weights as a function of RMSD
     Structure startStruct;
+    string outLogBase;   // base name for various optimization output
 };
 
 struct fusionScores {
@@ -166,6 +177,9 @@ class fusionTopology {
     /* Getters and setters */
     int numAlignedFrags() const { return alignedFrags.size(); }
     int numFrags() const { return fragments.size(); }
+    int numUniqueOverlaps() const { return fragsByOverlap.size(); }
+    int numFragsOverlapping(int i) const { return fragsByOverlap[i].size(); }
+    int getFragOverlapping(int i, int k) const { return fragsByOverlap[i][k]; }
     AtomPointerVector& getAlignedFragFused(int fi) { return alignedFrags[fi].first; }
     AtomPointerVector& getAlignedFragRef(int fi) { return alignedFrags[fi].second; }
     pair<AtomPointerVector, AtomPointerVector>& getAlignedFragPair(int fi) { return alignedFrags[fi]; }
@@ -210,11 +224,30 @@ class fusionTopology {
     static vector<string> bba;
 
   private:
-    // general topology information
+    /* fragments[k] stores the correspondance between the atoms of the k-th
+     * fragment and residue indices in the topology. */
     vector<pair<AtomPointerVector, vector<int> > > fragments;
+
+    /* overlap[(set<int>) x] stores the overlap "index" corresponding to the
+     * set of residues x. If this index is i, then fragsByOverlap[i] stores the
+     * list of fragment indices (i.e., indices into the fragments vector above)
+     * that overlap the set of residues resis. */
+    map<set<int>, int> overlap;
+    vector<vector<int> > fragsByOverlap;
+
+    /* the weight of every fragment */
     vector<mstreal> fragWeights;
+
+    /* overlappingResidues[k] is the list of residues that overlap the k-th
+     * position in the topology. */
     vector<vector<Residue*> > overlappingResidues;
+
+    /* fixed[k] indicates whether the k-th position in the topology is fixed. */
     vector<bool> fixed;
+
+    /* alignedFrags[k] stores the correspondence between some portion of on the
+     * fused structure (alignedFrags[k].first) and the corresponding atoms of
+     * some fragment (alignedFrags[k].second). */
     vector<pair<AtomPointerVector, AtomPointerVector> > alignedFrags;
 
     // per chain information (computed when needed)

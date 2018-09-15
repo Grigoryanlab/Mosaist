@@ -62,6 +62,10 @@ fusionTopology& fusionTopology::operator=(const fusionTopology& topo) {
   this->alignedFrags = topo.alignedFrags;
   this->numMobAtoms = topo.numMobAtoms;
   this->updated = topo.updated;
+  this->overlap = topo.overlap;
+  this->fragsByOverlap = topo.fragsByOverlap;
+  this->chainLengths = topo.chainLengths;
+  this->fixedInChain = topo.fixedInChain;
   return *this;
 }
 
@@ -77,6 +81,12 @@ void fusionTopology::addFragment(vector<Residue*>& R, const vector<int>& fragRes
   }
   fragments.push_back(pair<AtomPointerVector, vector<int> > (fragAtoms, fragRes));
   fragWeights.push_back(weight);
+  set<int> fragResSet = MstUtils::contents(fragRes);
+  if (overlap.find(fragResSet) == overlap.end()) {
+    overlap[fragResSet] = fragsByOverlap.size();
+    fragsByOverlap.resize(fragsByOverlap.size() + 1);
+  }
+  fragsByOverlap[overlap[fragResSet]].push_back(fragments.size() - 1);
   updated = true;
 }
 
@@ -686,7 +696,7 @@ void fusionEvaluator::scoreIC(const icBound& b) {
     for (int i = 0; i < b.atoms.size(); i++) {
       Atom* a = b.atoms[i];
       for (int d = 0; d < 3; d++) {
-        map<int, mstreal> parts = gradOfXYZ.getPartials(a, d);
+        map<int, mstreal>& parts = gradOfXYZ.getPartials(a, d);
         for (auto it = parts.begin(); it != parts.end(); ++it) {
           gradient[it->first] += 2 * f * del * innerGradient[j] * it->second;
         }
@@ -701,6 +711,7 @@ void fusionEvaluator::scoreRMSD() {
   rmsdScore = rmsdTot = 0; int N = 0;
   vector<mstreal> innerGradient;
   vector<mstreal> weights = topo.getFragWeights();
+  int df = 3;
   if (params.fragRedundancyWeighting()) { // down-weight RMSD contributions from regions with many overlapped fragments
     map<Residue*, int> numOcc; // proportional to the number of times each residue is overlapped
     mstreal Wo = 0, W = 0;
@@ -726,25 +737,70 @@ void fusionEvaluator::scoreRMSD() {
     for (int i = 0; i < topo.numAlignedFrags(); i++) N += topo.getAlignedFragFused(i).size();
     for (int i = 0; i < topo.numAlignedFrags(); i++) weights[i] *= (1.0*topo.numMobileAtoms())/N;
   }
-  for (int i = 0; i < topo.numAlignedFrags(); i++) {
-    innerGradient.resize(topo.getAlignedFragFused(i).size()*3, 0.0);
-    mstreal r = rms.qcpRMSDGrad(topo.getAlignedFragFused(i), topo.getAlignedFragRef(i), innerGradient);
-    rmsdScore += weights[i] * r * r * topo.getAlignedFragFused(i).size();
-    rmsdTot += r * r * topo.getAlignedFragFused(i).size();
-    N += topo.getAlignedFragFused(i).size();
 
-    // gradient of RMSD
-    int j = 0;
-    for (int ai = 0; ai < topo.getAlignedFragFused(i).size(); ai++) {
-      for (int d = 0; d < 3; d++) {
-        map<int, mstreal> parts = gradOfXYZ.getPartials(topo.getAlignedFragFused(i)[ai], d);
-        for (auto it = parts.begin(); it != parts.end(); ++it) {
-          gradient[it->first] += weights[i] * 2 * r * topo.getAlignedFragFused(i).size() * innerGradient[j] * it->second;
+  if (params.adaptiveWeighting()) {
+    for (int gi = 0; gi < topo.numUniqueOverlaps(); gi++) {
+      int n = topo.numFragsOverlapping(gi);
+      if (n <= 0) MstUtils::error("empty overlap type!", "fusionEvaluator::scoreRMSD");
+      int L = topo.getAlignedFragFused(topo.getFragOverlapping(gi, 0)).size();
+
+      mstreal Z = 0;
+      vector<mstreal> w(n, 1.0), r(n, 0.0);
+      vector<vector<mstreal> > innerGradients(n, vector<mstreal>(L*df, 0.0));
+      vector<mstreal> innerGradientZ(L*df, 0.0);
+
+      // compute partition function and collect RMSD gradients
+      for (int i = 0; i < n; i++) {
+        int fi = topo.getFragOverlapping(gi, i);
+        r[i] = rms.qcpRMSDGrad(topo.getAlignedFragFused(fi), topo.getAlignedFragRef(fi), innerGradients[i]);
+        w[i] = exp(-params.adaptiveBeta() * r[i] * r[i]);
+        Z += w[i];
+      }
+
+      // compute weights and gradient of partition function
+      for (int j = 0; j < n; j++) {
+        w[j] /= Z;
+        rmsdScore += w[j] * r[j] * r[j] * L * weights[j];
+        for (int k = 0; k < L*df; k++) {
+          innerGradientZ[k] -= 2 * w[j] * params.adaptiveBeta() * r[j] * innerGradients[j][k];
         }
-        j++;
+      }
+      // cout << "group " << gi << ": " << MstUtils::vecToString(w, ", ") << endl;
+
+      // update gradient of score
+      for (int i = 0; i < n; i++) {
+        int fi = topo.getFragOverlapping(gi, i);
+        for (int k = 0; k < L*df; k++) {
+          map<int, mstreal>& parts = gradOfXYZ.getPartials(topo.getAlignedFragFused(fi)[k/df], k%df);
+          for (auto it = parts.begin(); it != parts.end(); ++it) {
+            gradient[it->first] += L*weights[i]*(w[i]*r[i]*(2*(1 - params.adaptiveBeta()*r[i]*r[i])*innerGradients[i][k] - r[i]*innerGradientZ[k])) * it->second;
+          }
+        }
+      }
+    }
+  } else {
+    for (int i = 0; i < topo.numAlignedFrags(); i++) {
+      innerGradient.resize(topo.getAlignedFragFused(i).size()*df, 0.0);
+      mstreal r = rms.qcpRMSDGrad(topo.getAlignedFragFused(i), topo.getAlignedFragRef(i), innerGradient);
+      mstreal r2 = r*r;
+      rmsdScore += weights[i] * r2 * topo.getAlignedFragFused(i).size();
+      rmsdTot += r2 * topo.getAlignedFragFused(i).size();
+      N += topo.getAlignedFragFused(i).size();
+
+      // gradient of RMSD
+      int j = 0; // TODO: do as above, where the coordinate index is directly iterated over
+      for (int ai = 0; ai < topo.getAlignedFragFused(i).size(); ai++) {
+        for (int d = 0; d < df; d++) {
+          map<int, mstreal>& parts = gradOfXYZ.getPartials(topo.getAlignedFragFused(i)[ai], d); // TODO: should this be a reference??? OR an access method?
+          for (auto it = parts.begin(); it != parts.end(); ++it) {
+            gradient[it->first] += weights[i] * 2 * r * topo.getAlignedFragFused(i).size() * innerGradient[j] * it->second;
+          }
+          j++;
+        }
       }
     }
   }
+
   score += rmsdScore;
   rmsdTot = sqrt(rmsdTot/N);
   if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (overall RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
@@ -959,10 +1015,21 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
     } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
       vector<vector<mstreal> > trajectory;
       vector<mstreal> masses(E.numDF(), 10);
-      mstreal gamma = 10, kT = 1, timeStep = 10E-6; // gamma*timeStep should be no less than 10^-5
-      vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, -1, true);
+      mstreal gamma = 10, kT = 1, timeStep = 10E-4; // gamma*timeStep should be no less than 10^-5
+      vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, 100, true);
       bestScore = trajScores.back();
       bestSolution = trajectory.back();
+      if (params.logBaseDefined()) {
+        fstream lf;
+        MstUtils::openFile(lf, params.getLogBase() + ".dyn.pdb", ios::out);
+        for (int k = 0; k < trajectory.size(); k++) {
+          E.eval(trajectory[k]);
+          lf << "MODEL " << k + 1 << endl;
+          E.getAlignedStructure().writePDB(lf);
+          lf << "ENDMDL" << endl;
+        }
+        lf.close();
+      }
     } else {
       score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
     }
@@ -970,38 +1037,6 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
     if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
   }
 
-  // if (params.getMinimizerType() == fusionParams::gradDescent) {
-  //   bestScore = Optim::gradDescent(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
-  // } else if (params.getMinimizerType() == fusionParams::conjGrad) {
-  //   bestScore = Optim::conjGradMin(E, bestSolution, params.numIters(), params.errTol(), params.isVerbose());
-  // } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
-  //   vector<vector<mstreal> > trajectory;
-  //   vector<mstreal> masses(E.numDF(), 10);
-  //   mstreal gamma = 10, kT = 0.1, timeStep = 10E-6; // gamma*timeStep should be no less than 10^-5
-  //   vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, -1, true);
-  //   bestScore = trajScores.back();
-  //   bestSolution = trajectory.back();
-  // } else {
-  //   mstreal bestScore = Optim::fminsearch(E, params.numIters(), bestSolution, params.isVerbose());
-  // }
-  // int bestAnchor = E.getBuildOrigin();
-  // if (params.isVerbose()) { E.setVerbose(true); E.eval(bestSolution); E.setVerbose(false); }
-  // for (int i = 0; i < params.numCycles() - 1; i++) {
-  //   E.noisifyGuessPoint(0.2);
-  //   vector<mstreal> solution;
-  //   E.chooseBuildOrigin(true);
-  //   if (params.getMinimizerType() == fusionParams::gradDescent) {
-  //     score = Optim::gradDescent(E, solution, params.numIters(), params.errTol(), params.isVerbose());
-  //   } else if (params.getMinimizerType() == fusionParams::conjGrad) {
-  //     score = Optim::conjGradMin(E, solution, params.numIters(), params.errTol(), params.isVerbose());
-  //   } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
-  //     MstUtils::error("you should probably not repeat this much code!", "Fuser::fuse");
-  //   } else {
-  //     score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
-  //   }
-  //   if (score < bestScore) { bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigin(); }
-  //   if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
-  // }
   E.setBuildOrigin(bestAnchor);
   if (params.isVerbose()) {
     cout << "best score = " << bestScore << ":" << endl;
