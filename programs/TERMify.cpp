@@ -43,69 +43,73 @@ mstreal getRadius(const Structure& S) {
   return rad;
 }
 
-vector<Structure*> getMatches(fasstCache& C, Structure& frag, vector<int>& fragResIdx, int need = 5, const vector<int>& centIdx = vector<int>()) {
-  // want at least "need" matches in the end; estimate how many to ask for at first
-  int seqConsts = 0;
-  for (int i = 0; i < centIdx.size(); i++) {
-    if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) seqConsts++;
-  }
-  int Nmin = need*(pow(20, seqConsts)*2 + 3);
-  C.setQuery(frag, false);
-  C.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
-  C.options().setMaxNumMatches(Nmin*2);
-  // C.options().setMinNumMatches(Nmin);
-
-  vector<Structure*> matchStructures;
-  // limit iterations, because it is technically possible that a match meeting
-  // the sequence constraints does not exist, at which point we will just give up
-  for (int c = 0; c < 10; c++) {
-    fasstSolutionSet matches = C.search();
-    for (auto it = matches.begin(); it != matches.end(); ++it) {
-      if (centIdx.size() > 0) {
-        // check for sequence compatibility
-        Sequence mseq = C.getMatchSequence(*it);
-        bool comp = true;
-        for (int i = 0; i < centIdx.size(); i++) {
-          Residue& res = frag.getResidue(centIdx[i]);
-          if (SeqTools::isUnknown(res.getName())) continue;
-          if (SeqTools::aaToIdx(res.getName()) != mseq[centIdx[i]]) { comp = false; break; }
-        }
-        if (!comp) continue; // skip non-compatible solutions
-      }
-      matchStructures.push_back(new Structure(C.getMatchStructure(*it, false, FASST::matchType::REGION)));
-      Structure& match = *(matchStructures.back());
-      MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
-      for (int k = 0; k < match.residueSize(); k++) {
-        match.getResidue(k).setNum(fragResIdx[k]); // make residue numbers store indices into the original structure
-      }
-    }
-    if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
-    if (matchStructures.size() >= need) break;
-    for (int i = 0; i < matchStructures.size(); i++) delete(matchStructures[i]);
-    matchStructures.clear();
-    if (matches.size() == C.options().getMaxNumMatches()) {
-      C.options().setMaxNumMatches(C.options().getMaxNumMatches()*2);
-    } else {
-      C.options().setRMSDCutoff(C.options().getRMSDCutoff()*1.1);
-    }
-    if (C.isVerbose()) cout << "\t\tinsufficient, increasing params to " << C.options().getRMSDCutoff() << " / " << C.options().getMaxNumMatches() << endl;
-  }
-  return matchStructures;
+void numberResidues(Structure& S, const vector<int>& resIdx) {
+  for (int k = 0; k < S.residueSize(); k++) S.getResidue(k).setNum(resIdx[k]);
 }
 
-void addMatches(vector<Structure*>& matchStructures, vector<vector<Residue*> >& resTopo, fstream& matchOut, int ri = -1) {
-  for (int i = 0; i < matchStructures.size(); i++) {
-    if ((ri >= 0) && (i != ri)) continue;
-    Structure& match = *(matchStructures[i]);
-    if (matchOut.is_open()) {
-      match.writePDB(matchOut);
-      matchOut << "END" << endl;
-    }
-    for (int k = 0; k < match.residueSize(); k++) {
-      Residue& res = match.getResidue(k);
-      resTopo[res.getNum()].push_back(&res); // residue numbers store indices into the originating structure
+vector<Structure*> getMatches(FASST& C, Structure& frag, const vector<int>& fragResIdx, int need = 5, const vector<int>& centIdx = vector<int>()) {
+  // want at least "need" matches in the end; estimate how many to ask for at first
+  fasstSeqConstSimple seqConst(centIdx.size());
+  for (int i = 0; i < centIdx.size(); i++) {
+    if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) {
+      seqConst.addConstraint(i, centIdx[i], {frag.getResidue(centIdx[i]).getName()});
     }
   }
+  if (seqConst.hasConstraints()) C.options().setSequenceConstraints(seqConst);
+
+  vector<Structure*> matchStructures;
+  if (need == 0) return matchStructures;
+  C.setQuery(frag, false);
+  C.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
+  C.options().setMaxNumMatches(need);
+  C.options().setMinNumMatches(need);
+
+  // limit iterations, because it is technically possible that a match meeting
+  // the sequence constraints does not exist, at which point we will just give up
+  fasstSolutionSet matches = C.search();
+  for (auto it = matches.begin(); it != matches.end(); ++it) {
+    matchStructures.push_back(new Structure(C.getMatchStructure(*it, false, FASST::matchType::REGION)));
+    Structure& match = *(matchStructures.back());
+    MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
+    numberResidues(match, fragResIdx); // make residue numbers store indices into the original structure
+  }
+  if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
+
+  // for (int c = 0; c < 10; c++) {
+  //   fasstSolutionSet matches = C.search();
+  //   for (auto it = matches.begin(); it != matches.end(); ++it) {
+  //     if (centIdx.size() > 0) {
+  //       // check for sequence compatibility
+  //       Sequence mseq = C.getMatchSequence(*it);
+  //       bool comp = true;
+  //       for (int i = 0; i < centIdx.size(); i++) {
+  //         Residue& res = frag.getResidue(centIdx[i]);
+  //         if (SeqTools::isUnknown(res.getName())) continue;
+  //         if (SeqTools::aaToIdx(res.getName()) != mseq[centIdx[i]]) { comp = false; break; }
+  //       }
+  //       if (!comp) continue; // skip non-compatible solutions
+  //     }
+  //     matchStructures.push_back(new Structure(C.getMatchStructure(*it, false, FASST::matchType::REGION)));
+  //     Structure& match = *(matchStructures.back());
+  //     MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
+  //     numberResidues(match, fragResIdx); // make residue numbers store indices into the original structure
+  //   }
+  //   if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
+  //   if (matchStructures.size() >= need) break;
+  //   for (int i = 0; i < matchStructures.size(); i++) delete(matchStructures[i]);
+  //   matchStructures.clear();
+  //   if (matches.size() == C.options().getMaxNumMatches()) {
+  //     C.options().setMaxNumMatches(C.options().getMaxNumMatches()*2);
+  //   } else {
+  //     C.options().setRMSDCutoff(C.options().getRMSDCutoff()*1.1);
+  //   }
+  //   if (C.isVerbose()) cout << "\t\tinsufficient, increasing params to " << C.options().getRMSDCutoff() << " / " << C.options().getMaxNumMatches() << endl;
+  // }
+  // if (matchStructures.size() > need) {
+  //   for (int i = need; i < matchStructures.size(); i++) delete(matchStructures[i]);
+  //   matchStructures.resize(need);
+  // }
+  return matchStructures;
 }
 
 bool mc(mstreal oldScore, mstreal newScore, mstreal kT) {
@@ -176,6 +180,14 @@ void copySequence(const Structure& from, Structure& to) {
   }
 }
 
+bool sameSize(Structure& A, Structure& B) {
+  if (A.chainSize() != B.chainSize()) return false;
+  for (int i = 0; i < A.chainSize(); i++) {
+    if (A[i].residueSize() != B[i].residueSize()) return false;
+  }
+  return true;
+}
+
 int main(int argc, char** argv) {
   // TODO: debug Neilder-Meid optimization by comparing a simple case with Matlab
   // TODO: enable a setting in Fuser, whereby fully overlapping segments are scored
@@ -202,13 +214,15 @@ int main(int argc, char** argv) {
   op.addOption("c", "path to a FASST cache file to use for initializing the cache.");
   op.addOption("w", "flag; if specified, the FASST cache will be periodically updated.");
   op.addOption("app", "flag; if specified, will append to the output PDB file (e.g., for the purpose of accumulating a trajectory from multiple runs).");
-  op.addOption("dyn", "use dynamics rather than optimization to search for a solution.");
+  op.addOption("dyn", "use dynamics rather than optimization to search for a solution. If a number is specified, it is interpreted as the length of the dynamics simulation (relative to the length of a typical minimization run); default is 100.");
+  op.addOption("alt", "alternative conformation PDB file (must have the same length/topology as the starting conformation file). If given, for each TERM the corresponding segment of structure will be added as a \"match\".");
+  op.addOption("orig", "If given, each TERM's original conformation (from the starting structure) will be explicitly added as a \"match\".");
   op.addOption("v", "set verbose output flag.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
   MstUtils::setSignalHandlers();
   op.setOptions(argc, argv);
   RMSDCalculator rc;
-  Structure I(op.getString("p"));
+  Structure I(op.getString("p")), A;
   vector<int> fixed;
   if (op.isGiven("f")) {
     fixed = MstUtils::splitToInt(op.getString("f"));
@@ -222,38 +236,59 @@ int main(int argc, char** argv) {
     fixed.resize(fixedResidues.size());
     for (int i = 0; i < fixedResidues.size(); i++) fixed[i] = indices[fixedResidues[i]];
   }
-  fasstCache cache((I.residueSize() - fixed.size())*10);
-  cache.setStrictEquivalence(true);
-  cache.setVerbose(op.isGiven("v"));
-  cache.setMemorySaveMode(true);
-  if (op.isGiven("c") && op.getString("c").empty()) MstUtils::error("--c must be a valid file path");
+
+  // figure out which FASST object will be used
+  if (op.isGiven("s") && (op.isGiven("c") || op.isGiven("w"))) MstUtils::error("cannot specify --s with caching");
+  fasstCache withCache((I.residueSize() - fixed.size())*10); FASST woCache;
+  string tag = "TERMify-" + MstSys::getUserName();
+  bool useCache = op.isGiven("c") || op.isGiven("w") || !op.isGiven("s");
+  FASST& search = useCache ? withCache : woCache;
+  if (useCache) {
+    withCache.setStrictEquivalence(true);
+    withCache.setVerbose(op.isGiven("v"));
+    if (op.isGiven("c") && op.getString("c").empty()) MstUtils::error("--c must be a valid file path");
+    // read initial cache
+    if (op.isGiven("c")) {
+      if (op.getString("c").empty()) MstUtils::error("--c must be a valid file path");
+      if (MstSys::fileExists(op.getString("c"))) MstUtils::error("--c is not an existing file");
+      MstSys::getNetLock(tag, true);
+      cout << "reading cache from " << op.getString("c") << "... " << endl;
+      withCache.read(op.getString("c"));
+      MstSys::releaseNetLock(tag);
+    }
+  }
+  search.setMemorySaveMode(true);
   if (op.isGiven("d")) {
-    cache.addTargets(MstUtils::fileToArray(op.getString("d")));
+    search.addTargets(MstUtils::fileToArray(op.getString("d")));
     if (op.isGiven("b")) {
-      cache.writeDatabase(op.getString("b"));
+      search.writeDatabase(op.getString("b"));
     }
   } else if (op.isGiven("b")) {
-    cache.readDatabase(op.getString("b"));
+    search.readDatabase(op.getString("b"));
   } else {
     MstUtils::error("either --b or --d must be given!");
   }
+
   if (op.isGiven("us")) {
     selector sel(I);
     vector<Residue*> unkResidues = sel.selectRes(op.getString("us"));
     cout << "unknown sequence selection gave " << unkResidues.size() << " residues, marking unknown..." << endl;
     for (int i = 0; i < unkResidues.size(); i++) unkResidues[i]->setName("UNK");
   }
+  if (op.isGiven("alt")) {
+    A.readPDB(op.getString("alt"));
+    if (!sameSize(A, I)) MstUtils::error(op.getString("alt") + " and " + op.getString("p") + " do not have the same topology");
+  }
   int numPerTERM = op.getInt("n", 1);
 
-  if (cache.isResidueRelationshipPopulated("sim")) cache.setRedundancyProperty("sim");
-  else cache.setRedundancyCut(0.5);
+  if (search.isResidueRelationshipPopulated("sim")) search.setRedundancyProperty("sim");
+  else search.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000, lastWriteTime;
   fusionScores bestScore, currScore;
   fstream out, shellOut, dummy;
   contactList L;
-  string tag = "TERMify-" + MstSys::getUserName();
 
   // If fixed residues were defined, then not all contacts will be needed; only
   // contacts that can ultimately implicate a non-fixed residue are of interest.
@@ -285,17 +320,10 @@ int main(int argc, char** argv) {
     }
   }
 
-  // read initial cache
-  if (op.isGiven("c") && MstSys::fileExists(op.getString("c"))) {
-    MstSys::getNetLock(tag, true);
-    cout << "reading cache from " << op.getString("c") << "... " << endl;
-    cache.read(op.getString("c"));
-    MstSys::releaseNetLock(tag);
-  }
-
   // TERMify loop
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
   RotamerLibrary::standardizeBackboneNames(S);
+  vector<Structure*> O = {op.isGiven("alt") ? &A : NULL, op.isGiven("orig") ? &S : NULL}; // any "other" structures from which we should get matches
   mstreal R0 = getRadius(I);
   mstreal Rf = op.getReal("rad", pow(I.residueSize() * 1.0, 1.0/3)*5.0);
   int Ncyc = op.getInt("cyc", 10);
@@ -312,7 +340,7 @@ int main(int argc, char** argv) {
       if ((c == 0) || (time(NULL) - lastWriteTime > 5*60)) { // write every five minutes or so
         cout << "dumping cache to " << op.getString("c") << "... " << endl;
         MstSys::getNetLock(tag);
-        cache.write(op.getString("c"));
+        withCache.write(op.getString("c"));
         MstSys::releaseNetLock(tag);
         lastWriteTime = time(NULL);
       }
@@ -329,13 +357,20 @@ int main(int argc, char** argv) {
         vector<int> centIdx = TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
-        cache.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-        vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
+        search.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
+        vector<Structure*> matches = getMatches(search, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
+        for (int ii = 0; ii < O.size(); ii++) {
+          if (O[ii] == NULL) continue;
+          Structure* altFrag = new Structure();
+          TERMUtils::selectTERM({&(O[ii]->getResidue(C[ri].getResidueIndex()))}, *altFrag, pmSelf);
+          numberResidues(*altFrag, fragResIdx);
+          matches.push_back(altFrag);
+        }
         if (!matches.empty()) {
           allMatches.push_back(matches);
-          int lastIdx = MstUtils::min(numPerTERM, (int) matches.size());
+          int lastIdx = MstUtils::min(MstUtils::max(numPerTERM, 1), (int) matches.size());
           Structure* last = matches[lastIdx - 1];
-          if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
+          if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx << " is " << rc.bestRMSD(RotamerLibrary::getBackbone(*last), RotamerLibrary::getBackbone(frag)) << endl;
         }
       }
     }
@@ -358,13 +393,20 @@ int main(int argc, char** argv) {
       vector<int> centIdx = TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
-      cache.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
-      vector<Structure*> matches = getMatches(cache, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
+      search.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
+      vector<Structure*> matches = getMatches(search, frag, fragResIdx, numPerTERM, op.isGiven("s") ? centIdx : vector<int>());
+      for (int ii = 0; ii < O.size(); ii++) {
+        if (O[ii] == NULL) continue;
+        Structure* altFrag = new Structure();
+        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(A.getResidue(resB->getResidueIndex()))}, *altFrag, pmPair);
+        numberResidues(*altFrag, fragResIdx);
+        matches.push_back(altFrag);
+      }
       if (!matches.empty()) {
         allMatches.push_back(matches);
-        int lastIdx = MstUtils::min(numPerTERM, (int) matches.size());
+        int lastIdx = MstUtils::min(MstUtils::max(numPerTERM, 1), (int) matches.size());
         Structure* last = matches[lastIdx - 1];
-        if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx << " is " << rc.bestRMSD(last->getAtoms(), cache.getQuerySearchedAtoms()) << endl;
+        if (op.isGiven("v")) cout << "\tRMSD of match " << lastIdx << " is " << rc.bestRMSD(RotamerLibrary::getBackbone(*last), RotamerLibrary::getBackbone(frag)) << endl;
       }
     }
     // fuser options
@@ -382,7 +424,7 @@ int main(int argc, char** argv) {
     vector<vector<int> > currPicks(allMatches.size()), bestPicks;
     vector<vector<Residue*> > resTopo(I.residueSize());
     for (int si = 0; si < allMatches.size(); si++) {
-      for (int j = 0; j < MstUtils::min(numPerTERM, (int) allMatches[si].size()); j++) {
+      for (int j = 0; j < allMatches[si].size(); j++) {
         if (op.isGiven("r")) {
           currPicks[si].push_back(MstUtils::randInt(allMatches[si].size()));
         } else {
@@ -391,9 +433,9 @@ int main(int argc, char** argv) {
       }
     }
 
-    // if there are fixed residues, then their starting conformation (and thus,
-    // the final one also) is chosen from the original structure
-    if (!fixed.empty()) opts.setStartingStructure(S);
+
+    // if (!fixed.empty()) opts.setStartingStructure(S); // if there are fixed residues, then their conformation is taken from the original structure
+    opts.setStartingStructure(S);
 
     /* --- do an MC simulation to find a good combo of TERMs --- */
     fusionTopology bestTopo, currTopo;
@@ -413,7 +455,7 @@ int main(int argc, char** argv) {
       Structure propFused;
       if (op.isGiven("dyn")) {
         opts.setMinimizerType(fusionParams::langevinDyna);
-        opts.setNumIters(10*Ni);
+        opts.setNumIters((op.isInt("dyn") ? op.getInt("dyn") : 100)*Ni);
         opts.setLogBase(op.getString("o"));
         opts.setAdaptiveWeighting(true);
         propFused = Fuser::fuse(propTopo, propScore, opts);

@@ -1086,8 +1086,10 @@ T MstUtils::max(const vector<T>& vec, int beg, int end, int* maxIndex) {
   T mv = vec[beg];
   if (maxIndex != NULL) *maxIndex = beg;
   for (int i = beg; i <= end; i++) {
-    if (vec[i] > mv) mv = vec[i];
-    if (maxIndex != NULL) *maxIndex = i;
+    if (vec[i] > mv) {
+      mv = vec[i];
+      if (maxIndex != NULL) *maxIndex = i;
+    }
   }
   return mv;
 }

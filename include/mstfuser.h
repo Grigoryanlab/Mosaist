@@ -19,7 +19,7 @@ class fusionParams {
       optimCartesian = true;
       minMethod = fusionParams::gradDescent;
       normRMSD = true; fragRedWeighting = adapRedWeighting = false;
-      aBeta = 100;
+      aBeta = 0.1;
       noise = 0;
       Ni = 100;
       Nc = 1;

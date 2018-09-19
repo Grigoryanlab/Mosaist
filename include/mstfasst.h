@@ -204,6 +204,10 @@ class fasstSeqConstSimple : public fasstSeqConst {
     fasstSeqConstSimple(int numSegs) { positions.resize(numSegs); aminoAcids.resize(numSegs); }
     void evalConstraint(int segIdx, const Sequence& target, vector<bool>& alignments);
     bool isSegmentConstrained(int segIdx) { return !positions[segIdx].empty(); }
+    bool hasConstraints() const {
+      for (int i = 0; i < positions.size(); i++) { if (!positions[i].empty()) return true; }
+      return false;
+    }
 
     void addConstraint(int segIdx, int posIdx, const vector<string>& aas) {
       positions[segIdx].push_back(posIdx);
@@ -231,6 +235,7 @@ class fasstSearchOptions {
       contextLength = 30;
       redundancyCut = 1.0;
       seqConst = NULL;
+      verb = false;
     }
     ~fasstSearchOptions() { if (seqConst != NULL) delete(seqConst); }
 
@@ -254,6 +259,7 @@ class fasstSearchOptions {
     void setMinGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at list gapLim long] [segment j]
     void setMaxGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at most gapLim long] [segment j]
     void setContextLength(int len) { contextLength = len; }
+    void setVerbose(bool _verb) { verb = _verb; }
     /* Normally, the redundancy cutoff is between 0 and 1. But one can set it to
      * values outside of this range, in principle. Setting it to a value above 1
      * will cause no redundancy cutoff to be applied, but will populate solution
@@ -284,6 +290,7 @@ class fasstSearchOptions {
     bool isRedundancyCutSet() const { return redundancyCut < 1; }
     bool isRedundancyPropertySet() const { return !redundancyProp.empty(); }
     bool sequenceConstraintsSet() const { return seqConst != NULL; }
+    bool isVerbose() const { return verb; }
 
     /* -- validators -- */
     bool validateGapConstraints(int numQuerySegs) const;
@@ -298,7 +305,7 @@ class fasstSearchOptions {
 
     vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
     vector<vector<bool> > minGapSet, maxGapSet;
-    bool gapConstSet;
+    bool gapConstSet, verb;
     int maxNumMatches, minNumMatches, suffNumMatches;
     fasstSeqConst* seqConst;
 };
@@ -425,6 +432,7 @@ class FASST {
     void setMaxGap(int i, int j, int gapLim) { opts.setMaxGap(i, j, gapLim); }
     void setRedundancyCut(mstreal cut = 0.5) { opts.setRedundancyCut(cut); }
     void setRedundancyProperty(const string& prop) { opts.setRedundancyProperty(prop); }
+    void setVerbose(bool _verb) { opts.setVerbose(_verb); }
     int getMinNumMatches() const { return opts.getMinNumMatches(); }
     int getMaxNumMatches() const { return opts.getMaxNumMatches(); }
     int getSufficientNumMatches() const { return opts.getSufficientNumMatches(); }
@@ -443,6 +451,7 @@ class FASST {
     bool gapConstraintsExist() const { return opts.gapConstraintsExist(); }
     bool isRedundancyCutSet() const { return opts.isRedundancyCutSet(); }
     bool isRedundancyPropertySet() const { return opts.isRedundancyPropertySet(); }
+    bool isVerbose() const { return opts.isVerbose(); }
 
     int numTargets() const { return targetStructs.size(); }
     Structure getTargetCopy(int i) const { return *(targetStructs[i]); }

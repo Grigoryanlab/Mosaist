@@ -22,7 +22,7 @@ class cFASST : public FASST {
       sf = 10.0;
       maxNumPressure = (exp(1.0) - 1.0)*maxNumResults/sf; // so that max factor is 2.0 at the start
       errTolPressure = (exp(0.1) - 1.0)*maxNumResults/sf; // so that error factor is 1.1 at the start
-      verb = false; readPerm = modPerm = true;
+      readPerm = modPerm = true;
       /* Because removal of redundancy is done on-the-fly in FASST (as matches
        * are discovered) and after the fact in cFASST (after fully redundant
        * matches are first fetched from the cache), the precise set of matches
@@ -46,7 +46,6 @@ class cFASST : public FASST {
     void incMaxNumPressure(mstreal del = 1.0) { maxNumPressure += fabs(del); }
     void decErrTolPressure(mstreal del = 1.0) { errTolPressure -= fabs(del); if (errTolPressure < 0) errTolPressure = 0; }
     void decMaxNumPressure(mstreal del = 1.0) { maxNumPressure -= fabs(del); if (maxNumPressure < 0) maxNumPressure = 0; }
-    void setVerbose(bool _verb) { verb = _verb; }
     void setReadPermission(bool _perm) { readPerm = _perm; }
     void setModifyPermission(bool _perm) { modPerm = _perm; }
     void setStrictEquivalence(bool _eq) { strictEquiv = _eq; }
@@ -54,7 +53,6 @@ class cFASST : public FASST {
     mstreal getMaxNumPressure() const { return maxNumPressure; }
     mstreal maxNumFactor() const { return log(sf*maxNumPressure/maxNumResults + 1.0) + 1.5; }
     mstreal errTolFactor() const { return log(sf*errTolPressure/maxNumResults + 1.0) + 1.05; }
-    bool isVerbose() const { return verb; }
     bool readPermission() const { return readPerm; }
     bool modifyPermission() const { return modPerm; }
     bool strictEquivalence() const { return strictEquiv; }
@@ -125,7 +123,7 @@ class cFASST : public FASST {
     set<cachedResult*, compResults> cache;
     RMSDCalculator rc;
     mstreal errTolPressure, maxNumPressure, sf;
-    bool verb, readPerm, modPerm, strictEquiv;
+    bool readPerm, modPerm, strictEquiv;
 };
 
 typedef cFASST fasstCache; // cFASST seems to be a better name, but the initial one was cFASST

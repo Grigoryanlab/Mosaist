@@ -117,7 +117,7 @@ fasstSolutionSet cFASST::search() {
 
   // first try going through matches of a close query
   if (bestComp != cache.end()) {
-    if (verb) begin = chrono::high_resolution_clock::now();
+    if (isVerbose()) begin = chrono::high_resolution_clock::now();
     // visit all matches of the most suitable cached result
     fasstSolutionSet sols((*bestComp)->getSolutions(), topo);
     if (redSet) addSequenceContext(sols);
@@ -141,10 +141,10 @@ fasstSolutionSet cFASST::search() {
         sols[k].setRMSD(rmsd);                                    // set RMSD back to the old value
       }
     }
-    if (verb) {
+    if (isVerbose()) {
       end = chrono::high_resolution_clock::now();
       searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
-      if (verb) cout << "\tquick-search time " << searchTime << " ms to go over " << sols.size() << " solutions" << endl;
+      cout << "\tquick-search time " << searchTime << " ms to go over " << sols.size() << " solutions" << endl;
     }
   }
 
@@ -170,7 +170,7 @@ fasstSolutionSet cFASST::search() {
       if ((*bestComp)->isLimitedByMaxNumMatches()) { incMaxNumPressure(); }
       else { incErrTolPressure(); }
     }
-    if (verb) {
+    if (isVerbose()) {
       cout << "\t\tFAILED, need to search (" << matches.size() << " matches were found)";
       if (maxSet) cout << " (" << maxN << " was the max) ";
       if (matches.size() > 0) cout << " (worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << ", search params: " << (*bestComp)->getSearchRMSDCutoff() << " / " << (*bestComp)->getSearchMaxNumMatches() << ")";
@@ -191,13 +191,13 @@ fasstSolutionSet cFASST::search() {
       if (matches.size() > 0) {
         cachedResult* result = new cachedResult(queryAtoms, matches, getRMSDCutoff(), getMaxNumMatches(), topo);
         cache.insert(result);
-        if (verb) {
+        if (isVerbose()) {
           cout << "\t\tfound " << matches.size() << " matches, last RMSD " << matches.rbegin()->getRMSD() << ", cutoff was " << getRMSDCutoff() << endl;
           cout << "\t\tcache now has " << cache.size() << " elements" << endl;
         }
         if (cache.size() > maxNumResults) {
           auto leastUseful = --cache.end();
-          if (verb) cout << "\t\t\t\tERASING entry with priority " << (*leastUseful)->getPriority() << endl;
+          if (isVerbose()) cout << "\t\t\t\tERASING entry with priority " << (*leastUseful)->getPriority() << endl;
           delete(*leastUseful);
           cache.erase(leastUseful); // bump off the least used cached result if reached limit
         }
@@ -227,7 +227,7 @@ fasstSolutionSet cFASST::search() {
 
     // -- reset search setting to their old values
     setOptions(origOpts);
-    if (verb) {
+    if (isVerbose()) {
       end = chrono::high_resolution_clock::now();
       searchTime = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
       cout << "\t\tregular-search time " << searchTime << " ms" << endl;
@@ -249,7 +249,7 @@ fasstSolutionSet cFASST::search() {
     cache.erase(bestComp);
     result->upPriority();
     cache.insert(result);
-    if (verb) {
+    if (isVerbose()) {
       cout << "\tdone upping priority" << std::endl;
       cout << "\tSUCCEEDED, NO need to search!!!" << endl;
       if (matches.size() > 0) cout << "\t\tfound " << matches.size() << " matches, worst RMSD was " << matches.worstRMSD() << ", cutoff was " << cut << ", and safeRadius was " << safeRadius << endl;

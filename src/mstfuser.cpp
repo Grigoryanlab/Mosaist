@@ -654,8 +654,18 @@ void fusionEvaluator::scoreIC(const icBound& b) {
   mstreal del = 0.0, f, *comp;
   switch (b.type) {
     case icDihedral: {
-      if (CartesianGeometry::angleDiffCCW(b.minVal, val) < CartesianGeometry::angleDiffCCW(b.maxVal, val)) {
-        del = MstUtils::min(fabs(CartesianGeometry::angleDiff(b.minVal, val)), fabs(CartesianGeometry::angleDiff(b.maxVal, val)));
+      mstreal dmin = CartesianGeometry::angleDiffCCW(b.minVal, val);
+      mstreal dmax = CartesianGeometry::angleDiffCCW(b.maxVal, val);
+      if (dmin < dmax) {
+        // outside of the allowed range (before min and after max), so we need
+        // the counter-clockwise distance to min and clockwise distance to max
+        // (both as positive numbers). If min ends up being closer, the derivative
+        // should go with a minus sign, because as the angle becomes larger (and
+        // thus moves towards the min), the energy will decrease.
+        dmax = 360 - dmax;
+        if (dmax < dmin) del = dmax;
+        else del = -dmin;
+// cout << val << " vs. [" << b.minVal << ", " << b.maxVal << "], dmin = " << dmin << ", dmax = " << dmax << ", del = " << del << endl;
       }
       f = params.getDihedralFC(); comp = &dihePenalty;
       break;
@@ -733,9 +743,9 @@ void fusionEvaluator::scoreRMSD() {
     for (int i = 0; i < topo.numAlignedFrags(); i++) weights[i] *= Wo/W;
   }
   if (params.normalizeRMSD()) { // score per-fragment residual, not total residual
-    int N = 0;
-    for (int i = 0; i < topo.numAlignedFrags(); i++) N += topo.getAlignedFragFused(i).size();
-    for (int i = 0; i < topo.numAlignedFrags(); i++) weights[i] *= (1.0*topo.numMobileAtoms())/N;
+    int nn = 0;
+    for (int i = 0; i < topo.numAlignedFrags(); i++) nn += topo.getAlignedFragFused(i).size();
+    for (int i = 0; i < topo.numAlignedFrags(); i++) weights[i] *= (1.0*topo.numMobileAtoms())/nn;
   }
 
   if (params.adaptiveWeighting()) {
@@ -743,6 +753,7 @@ void fusionEvaluator::scoreRMSD() {
       int n = topo.numFragsOverlapping(gi);
       if (n <= 0) MstUtils::error("empty overlap type!", "fusionEvaluator::scoreRMSD");
       int L = topo.getAlignedFragFused(topo.getFragOverlapping(gi, 0)).size();
+      N += L*n;
 
       mstreal Z = 0;
       vector<mstreal> w(n, 1.0), r(n, 0.0);
@@ -753,14 +764,17 @@ void fusionEvaluator::scoreRMSD() {
       for (int i = 0; i < n; i++) {
         int fi = topo.getFragOverlapping(gi, i);
         r[i] = rms.qcpRMSDGrad(topo.getAlignedFragFused(fi), topo.getAlignedFragRef(fi), innerGradients[i]);
-        w[i] = exp(-params.adaptiveBeta() * r[i] * r[i]);
+      }
+      mstreal D = MstUtils::min(r); D = D*D;
+      for (int i = 0; i < n; i++) {
+        w[i] = exp(-params.adaptiveBeta() * (r[i] * r[i] - D));
         Z += w[i];
       }
-
       // compute weights and gradient of partition function
       for (int j = 0; j < n; j++) {
         w[j] /= Z;
         rmsdScore += w[j] * r[j] * r[j] * L * weights[j];
+        rmsdTot += r[j] * r[j] * L;
         for (int k = 0; k < L*df; k++) {
           innerGradientZ[k] -= 2 * w[j] * params.adaptiveBeta() * r[j] * innerGradients[j][k];
         }
@@ -791,7 +805,7 @@ void fusionEvaluator::scoreRMSD() {
       int j = 0; // TODO: do as above, where the coordinate index is directly iterated over
       for (int ai = 0; ai < topo.getAlignedFragFused(i).size(); ai++) {
         for (int d = 0; d < df; d++) {
-          map<int, mstreal>& parts = gradOfXYZ.getPartials(topo.getAlignedFragFused(i)[ai], d); // TODO: should this be a reference??? OR an access method?
+          map<int, mstreal>& parts = gradOfXYZ.getPartials(topo.getAlignedFragFused(i)[ai], d);
           for (auto it = parts.begin(); it != parts.end(); ++it) {
             gradient[it->first] += weights[i] * 2 * r * topo.getAlignedFragFused(i).size() * innerGradient[j] * it->second;
           }
@@ -1016,7 +1030,7 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
       vector<vector<mstreal> > trajectory;
       vector<mstreal> masses(E.numDF(), 10);
       mstreal gamma = 10, kT = 1, timeStep = 10E-4; // gamma*timeStep should be no less than 10^-5
-      vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, 100, true);
+      vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, MstUtils::max(10, (int) (params.numIters()/1000)), true);
       bestScore = trajScores.back();
       bestSolution = trajectory.back();
       if (params.logBaseDefined()) {
