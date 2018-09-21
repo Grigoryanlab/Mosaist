@@ -458,6 +458,7 @@ int main(int argc, char** argv) {
         opts.setNumIters((op.isInt("dyn") ? op.getInt("dyn") : 100)*Ni);
         opts.setLogBase(op.getString("o"));
         opts.setThermalEnergy(1.0);
+        opts.setSaveInterval(MstUtils::max(1, opts.numIters()/1000));
         opts.setAdaptiveWeighting(true);
         propFused = Fuser::fuse(propTopo, propScore, opts);
         opts.setMinimizerType(fusionParams::gradDescent);

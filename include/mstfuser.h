@@ -33,6 +33,7 @@ class fusionParams {
       // dynamics-related stuff
       kT = 1;
       ts = 10E-4;
+      saveSteps = -1;
       visc = 10;
       mfact = 1;
     }
@@ -65,6 +66,7 @@ class fusionParams {
     mstreal viscosity() const { return visc; }
     mstreal thermalEnergy() const { return kT; }
     mstreal massFactor() const { return mfact; }
+    int saveInterval() const { return saveSteps; }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }
@@ -91,6 +93,7 @@ class fusionParams {
     void setViscosity(mstreal v) { visc = v; }
     void setThermalEnergy(mstreal v) { kT = v; }
     void setMassFactor(mstreal v) { mfact = v; }
+    void setSaveInterval(int v) { saveSteps = v; }
 
   private:
     // start optimization from the averaged Cartesian structure or the structure
@@ -110,6 +113,7 @@ class fusionParams {
     // dynamics-related parameters
     mstreal kT;          // k*T for doing dynamics
     mstreal ts;          // integration time step
+    int saveSteps;       // periodicity of recording dynamics snapshot
     mstreal visc;        // viscosity coefficient for Langevin dynamics; viscosity*timeStep should be no less than 10^-5
     mstreal mfact;       // the factor by whichh to multiply atomic masses in Da
 };

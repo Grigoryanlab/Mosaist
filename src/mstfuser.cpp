@@ -1078,7 +1078,7 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionOutput& scores, const fu
     } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
       trajectory.clear();
       E.guessPoint(); // fills masses (among other things)
-      trajScores = Optim::langevinDynamics(E, CartesianPoint(E.getMasses())*params.massFactor(), params.timeStep(), params.viscosity(), params.thermalEnergy(), params.numIters(), trajectory, MstUtils::max(10, (int) (params.numIters()/1000)), true);
+      trajScores = Optim::langevinDynamics(E, CartesianPoint(E.getMasses())*params.massFactor(), params.timeStep(), params.viscosity(), params.thermalEnergy(), params.numIters(), trajectory, params.saveInterval(), true);
       score = trajScores.back();
       solution = trajectory.back();
       if (params.logBaseDefined()) {
