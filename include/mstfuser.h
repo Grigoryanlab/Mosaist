@@ -30,6 +30,11 @@ class fusionParams {
       krep = kcomp = 0;
       Rcomp = 1000;
       outLogBase = "";
+      // dynamics-related stuff
+      kT = 1;
+      ts = 10E-4;
+      visc = 10;
+      mfact = 1;
     }
     mstreal getNoise() const { return noise; }
     fusionParams::coorInitType getCoorInitType() const { return startType; }
@@ -56,6 +61,10 @@ class fusionParams {
     string getLogBase() const { return outLogBase; }
     bool logBaseDefined() const { return !(outLogBase.empty()); }
     mstreal adaptiveBeta() const { return aBeta; }
+    mstreal timeStep() const { return ts; }
+    mstreal viscosity() const { return visc; }
+    mstreal thermalEnergy() const { return kT; }
+    mstreal massFactor() const { return mfact; }
 
     void setNoise(mstreal _noise) { noise = _noise; }
     void setVerbose(bool _verbose = true) { verbose = _verbose; }
@@ -78,6 +87,10 @@ class fusionParams {
     void setMinimizerType(minimizerType _type) { minMethod = _type; }
     void setLogBase(const string& _base) { outLogBase = _base; }
     void setAdaptiveBeta(mstreal beta) { aBeta = beta; }
+    void setTimeStep(mstreal v) { ts = v; }
+    void setViscosity(mstreal v) { visc = v; }
+    void setThermalEnergy(mstreal v) { kT = v; }
+    void setMassFactor(mstreal v) { mfact = v; }
 
   private:
     // start optimization from the averaged Cartesian structure or the structure
@@ -94,34 +107,51 @@ class fusionParams {
     mstreal aBeta;       // (1/kT) factor used in adapting weighting to compute weights as a function of RMSD
     Structure startStruct;
     string outLogBase;   // base name for various optimization output
+    // dynamics-related parameters
+    mstreal kT;          // k*T for doing dynamics
+    mstreal ts;          // integration time step
+    mstreal visc;        // viscosity coefficient for Langevin dynamics; viscosity*timeStep should be no less than 10^-5
+    mstreal mfact;       // the factor by whichh to multiply atomic masses in Da
 };
 
-struct fusionScores {
+struct fusionOutput {
   public:
-    fusionScores() { reset(); }
-    fusionScores(mstreal _bondPenalty, mstreal _anglPenalty, mstreal _dihePenalty, mstreal _rmsdScore, mstreal _rmsdTot, mstreal _score) {
+    fusionOutput() { reset(); }
+    fusionOutput(mstreal _bondPenalty, mstreal _anglPenalty, mstreal _dihePenalty, mstreal _rmsdScore, mstreal _rmsdTot, mstreal _score) {
+      reset();
       bondPenalty = _bondPenalty; anglPenalty = _anglPenalty; dihePenalty = _dihePenalty;
       rmsdScore = _rmsdScore; rmsdTot = _rmsdTot; score = _score;
     }
-    fusionScores(const fusionScores& sc) {
+    fusionOutput(const fusionOutput& sc) {
       bondPenalty = sc.bondPenalty; anglPenalty = sc.anglPenalty; dihePenalty = sc.dihePenalty;
       rmsdScore = sc.rmsdScore; rmsdTot = sc.rmsdTot; score = sc.score;
+      fused = sc.fused; trajSnaps = sc.trajSnaps; trajScores = sc.trajScores;
     }
-    void reset() { rmsdScore = rmsdTot = bondPenalty = anglPenalty = dihePenalty = 0; }
-    mstreal getBondScore() { return bondPenalty; }
-    mstreal getAngleScore() { return anglPenalty; }
-    mstreal getDihedralScore() { return dihePenalty; }
-    mstreal getRMSDScore() { return rmsdScore; }
-    mstreal getTotRMSDScore() { return rmsdTot; }
-    mstreal getScore() { return score; }
-    friend ostream & operator<<(ostream &_os, const fusionScores& _s) {
+    void reset() { rmsdScore = rmsdTot = bondPenalty = anglPenalty = dihePenalty = 0; trajSnaps = vector<vector<vector<mstreal> > >(3); }
+    mstreal getBondScore() const { return bondPenalty; }
+    mstreal getAngleScore() const { return anglPenalty; }
+    mstreal getDihedralScore() const { return dihePenalty; }
+    mstreal getRMSDScore() const { return rmsdScore; }
+    mstreal getTotRMSDScore() const { return rmsdTot; }
+    mstreal getScore() const { return score; }
+    int numSnapshots() const { return trajScores.size(); }
+    Structure getSnapshot(int j) const;
+    friend ostream & operator<<(ostream &_os, const fusionOutput& _s) {
       _os << _s.score << ": rmsdScore = " << _s.rmsdScore << " (RMSDtot = " << _s.rmsdTot << "), bond penalty = ";
       _os << _s.bondPenalty << ", angle penalty = " << _s.anglPenalty << ", dihedral penalty = " << _s.dihePenalty;
       return _os;
     }
 
+    void setFused(const Structure& f) { fused = f; }
+    void addSnapshot(const Structure& snap, mstreal ener);
+
   private:
     double rmsdScore, rmsdTot, bondPenalty, anglPenalty, dihePenalty, score;
+    Structure fused;
+
+    /* dynamics-related outputs */
+    vector<vector<vector<mstreal> > > trajSnaps; // trajSnaps[0][i][j] is the x-coordinate of the j-th atom in snapshot i
+    vector<mstreal> trajScores;
 };
 
 /* This class is a logical representation of the "topology" of a structure to be
@@ -276,6 +306,7 @@ class fusionEvaluator: public optimizerEvaluator {
     mstreal eval(const vector<mstreal>& point);
     mstreal eval(const vector<mstreal>& point, Vector& grad);
     vector<mstreal> guessPoint();
+    vector<mstreal> getMasses() const { return masses; }
     void setGuessPoint(const vector<mstreal>& _initPoint) { initPoint = _initPoint; }
     void noisifyGuessPoint(mstreal _noise = 1.0) { params.setNoise(_noise); initPoint.resize(0); }
     bool isAnchored() { return (topo.numFixedPositions() > 0); }
@@ -292,7 +323,7 @@ class fusionEvaluator: public optimizerEvaluator {
     Structure getAlignedStructure();
     void setVerbose(bool _verbose) { params.setVerbose(_verbose); }
     void chooseBuildOrigin(bool randomize = false);
-    fusionScores getScores();
+    fusionOutput getScores();
 
   class icBound {
     public:
@@ -397,7 +428,7 @@ class fusionEvaluator: public optimizerEvaluator {
      * a non-fixed atom). */
     vector<icBound> bounds;
 
-    vector<mstreal> initPoint;
+    vector<mstreal> initPoint, masses;
     fusionParams params;
 
     /* Class for storing the gradient of a Cartesian coordinate set with respect
@@ -481,8 +512,8 @@ class Fuser {
      * that overlap with the i-th residue in the chain, in the N-to-C order,
      * starting with 0. Returns the the fused chain as a Structure object. */
     static Structure fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
-    static Structure fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
-    static Structure fuse(const fusionTopology& topo, fusionScores& scores, const fusionParams& params = fusionParams());
+    static Structure fuse(const vector<vector<Residue*> >& resTopo, fusionOutput& scores, const vector<int>& fixed = vector<int>(), const fusionParams& params = fusionParams());
+    static Structure fuse(const fusionTopology& topo, fusionOutput& scores, const fusionParams& params = fusionParams());
     static Structure fuse(const fusionTopology& topo, const fusionParams& params = fusionParams());
 
     /* This function is a simplified version of Fuser::fuse(), in that it guesses

@@ -316,6 +316,8 @@ class Atom {
     Residue* getResidue() const { return parent; }
     Chain* getChain() const { return (parent == NULL) ? NULL : parent->getParent(); }
     Structure* getStructure() { Chain* chain = getChain(); return (chain == NULL) ? NULL : chain->getParent(); }
+    mstreal getMass() const { return Atom::getMass(name); }
+    static mstreal getMass(const char* name);
 
     void setName(const char* _name);
     void setName(const string& _name);

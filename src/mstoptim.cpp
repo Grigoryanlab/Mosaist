@@ -215,7 +215,6 @@ vector<mstreal> Optim::langevinDynamics(optimizerEvaluator& E, const vector<mstr
   Vector x0(E.guessPoint());    // starting positions (row vector)
   int df = x0.size();           // number of degrees of freedom
   int dim = df / masses.size(); // number of degrees of freedom per particle
-  int np = df / dim;            // number of particles
   Vector V(df);                 // velocities
   Vector f(df);                 // forces divided by mass, at current point
   Vector f1(df);                // forces divided by mass, at next point

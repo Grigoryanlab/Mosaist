@@ -1099,6 +1099,26 @@ char Atom::getAltLocID(int altInd) const {
   return (*alternatives)[altInd].alt;
 }
 
+mstreal Atom::getMass(const char* name) {
+  switch (name[0]) {
+    case 'N':
+      return 14.0067;
+    case 'C':
+      return 12.0107;
+    case 'O':
+      return 15.9994;
+    case 'P':
+      return 30.973762;
+    case 'S':
+      return 32.065;
+    case 'H':
+      return 1.00794;
+    default:
+      MstUtils::error("do not know mass for atom named " + string(name));
+  }
+  return 0; // to make the compiler happy
+}
+
 void Atom::setCoor(const CartesianPoint& xyz) {
   x = xyz[0]; y = xyz[1]; z = xyz[2];
 }

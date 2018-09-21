@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
   cout << "Leaving " << L - fixed.size() << " mobile" << endl;
 
   fusionParams opts; opts.setNumIters(1000); opts.setVerbose(false); opts.setMinimizerType(fusionParams::conjGrad);
-  fusionScores scores;
+  fusionOutput scores;
   Structure fused = Fuser::fuse(resTopo, scores, fixed, opts);
   cout << "best score is " << scores.getScore() << endl;
   fused.writePDB(outBase + ".fused.pdb");

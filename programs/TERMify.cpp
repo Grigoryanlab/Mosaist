@@ -161,7 +161,7 @@ AtomPointerVector getCorrespondingAtoms(Structure& from, Structure& like) {
   return atoms;
 }
 
-mstreal totalScore(fusionScores& scoreObj, Structure& fused, AtomPointerVector& init, bool report = false) {
+mstreal totalScore(fusionOutput& scoreObj, Structure& fused, AtomPointerVector& init, bool report = false) {
   RMSDCalculator rc;
   // mstreal a = scoreObj.getScore()/10;
   // mstreal a = scoreObj.getTotRMSDScore();
@@ -286,7 +286,7 @@ int main(int argc, char** argv) {
   RotamerLibrary RL(op.getString("rLib"));
   int pmSelf = 2, pmPair = 1;
   int Ni = 1000, lastWriteTime;
-  fusionScores bestScore, currScore;
+  fusionOutput bestScore, currScore;
   fstream out, shellOut, dummy;
   contactList L;
 
@@ -440,7 +440,7 @@ int main(int argc, char** argv) {
     /* --- do an MC simulation to find a good combo of TERMs --- */
     fusionTopology bestTopo, currTopo;
     Structure bestFused, currFused;
-    fusionScores bestScore, currScore, propScore;
+    fusionOutput bestScore, currScore, propScore;
     mstreal kT = 0.001;
     for (int it = 0; it < op.getInt("iter", 1); it++) {
       vector<vector<int> > propPicks = currPicks;
@@ -457,6 +457,7 @@ int main(int argc, char** argv) {
         opts.setMinimizerType(fusionParams::langevinDyna);
         opts.setNumIters((op.isInt("dyn") ? op.getInt("dyn") : 100)*Ni);
         opts.setLogBase(op.getString("o"));
+        opts.setThermalEnergy(1.0);
         opts.setAdaptiveWeighting(true);
         propFused = Fuser::fuse(propTopo, propScore, opts);
         opts.setMinimizerType(fusionParams::gradDescent);

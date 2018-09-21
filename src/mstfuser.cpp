@@ -14,6 +14,29 @@ void fusionParams::setStartingStructure(const Structure& _S) {
   startStruct = Structure(atoms);
 }
 
+/* --------- fusionOutput ------------ */
+void fusionOutput::addSnapshot(const Structure& snap, mstreal ener) {
+  if (snap.atomSize() != fused.atomSize()) MstUtils::error("fused structure and added snapshot have different numbers of atoms", "fusionOutput::addSnapshot");
+  AtomPointerVector atoms = snap.getAtoms();
+  int na = snap.atomSize();
+  int dim = 3;
+  for (int k = 0; k < dim; k++) trajSnaps[k].push_back(vector<mstreal>(na, 0.0));
+  for (int i = 0; i < na; i++) {
+    for (int k = 0; k < dim; k++) trajSnaps[k].back()[i] = (*atoms[i])[k];
+  }
+  trajScores.push_back(ener);
+}
+
+Structure fusionOutput::getSnapshot(int j) const {
+  Structure snap = fused;
+  AtomPointerVector atoms = snap.getAtoms();
+  int dim = 3;
+  for (int i = 0; i < atoms.size(); i++) {
+    for (int k = 0; k < dim; k++) (*atoms[i])[k] = trajSnaps[k][j][i];
+  }
+  return snap;
+}
+
 /* --------- fusionTopology ------------ */
 fusionTopology::fusionTopology(int L) {
   overlappingResidues.resize(L);
@@ -333,6 +356,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
     gradOfXYZ.clear();
     gradient.resize(numDF());
     bounds.clear();
+    masses.clear();
   }
   mstreal bR = 0.01; mstreal aR = 1.0; mstreal dR = 1.0; mstreal xyzR = 0.01; // randomness scale factors
   if (!init && (point.size() != numDF())) MstUtils::error("need to place " + MstUtils::toString(topo.numMobileAtoms()) + " atoms, with " + MstUtils::toString(topo.numFixedPositions()) + " fixed residues, and received " + MstUtils::toString(point.size()) + " parameters: that appears wrong!", "fusionEvaluator::eval");
@@ -356,6 +380,7 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           if (init) {
             initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
             gradOfXYZ.addPartial(res[j], dim, k, 1.0);
+            masses.push_back(res[j].getMass());
           } else {
             res[j][dim] = point[k];
           }
@@ -363,32 +388,26 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         }
       }
     }
-    // for (int ci = 0; ci < fused.chainSize(); ci++) {
-    //   Chain& C = fused[ci];
-    //   for (int i = 0; i < C.residueSize(); i++) {
-    //     if (topo.isFixed(ci, i)) continue;
-    //     Residue& res = C[i];
-    //     bool skipDFs = ((ci == 0) && (i == 0) && !isAnchored());
-    //     for (int j = 0; j < res.atomSize(); j++) {
-    //       for (int dim = 0; dim < 3; dim++) {
-    //         /* If the fused structure is not anchored in space, skip all coordinates
-    //          * of the first atom, the Y and the Z coordinates of the second atom,
-    //          * and the Z coordinate of the third atom. In this case, the constructor
-    //          * would have placed the first atom at the origin, the second atom on
-    //          * the X-axis, and the third atom in the X-Y plane. */
-    //         if (skipDFs && (j < 3) && (dim >= j)) continue;
-    //         if (init) {
-    //           initPoint.push_back(res[j][dim] + xyzR * MstUtils::randUnit() * noise);
-    //           gradOfXYZ.addPartial(res[j], dim, k, 1.0);
-    //         } else {
-    //           res[j][dim] = point[k];
-    //         }
-    //         k++;
-    //       }
-    //     }
-    //   }
-    // }
   } else {
+    // compute all reduced masses
+    mstreal m_N_CA, m_CA_C, m_N_C, m_C_O, m_N_CA_C, m_CA_C_O, m_N_C_O, m_N_CA_C_N, m_CA_C_N_CA, m_C_N_CA_C, m_N_CA_C_O;
+    if (init) { // these "seem" right, but I have not checked (good enough for now)
+      mstreal mN = Atom::getMass("N");
+      mstreal mCA = Atom::getMass("CA");
+      mstreal mC = Atom::getMass("C");
+      mstreal mO = Atom::getMass("O");
+      m_N_CA = mN*mCA/(mN + mCA);
+      m_CA_C = mCA*mC/(mCA + mC);
+      m_N_C = mN*mC/(mN + mC);
+      m_C_O = mC*mO/(mC + mO);
+      m_N_CA_C = mN*mCA*mC/(mN*mCA + mCA*mC + mN*mC);
+      m_CA_C_O = mCA*mC*mO/(mCA*mC + mCA*mO + mC*mO);
+      m_N_C_O = mN*mC*mO/(mN*mC + mN*mO + mC*mO);
+      m_N_CA_C_N = mN*mCA*mC*mN/(mN*mCA*mC + mN*mCA*mN + mN*mC*mN + mCA*mC*mN);
+      m_C_N_CA_C = mC*mN*mCA*mC/(mC*mN*mCA + mC*mN*mC + mC*mCA*mC + mN*mCA*mC);
+      m_CA_C_N_CA = mCA*mC*mN*mCA/(mCA*mC*mN + mCA*mC*mCA + mCA*mN*mCA + mC*mN*mCA);
+      m_N_CA_C_O = mN*mCA*mC*mO/(mN*mCA*mC + mN*mCA*mO + mN*mC*mO + mCA*mC*mO);
+    }
     // -- build the fused backbone, atom by atom
     // build forward
     int startIdx = isAnchored() ? buildOriginRes : 0;
@@ -402,8 +421,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         if ((i == 0) && !isAnchored()) {
           if (init) {
             initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_CA);
             initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
+            masses.push_back(m_CA_C);
             initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_CA_C);
           } else {
             mstreal r2d = M_PI/180;
             mstreal d0 = point[k];
@@ -424,8 +446,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           // place N relative to pN, pCA, pC
           if (init) {
             initPoint.push_back(bondInitValue(i-1, i, "C", "N") + bR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_C);
             initPoint.push_back(angleInitValue(i-1, i-1, i, "CA", "C", "N") + aR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_CA_C);
             initPoint.push_back(dihedralInitValue(i-1, i-1, i-1, i, "N", "CA", "C", "N") + dR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_CA_C_N);
           } else {
             N->build(pC, pCA, pN, point[k], point[k+1], point[k+2]);
             // TODO: when we want to enable gradient calculation
@@ -446,8 +471,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           // place CA relative to pCA, pC, N
           if (init) {
             initPoint.push_back(bondInitValue(i, i, "N", "CA") + bR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_CA);
             initPoint.push_back(angleInitValue(i-1, i, i, "C", "N", "CA") + aR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_CA_C);
             initPoint.push_back(dihedralInitValue(i-1, i-1, i, i, "CA", "C", "N", "CA") + dR * MstUtils::randUnit() * noise);
+            masses.push_back(m_CA_C_N_CA);
           } else {
             CA->build(N, pC, pCA, point[k], point[k+1], point[k+2]); k += 3;
           }
@@ -455,8 +483,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           // place C relative to pC, N, CA
           if (init) {
             initPoint.push_back(bondInitValue(i, i, "CA", "C") + bR * MstUtils::randUnit() * noise);
+            masses.push_back(m_CA_C);
             initPoint.push_back(angleInitValue(i, i, i, "N", "CA", "C") + aR * MstUtils::randUnit() * noise);
+            masses.push_back(m_N_CA_C);
             initPoint.push_back(dihedralInitValue(i-1, i, i, i, "C", "N", "CA", "C") + dR * MstUtils::randUnit() * noise);
+            masses.push_back(m_C_N_CA_C);
           } else {
             C->build(CA, N, pC, point[k], point[k+1], point[k+2]); k += 3;
           }
@@ -465,8 +496,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
           if (i == fused.residueSize() - 1) {
             if (init) {
               initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
+              masses.push_back(m_C_O);
               initPoint.push_back(angleInitValue(i, i, i, "CA", "C", "O") + aR * MstUtils::randUnit() * noise);
+              masses.push_back(m_CA_C_O);
               initPoint.push_back(dihedralInitValue(i, i, i, i, "N", "CA", "C", "O") + dR * MstUtils::randUnit() * noise);
+              masses.push_back(m_N_CA_C_O);
             } else {
               O->build(C, CA, N, point[k], point[k+1], point[k+2]); k += 3;
             }
@@ -477,8 +511,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
       if ((i > startIdx) && !topo.isFixed(i-1)) {
         if (init) {
           initPoint.push_back(bondInitValue(i-1, i-1, "C", "O") + bR * MstUtils::randUnit() * noise);
+          masses.push_back(m_C_O);
           initPoint.push_back(angleInitValue(i, i-1, i-1, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
+          masses.push_back(m_CA_C_O);
           initPoint.push_back(dihedralInitValue(i-1, i, i-1, i-1, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_CA_C_O);
         } else {
           pO->build(pC, N, pCA, point[k], point[k+1], point[k+2]); k += 3;
         }
@@ -498,8 +535,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         // place C relative to pC, pCA, pN
         if (init) {
           initPoint.push_back(bondInitValue(i+1, i, "N", "C") + bR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_C);
           initPoint.push_back(angleInitValue(i+1, i+1, i, "CA", "N", "C") + aR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_CA_C);
           initPoint.push_back(dihedralInitValue(i+1, i+1, i+1, i, "C", "CA", "N", "C") + dR * MstUtils::randUnit() * noise);
+          masses.push_back(m_C_N_CA_C);
         } else {
           C->build(pN, pCA, pC, point[k], point[k+1], point[k+2]); k += 3;
         }
@@ -507,8 +547,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         // place CA relative to pCA, pN, C
         if (init) {
           initPoint.push_back(bondInitValue(i, i, "C", "CA") + bR * MstUtils::randUnit() * noise);
+          masses.push_back(m_CA_C);
           initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "CA") + aR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_CA_C);
           initPoint.push_back(dihedralInitValue(i+1, i+1, i, i, "CA", "N", "C", "CA") + dR * MstUtils::randUnit() * noise);
+          masses.push_back(m_CA_C_N_CA);
         } else {
           CA->build(C, pN, pCA, point[k], point[k+1], point[k+2]); k += 3;
         }
@@ -516,8 +559,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         // place N relative to pN, C, CA
         if (init) {
           initPoint.push_back(bondInitValue(i, i, "CA", "N") + bR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_CA);
           initPoint.push_back(angleInitValue(i, i, i, "C", "CA", "N") + aR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_CA_C);
           initPoint.push_back(dihedralInitValue(i+1, i, i, i, "N", "C", "CA", "N") + dR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_CA_C_N);
         } else {
           N->build(CA, C, pN, point[k], point[k+1], point[k+2]); k += 3;
         }
@@ -525,8 +571,11 @@ mstreal fusionEvaluator::eval(const vector<mstreal>& point) {
         // place O relative to pCA, pN, C (an improper)
         if (init) {
           initPoint.push_back(bondInitValue(i, i, "C", "O") + bR * MstUtils::randUnit() * noise);
+          masses.push_back(m_C_O);
           initPoint.push_back(angleInitValue(i+1, i, i, "N", "C", "O") + aR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_C_O);
           initPoint.push_back(dihedralInitValue(i, i+1, i, i, "CA", "N", "C", "O") + dR * MstUtils::randUnit() * noise);
+          masses.push_back(m_N_CA_C_O);
         } else {
           O->build(C, pN, CA, point[k], point[k+1], point[k+2]); k += 3;
         }
@@ -665,7 +714,6 @@ void fusionEvaluator::scoreIC(const icBound& b) {
         dmax = 360 - dmax;
         if (dmax < dmin) del = dmax;
         else del = -dmin;
-// cout << val << " vs. [" << b.minVal << ", " << b.maxVal << "], dmin = " << dmin << ", dmax = " << dmax << ", del = " << del << endl;
       }
       f = params.getDihedralFC(); comp = &dihePenalty;
       break;
@@ -820,8 +868,8 @@ void fusionEvaluator::scoreRMSD() {
   if (params.isVerbose()) cout << "rmsdScore = " << rmsdScore << " (overall RMSD " << rmsdTot << "), bond penalty = " << bondPenalty << ",  angle penalty = " << anglPenalty << ", dihedral penalty = " << dihePenalty << endl;
 }
 
-fusionScores fusionEvaluator::getScores() {
-  fusionScores scores(bondPenalty, anglPenalty, dihePenalty, rmsdScore, rmsdTot, score);
+fusionOutput fusionEvaluator::getScores() {
+  fusionOutput scores(bondPenalty, anglPenalty, dihePenalty, rmsdScore, rmsdTot, score);
   return scores;
 }
 
@@ -1013,9 +1061,10 @@ mstreal fusionEvaluator::atomRadius(const Atom& a) {
 
 /* --------- Fuser ----------- */
 
-Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fusionParams& params) {
+Structure Fuser::fuse(const fusionTopology& topo, fusionOutput& scores, const fusionParams& params) {
   fusionEvaluator E(topo, params); E.setVerbose(false);
   vector<mstreal> bestSolution; mstreal score, bestScore; int bestAnchor;
+  vector<vector<mstreal> > trajectory, bestTrajectory; vector<mstreal> trajScores, bestTrajScores;
   for (int i = 0; i < params.numCycles(); i++) {
     if (i > 0) {
       E.noisifyGuessPoint(0.2);
@@ -1027,12 +1076,11 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
     } else if (params.getMinimizerType() == fusionParams::conjGrad) {
       score = Optim::conjGradMin(E, solution, params.numIters(), params.errTol(), params.isVerbose());
     } else if (params.getMinimizerType() == fusionParams::langevinDyna) {
-      vector<vector<mstreal> > trajectory;
-      vector<mstreal> masses(E.numDF(), 10);
-      mstreal gamma = 10, kT = 1, timeStep = 10E-4; // gamma*timeStep should be no less than 10^-5
-      vector<mstreal> trajScores = Optim::langevinDynamics(E, masses, timeStep, gamma, kT, params.numIters(), trajectory, MstUtils::max(10, (int) (params.numIters()/1000)), true);
-      bestScore = trajScores.back();
-      bestSolution = trajectory.back();
+      trajectory.clear();
+      E.guessPoint(); // fills masses (among other things)
+      trajScores = Optim::langevinDynamics(E, CartesianPoint(E.getMasses())*params.massFactor(), params.timeStep(), params.viscosity(), params.thermalEnergy(), params.numIters(), trajectory, MstUtils::max(10, (int) (params.numIters()/1000)), true);
+      score = trajScores.back();
+      solution = trajectory.back();
       if (params.logBaseDefined()) {
         fstream lf;
         MstUtils::openFile(lf, params.getLogBase() + ".dyn.pdb", ios::out);
@@ -1047,7 +1095,10 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
     } else {
       score = Optim::fminsearch(E, params.numIters(), solution, params.isVerbose());
     }
-    if ((i == 0) || (score < bestScore)) { bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigin(); }
+    if ((i == 0) || (score < bestScore)) {
+      bestScore = score; bestSolution = solution; bestAnchor = E.getBuildOrigin();
+      bestTrajectory = trajectory; bestTrajScores = trajScores;
+    }
     if (params.isVerbose()) { E.setVerbose(true); E.eval(solution); E.setVerbose(false); }
   }
 
@@ -1058,22 +1109,31 @@ Structure Fuser::fuse(const fusionTopology& topo, fusionScores& scores, const fu
   }
   E.eval(bestSolution);
   scores = E.getScores();
-  return E.getAlignedStructure();
+  Structure fused = E.getAlignedStructure();
+  scores.setFused(fused);
+  if (!bestTrajScores.empty()) {
+    for (int i = 0; i < bestTrajectory.size(); i++) {
+      E.eval(bestTrajectory[i]);
+      Structure snap = E.getAlignedStructure();
+      scores.addSnapshot(snap, bestTrajScores[i]);
+    }
+  }
+  return fused;
 }
 
 Structure Fuser::fuse(const fusionTopology& topo, const fusionParams& params) {
-  fusionScores scores;
+  fusionOutput scores;
   return fuse(topo, scores, params);
 }
 
-Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionScores& scores, const vector<int>& fixed, const fusionParams& params) {
+Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, fusionOutput& scores, const vector<int>& fixed, const fusionParams& params) {
   fusionTopology topo(resTopo);
   topo.addFixedPositions(fixed);
   return fuse(topo, scores, params);
 }
 
 Structure Fuser::fuse(const vector<vector<Residue*> >& resTopo, const vector<int>& fixed, const fusionParams& params) {
-  fusionScores scores;
+  fusionOutput scores;
   return fuse(resTopo, scores, fixed, params);
 }
 
