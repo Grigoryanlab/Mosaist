@@ -1937,7 +1937,10 @@ AtomPointerVector selector::select(string selStr) {
   AtomPointerVector sel;
   select(tree, sel);
   delete tree;
-  return sel;
+  set<Atom*> selAtoms(sel.begin(), sel.end());
+  AtomPointerVector sortedSel;
+  for (int i = 0; i < atoms.size(); i++) if (selAtoms.find(atoms[i]) != selAtoms.end()) sortedSel.push_back(atoms[i]);
+  return sortedSel;
 }
 
 vector<Residue*> selector::selectRes(string selStr) {
