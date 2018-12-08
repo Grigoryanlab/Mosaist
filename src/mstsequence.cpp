@@ -153,6 +153,24 @@ vector<Sequence> SeqTools::readFasta(const string& fastaFile) {
   return seqs;
 }
 
+void SeqTools::readSequences(const string& seqsFile, vector<Sequence>& seqs) {
+  fstream file;
+	MstUtils::openFile(file, seqsFile, fstream::in, "SeqTools::readSequences " + seqsFile);
+	string line;
+	while (getline(file, line)) {
+    line = MstUtils::trim(line);
+    if (line.empty()) continue;
+    seqs.push_back(Sequence(line, ""));
+	}
+	file.close();
+}
+
+vector<Sequence> SeqTools::readSequences(const string& seqsFile) {
+  vector<Sequence> seqs;
+  SeqTools::readSequences(seqsFile, seqs);
+  return seqs;
+}
+
 vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a, bool verb) {
   MstUtils::assert((idCut >= 0) && (idCut <= 1.0), "ID cutoff value must be [0; 1]", "SeqTools::rSearch()");
   int N = seqs.size();
@@ -414,6 +432,12 @@ vector<string> Sequence::toStringVector(bool triple) const {
 string Sequence::getResidue(int i, bool triple) const {
   if (triple) return SeqTools::idxToTriple(seq[i]);
   return SeqTools::idxToSingle(seq[i]);
+}
+
+Sequence Sequence::subSequence(const vector<int>& inds) const {
+  Sequence sub(inds.size());
+  for (int i = 0; i < inds.size(); i++) sub[i] = (*this)[inds[i]];
+  return sub;
 }
 
 void Sequence::resize(int newLen, res_t newIdx) {

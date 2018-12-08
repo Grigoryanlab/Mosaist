@@ -69,7 +69,7 @@ endif
 
 # targets and MST libraries
 TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testRotlib testTERMUtils testTransforms testdTERMen testTermanal
-PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape $(ARMA_PROGRAMS)
+PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes msttermanal
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans libdtermen
@@ -90,6 +90,7 @@ testTransforms_DEPS		:= mstlinalg msttransforms msttypes
 testTermanal_DEPS		:= msttermanal msttypes mstfasst mstoptions mstsequence msttransforms
 findTERMs_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
 renumber_DEPS			:= mstsystem msttypes mstoptions
+extractSegments_DEPS		:= msttypes msttransforms mstsequence mstoptions mstfasst dtermen mstcondeg mstrotlib mstmagic
 TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic mstfasstcache mstsystem
 bind_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions mstmagic
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions

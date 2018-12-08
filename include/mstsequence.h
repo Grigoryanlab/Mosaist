@@ -25,6 +25,7 @@ class Sequence {
     string getResidue(int i, bool triple = false) const;
     res_t& operator[] (int i) { return seq[i]; }
     res_t operator[] (int i) const { return seq[i]; }
+    Sequence subSequence(const vector<int>& inds) const;
     int length() const { return seq.size(); }
     int size() const { return seq.size(); }
     void appendResidue(const string& aa);
@@ -72,6 +73,8 @@ class SeqTools {
     static string toSingle(const string& aa);
     static vector<Sequence> readFasta(const string& fastaFile);
     static void readFasta(const string& fastaFile, vector<Sequence>& seqs);
+    static vector<Sequence> readSequences(const string& seqsFile);
+    static void readSequences(const string& seqsFile, vector<Sequence>& seqs);
 
     /* For these two functions, seqA and seqB must be of the same length. This
      * is not checked, for efficiency. The comparison is smart, in that it stops
