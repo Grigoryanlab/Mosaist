@@ -5,7 +5,9 @@
 
 using namespace MST;
 
-mstreal scoreAlignmentSegment(const vector<Sequence>& M, const vector<int>& positions) {
+mstreal scoreAlignmentSegment(const vector<Sequence>& M, const vector<int>& positions, bool verbose = false) {
+  // TODO: if we sort M based on positions, it will be already almost sorted from before, so will be linear
+  // (so need to keep one copy of M for each segment and keep using it only for the sake of storing the order)
   // compute the frequency of each variant in the segment
   map<Sequence, mstreal> f;
   for (int i = 0; i < M.size(); i++) f[M[i].subSequence(positions)] += 1.0/M.size();
@@ -13,6 +15,16 @@ mstreal scoreAlignmentSegment(const vector<Sequence>& M, const vector<int>& posi
   // score is the sum of squares of frequencies (maximized when only one variant exists)
   mstreal score = 0;
   for (const auto& it : f) score += (it.second) * (it.second);
+
+  if (verbose) {
+    cout << "segment score information:\n";
+    cout << "\t" << 1/score << " effective sequences, " << f.size() << " unique sequences. Top few are:" << endl;
+    vector<Sequence> uniqSeqs = MstUtils::keys(f);
+    sort(uniqSeqs.begin(), uniqSeqs.end(), [f](const Sequence& i, const Sequence& j) { return f.at(i) > f.at(j); });
+    for (int i = 0; i < MstUtils::min(10, (int) uniqSeqs.size()); i++) {
+      cout << "\t\t" << uniqSeqs[i].toString() << " -> " << f[uniqSeqs[i]] << " (" << f[uniqSeqs[i]] * M.size() << ")" << endl;
+    }
+  }
   return score;
 }
 
@@ -22,8 +34,7 @@ mstreal scoreAlignmentSegments(const vector<Sequence>& M, const vector<vector<in
   return score;
 }
 
-vector<vector<int>> optimalSplit(const vector<Sequence>& M, const vector<int>& positions) {
-cout << "positions = " << MstUtils::vecToString(positions) << endl;
+vector<vector<int>> optimalSplit(const vector<Sequence>& M, const vector<int>& positions, bool verbose = false) {
   if (positions.size() < 2) MstUtils::error("have to have at least two positions to split!");
   vector<vector<int>> bestSegments; mstreal bestScore;
   for (int c = 0; c < 10; c++) {
@@ -38,11 +49,13 @@ cout << "positions = " << MstUtils::vecToString(positions) << endl;
 
     // now do MC sampling that randomly moves positions between segments and scores
     mstreal score = scoreAlignmentSegments(M, segments);
-    cout << "------------" << endl;
-    cout << "segments[0] = " << MstUtils::vecToString(segments[0]) << endl;
-    cout << "segments[1] = " << MstUtils::vecToString(segments[1]) << endl;
-    cout << "initial score is " << score << endl;
-    for (int i = 0; i < 1E3; i++) {
+    if (verbose) {
+      cout << "------------" << endl;
+      cout << "segments[0] = " << MstUtils::vecToString(segments[0]) << endl;
+      cout << "segments[1] = " << MstUtils::vecToString(segments[1]) << endl;
+      cout << "initial score is " << score << endl;
+    }
+    for (int i = 0; i < 1E4; i++) {
       // pick a random position and re-assign
       int fromSide, toSide;
       if (MstUtils::randUnit() < 0.5) { fromSide = 0; toSide = 1; }
@@ -57,9 +70,11 @@ cout << "positions = " << MstUtils::vecToString(positions) << endl;
       // accept or reject
       if (newScore > score) {
         score = newScore;
-        cout << "score became " << score << ", with a " << segments[0].size() << " - " << segments[1].size() << " split" << endl;
-        cout << "segments[0] = " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[0]))) << endl;
-        cout << "segments[1] = " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[1]))) << endl;
+        if (verbose) {
+          cout << "score became " << score << ", with a " << segments[0].size() << " - " << segments[1].size() << " split" << endl;
+          cout << "segments[0] = " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[0]))) << endl;
+          cout << "segments[1] = " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[1]))) << endl;
+        }
       } else {
         segments[fromSide].push_back(segments[toSide].back());
         segments[toSide].pop_back();
@@ -105,18 +120,47 @@ int main(int argc, char *argv[]) {
   if (M.empty()) MstUtils::error("no sequences were read/generated!");
 
   // -- optimally split the MSA into two segments
-  vector<vector<int>> segments = optimalSplit(M, MstUtils::range(0, (int) M[0].size()));
-  cout << endl << "***" << endl;
-  cout << "segment 0: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[0]))) << endl;
-  cout << "segment 1: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[1]))) << endl;
-  cout << endl << "***" << endl;
-  vector<vector<int>> segmentsA = optimalSplit(M, segments[0]);
-  vector<vector<int>> segmentsB = optimalSplit(M, segments[1]);
+  cout << "before splitting:" << endl;
+  vector<vector<int>> segments(1, MstUtils::range(0, (int) M[0].size()));
+  scoreAlignmentSegment(M, segments[0], true);
+  for (int c = 0; c < 2; c++) {
+    cout << "cycle " << c << endl;
+    vector<vector<int>> newSegments;
+    for (int i = 0; i < segments.size(); i++) {
+      cout << "\tsplitting segment " << i << ": " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[i]))) << endl;
+      vector<vector<int>> split = optimalSplit(M, segments[i]);
+      cout << "\n\t\tsub-segment 0: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(split[0]))) << endl;
+      scoreAlignmentSegment(M, split[0], true);
+      cout << "\n\t\tsub-segment 1: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(split[1]))) << endl;
+      scoreAlignmentSegment(M, split[1], true);
+      newSegments.push_back(split[0]);
+      newSegments.push_back(split[1]);
+    }
+    segments = newSegments;
+  }
+  // cout << endl << "***" << endl;
+  // cout << "segment 0: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[0]))) << endl;
+  // mstreal s1 = scoreAlignmentSegment(M, segments[0], true);
+  // cout << "segment 1: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[1]))) << endl;
+  // scoreAlignmentSegment(M, segments[1], true);
+  // cout << endl << "***" << endl;
+  //
+  // cout << "before splitting:" << endl;
+  // scoreAlignmentSegment(M, MstUtils::range(0, (int) M[0].size()), true);
+  // vector<vector<int>> segments = optimalSplit(M, MstUtils::range(0, (int) M[0].size()));
+  // cout << endl << "***" << endl;
+  // cout << "segment 0: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[0]))) << endl;
+  // mstreal s1 = scoreAlignmentSegment(M, segments[0], true);
+  // cout << "segment 1: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segments[1]))) << endl;
+  // scoreAlignmentSegment(M, segments[1], true);
+  // cout << endl << "***" << endl;
 
-  cout << endl << "***" << endl;
-  cout << "segment 0: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsA[0]))) << endl;
-  cout << "segment 1: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsA[1]))) << endl;
-  cout << "segment 3: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsB[0]))) << endl;
-  cout << "segment 4: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsB[1]))) << endl;
-  cout << endl << "***" << endl;
+  // vector<vector<int>> segmentsA = optimalSplit(M, segments[0]);
+  // vector<vector<int>> segmentsB = optimalSplit(M, segments[1]);
+  // cout << endl << "***" << endl;
+  // cout << "segment 0: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsA[0]))) << endl;
+  // cout << "segment 1: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsA[1]))) << endl;
+  // cout << "segment 3: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsB[0]))) << endl;
+  // cout << "segment 4: " << MstUtils::vecToString(MstUtils::keys(MstUtils::contents(segmentsB[1]))) << endl;
+  // cout << endl << "***" << endl;
 }
