@@ -186,7 +186,7 @@ int fusionTopology::numFixedInChain(int ci) {
   return num;
 }
 
-void fusionTopology::updateConnectivity(bool verbose) {
+void fusionTopology::updateConnectivity() {
   if (!updated) return;
   int L = overlappingResidues.size();
   int nbba = fusionTopology::bba.size();
