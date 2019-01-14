@@ -112,6 +112,7 @@ int main(int argc, char *argv[]) {
       cout << "Computing local-window sequence similarity..." << endl;
       // first cluster all local windows
       cout << "\tgathering local sequence windows..." << endl;
+      int Nr = 0;
       int L = op.getInt("win", 31);
       int L2 = (L - 1)/2;
       vector<Sequence> wins;
@@ -122,6 +123,7 @@ int main(int argc, char *argv[]) {
         int off = 0;
         for (int i = 0; i < P.chainSize(); i++) {
           Chain& C = P[i];
+          Nr += C.residueSize();
           for (int j = 0; j < C.residueSize() - L + 1; j++) {
             Sequence win(L);
             for (int k = 0; k < L; k++) win[k] = SeqTools::aaToIdx(C[j + k].getName());
@@ -153,17 +155,17 @@ int main(int argc, char *argv[]) {
           symN++;
           // if either window starts at the N-terminus, then the whole first half is redundant
           if (nTerm[i] || nTerm[j]) {
-            for (rj = winStart[j]; rj < winStart[j] + L2 - 1; rj++) S.addResidueRelationship(ti, "sim", ri, tj, rj);
+            for (int d = -L2; d < 0; d++) S.addResidueRelationship(ti, "sim", ri + d, tj, rj + d);
             symN += L2;
           }
           // if either window ends at the C-terminus, then the whole second half is redundant
           if (cTerm[i] || cTerm[j]) {
-            for (rj = winStart[j] + L2 + 1; rj < winStart[j] + L; rj++) S.addResidueRelationship(ti, "sim", ri, tj, rj);
+            for (int d = 1; d <= L/2; d++) S.addResidueRelationship(ti, "sim", ri + d, tj, rj + d);
             symN += L2;
           }
         }
       }
-      cout << "\trecorded " << symN << " similar windows" << endl;
+      cout << "\trecorded " << symN << " similar windows, from a total of " << Nr << " residues" << endl;
     }
     S.writeDatabase(op.getString("o"));
   } else {

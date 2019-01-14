@@ -27,7 +27,7 @@ mstreal scoreAlignmentSegment(const vector<Sequence>& M, const vector<int>& posi
     for (const auto& it : f) {
       H -= it.second * log(it.second);
     }
-    H += P/(2*N);        // small sample correction
+    H += P/(2*N);        // small sample correction (doi:10.1088/1751-8113/41/20/202001)
     // score = log(P) - H;  // information (log(P) is maximal entropy)
     score = -H;             // negative entropy
     Neff = (int) round(exp(H));
@@ -35,7 +35,7 @@ mstreal scoreAlignmentSegment(const vector<Sequence>& M, const vector<int>& posi
 
   if (verbose) {
     cout << "segment score information:\n";
-    cout << "\tscore = " << score << ", " << Neff << " effective sequences, " << f.size() << " unique sequences. Top few are:" << endl;
+    cout << "\tscore = " << score << ", " << Neff << " effective sequences, " << f.size() << " unique sequences, " << M.size() << " sequences. Top few are:" << endl;
     vector<Sequence> uniqSeqs = MstUtils::keys(f);
     sort(uniqSeqs.begin(), uniqSeqs.end(), [f](const Sequence& i, const Sequence& j) { return f.at(i) > f.at(j); });
     for (int i = 0; i < MstUtils::min(10, (int) uniqSeqs.size()); i++) {
