@@ -15,7 +15,8 @@ int main(int argc, char *argv[]) {
   op.addOption("o", "output base.", true);
   op.setOptions(argc, argv);
 
-  Structure S(op.getString("p"));
+  Structure So(op.getString("p")), S;
+  RotamerLibrary::extractProtein(S, So);
   vector<Residue*> variable, specContext;
   selector sel(S);
   if (op.isGiven("s")) {
