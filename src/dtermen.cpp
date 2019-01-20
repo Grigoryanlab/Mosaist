@@ -139,6 +139,7 @@ EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const ve
       }
     }
   }
+  if (specTable != NULL) *specTable = E;
   ConFind C(&RL, *S); // make a ConFind object that will keep getting reused in energy calculations
 
   /* If dealing with crystal symmetry, create map:
