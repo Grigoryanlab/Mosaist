@@ -56,7 +56,7 @@ void dTERMen::readConfigFile(const string& configFile) {
     } else if (ents[0].compare("rotlib") == 0) {
       rotLibFile = ents[1];
     } else if (ents[0].compare("efun") == 0) {
-      setEnergyFunction(ents[0]);
+      setEnergyFunction(ents[1]);
     } else {
       MstUtils::error("unknown parameter name '" + ents[0] + "'", "dTERMen::dTERMen(const string&)");
     }
@@ -75,10 +75,54 @@ void dTERMen::readConfigFile(const string& configFile) {
   }
 }
 
-EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const vector<vector<string> >& allowed) {
+vector<pair<Residue*, Residue*>> dTERMen::getContactsWith(const vector<Residue*>& source, ConFind& C, int type, bool verbose) {
+  set<Residue*> sourceSet = MstUtils::contents(source);
+  vector<pair<Residue*, Residue*>> conts;
+  set<pair<Residue*, Residue*>> contsSet;
+  pair<Residue*, Residue*> c;
+  contactList contList;
+  if (verbose) {
+    cout << "identifying contacts with:";
+    for (int i = 0; i < source.size(); i++) cout << " " << *(source[i]);
+    cout << endl;
+  }
+
+  // get all contacts involving the source residues
+  for (int cType = 0; cType < 2; cType++) {
+    if (cType == 0) contList = C.getContacts(source, cdCut);
+    else {
+      if (intCut > 1.0) continue;
+      contList = C.getInterfering(source, intCut);
+    }
+
+    // go through each and insert into list, in the right order, if it qualifies
+    contList.sortByDegree();
+    for (int i = 0; i < contList.size(); i++) {
+      bool isInA = (sourceSet.find(contList.residueA(i)) != sourceSet.end());
+      bool isInB = (sourceSet.find(contList.residueB(i)) != sourceSet.end());
+      if (((type == 0) && (isInA == isInB)) || ((type == 1) && !(isInA && isInB)) || ((type == 2) && !(isInA || isInB))) continue;
+
+      if (!isInA) c = pair<Residue*, Residue*>(contList.residueB(i), contList.residueA(i));
+      else c = pair<Residue*, Residue*>(contList.residueA(i), contList.residueB(i));
+
+      if (verbose) cout << "\t" << (cType ? "interference " : "contact-degree ") << "contact with " << *(c.second) << " (from " << *(c.first) << "); " << contList.degree(i) << endl;
+      if (contsSet.find(c) == contsSet.end()) {
+        contsSet.insert(c);
+        conts.push_back(c);
+      }
+    }
+  }
+  if (verbose) cout << "in the end, found " << conts.size() << " contacts" << endl;
+
+  return conts;
+}
+
+
+EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const vector<vector<string>>& allowed, const vector<vector<Residue*>>& images, EnergyTable* specTable, const vector<Residue*>& specContext) {
   EnergyTable E;
   if (variable.empty()) return E;
   Structure* S = variable[0]->getStructure();
+  set<Residue*> variableSet = MstUtils::contents(variable);
   map<Residue*, string> siteNames;
   for (int i = 0; i < variable.size(); i++) {
     if (variable[i]->getStructure() != S) MstUtils::error("mutable positions belong to different Structure objects", "dTERMen::buildEnergyTable");
@@ -97,6 +141,69 @@ EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const ve
   }
   ConFind C(&RL, *S); // make a ConFind object that will keep getting reused in energy calculations
 
+  /* If dealing with crystal symmetry, create map:
+   * imgToCen[Ri] is the residue in the central unit cell corresponding to residue
+   *              Ri in some image.
+   * cenToImg[Ri] is the list of image residues, corresponding to the residue Ri
+   *              from the central unit cell. Residues are listed in the order
+   *              in which images are specified in the images vector.
+   * */
+   map<Residue*, Residue*> imgToCen;
+   map<Residue*, vector<Residue*>> cenToImg;
+   if (!images.empty()) {
+     for (int mi = 1; mi < images.size(); mi++) {
+       if (images[mi].size() != images[0].size()) MstUtils::error("central unit cell has " + MstUtils::toString(images[0].size()) + " residues, while image " + MstUtils::toString(mi) + " has " + MstUtils::toString(images[mi].size()) + " residues", "dTERMen::buildEnergyTable");
+       for (int ri = 0; ri < images[mi].size(); ri++) imgToCen[images[mi][ri]] = images[0][ri];
+     }
+     for (int ri = 0; ri < images[0].size(); ri++) {
+       for (int mi = 1; mi < images.size(); mi++) {
+         cenToImg[images[0][ri]].push_back(images[mi][ri]);
+       }
+     }
+   }
+
+  // all residues that contact variable positions, but are not variable, are fixed
+  set<Residue*> fixedSet; // this set will include fixed residues in image unit cells
+  vector<pair<Residue*, Residue*>> conts = getContactsWith(variable, C, 2);
+  for (int i = 0; i < conts.size(); i++) {
+    Residue* res = conts[i].second;
+    if (variableSet.find(res) == variableSet.end()) {
+      if ((imgToCen.find(res) == imgToCen.end()) || (variableSet.find(imgToCen[res]) == variableSet.end())) {
+        fixedSet.insert(res);
+      } else {
+        // add to variable set images of variable positions, with which variable
+        // positions in the central unit cell interact
+        variableSet.insert(res);
+      }
+    }
+  }
+
+  // make sure amino acids at fixed positions are legal
+  for (auto it = fixedSet.begin(); it != fixedSet.end(); ++it) {
+    Residue* res = *it;
+    if (!aaIndexKnown(aaToIndex(res->getName()))) MstUtils::error("fixed position " + MstUtils::toString(*(*it)) + " occupied with unknown amino acid", "dTERMen::buildEnergyTable");
+    if (imgToCen.find(res) != imgToCen.end()) {
+      Residue* cres = imgToCen[res];
+      if (!(res->isNamed(cres->getName()))) MstUtils::error("fixed residue " + MstUtils::toString(*cres) + " and its corresponding image residue " + MstUtils::toString(*res) + " are occupied with different amino acids", "dTERMen::buildEnergyTable");
+    }
+  }
+
+  // specificity context is a sub-set of the fixed positions
+  set<Residue*> specContextSet;
+  if (specTable != NULL) {
+    if (specContext.empty()) specContextSet = fixedSet;
+    else {
+      specContextSet = MstUtils::contents(specContext);
+      for (Residue* contRes : specContext) {
+        if (cenToImg.find(contRes) == cenToImg.end()) continue;
+        vector<Residue*> imgResis = cenToImg[contRes];
+        specContextSet.insert(imgResis.begin(), imgResis.end());
+      }
+      specContextSet = MstUtils::contents(MstUtils::setintersect(MstUtils::keys(fixedSet), MstUtils::keys(specContextSet)));
+    }
+    cout << "---> " << specContextSet.size() << " residues are considered as the fixed context" << endl;
+  }
+
   // compute self energies
   for (int i = 0; i < variable.size(); i++) {
     cout << "computing self energy for position " << *(variable[i]) << ", " << i+1 << "/" << variable.size() << endl;
@@ -105,24 +212,81 @@ EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const ve
     for (int k = 0; k < alpha.size(); k++) {
       int aai = aaToIndex(alpha[k]);
       E.setSelfEnergy(i, k, selfE[aai]);
+      if (specTable != NULL) specTable->setSelfEnergy(i, k, 0.0);
     }
   }
 
   // compute pair energies
-  contactList cL = C.getContacts(*S, cdCut);
-  vector<pair<Residue*, Residue*> > conts = cL.getOrderedContacts();
   for (int i = 0; i < conts.size(); i++) {
-    cout << "computing pair energy for positions " << *(conts[i].first) << " x " << *(conts[i].second) << ", " << i+1 << "/" << conts.size() << endl;
-    vector<vector<mstreal> > pairE = pairEnergies(conts[i].first, conts[i].second, true);
-    int si = E.siteIndex(siteNames[conts[i].first]);
-    int sj = E.siteIndex(siteNames[conts[i].second]);
+    Residue* resA = conts[i].first;
+    Residue* resB = conts[i].second;
+    cout << "computing pair energy for positions " << *resA << " x " << *resB << ", " << i+1 << "/" << conts.size() << endl;
+    vector<vector<mstreal>> pairE = pairEnergies(resA, resB, true);
+    int si = E.siteIndex(siteNames[resA]); // residue A will always be a variable one (that's how we constructed conts)
     vector<string> alphaA = E.getSiteAlphabet(si);
-    vector<string> alphaB = E.getSiteAlphabet(sj);
-    for (int a = 0; a < alphaA.size(); a++) {
-      int ai = aaToIndex(alphaA[a]);
-      for (int b = 0; b < alphaB.size(); b++) {
-        int bi = aaToIndex(alphaB[b]);
-        E.setPairEnergy(si, sj, a, b, pairE[ai][bi]);
+
+    // differentiate based on whether resB is variable or not
+    if (variableSet.find(resB) != variableSet.end()) {
+      if (imgToCen.find(resB) == imgToCen.end()) {
+        // bona fide pair interaction within the central unit cell
+        int sj = E.siteIndex(siteNames[resB]);
+        vector<string> alphaB = E.getSiteAlphabet(sj);
+        for (int a = 0; a < alphaA.size(); a++) {
+          int ai = aaToIndex(alphaA[a]);
+          for (int b = 0; b < alphaB.size(); b++) {
+            int bi = aaToIndex(alphaB[b]);
+            E.setPairEnergy(si, sj, a, b, pairE[ai][bi]);
+          }
+        }
+      } else {
+        // pair interaction between variable positions across unit cells
+        if (imgToCen[resB] == resA) {
+          // interaction of a residue with its own image (goes into self)
+          for (int a = 0; a < alphaA.size(); a++) {
+            int ai = aaToIndex(alphaA[a]);
+            E.setSelfEnergy(si, a, E.selfEnergy(si, a) + 0.5*pairE[ai][ai]);
+          }
+        } else {
+          // interaction of a residue with an image of another residues (goes into pair)
+          Residue* cenB = imgToCen[resB];
+          int sj = E.siteIndex(siteNames[cenB]);
+          vector<string> alphaB = E.getSiteAlphabet(sj);
+          for (int a = 0; a < alphaA.size(); a++) {
+            int ai = aaToIndex(alphaA[a]);
+            for (int b = 0; b < alphaB.size(); b++) {
+              int bi = aaToIndex(alphaB[b]);
+              E.setPairEnergy(si, sj, a, b, 0.5*pairE[ai][bi]);
+            }
+          }
+        }
+      }
+    } else {
+      if (fixedSet.find(resB) == fixedSet.end()) MstUtils::error("expected only variable-variable and variable-fixed interactions", "dTERMen::buildEnergyTable");
+      // interaction between a variable and a fixed position (goes into self)
+      mstreal sf = (imgToCen.find(resB) == imgToCen.end()) ? 1.0 : 0.5; // if across images, divide by two
+      int bi = aaToIndex(resB->getName());
+      for (int a = 0; a < alphaA.size(); a++) {
+        int ai = aaToIndex(alphaA[a]);
+        E.setSelfEnergy(si, a, E.selfEnergy(si, a) + sf*pairE[ai][bi]);
+      }
+
+      // if this is an interaction with a fixed-context residue, need to update spec gap table
+      if (specContextSet.find(resB) != specContextSet.end()) {
+        mstreal sf = (imgToCen.find(resB) == imgToCen.end()) ? 1.0 : 0.5; // if across images, divide by two
+        vector<mstreal> contextProbs(globalAlphabetSize(), 0.0);
+        for (int biAlt = 0; biAlt < globalAlphabetSize(); biAlt++) contextProbs[biAlt] = backEner(biAlt);
+        contextProbs[bi] = INFINITY; // exclude the identity currently present at this position
+        dTERMen::enerToProb(contextProbs);
+        for (int a = 0; a < alphaA.size(); a++) {
+          int ai = aaToIndex(alphaA[a]);
+          mstreal meanAltPairEner = 0;
+          for (int biAlt = 0; biAlt < globalAlphabetSize(); biAlt++) {
+            meanAltPairEner += contextProbs[biAlt] * pairE[ai][biAlt];
+          }
+          mstreal pairEner = pairE[ai][bi];
+          mstreal gap = pairEner - meanAltPairEner;
+          specTable->setSelfEnergy(si, a, specTable->selfEnergy(si, a) + sf*gap);
+        }
       }
     }
   }
@@ -788,25 +952,29 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   };
 
   // -- get contacts
-  if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
-  contactList cL = C.getContacts(R, cdCut);
-  cL.sortByDegree();
-  vector<Residue*> contResidues = cL.destResidues();
-  if (verbose) {
-    cout << "\t\tdTERMen::selfEnergies -> found " << contResidues.size() << " contact-degree contacts:";
-    for (int ii = 0; ii < contResidues.size(); ii++) cout << " " << *(contResidues[ii]);
-    cout << endl;
-  }
-  if (intCut <= 1.0) {
-    vector<Residue*> bbscConts = (C.getInterfering({R}, intCut)).destResidues();
-    if (verbose) {
-      cout << "\t\tadding interfering residues:";
-      for (int ii = 0; ii < bbscConts.size(); ii++) cout << " " << *(bbscConts[ii]);
-      cout << endl;
-    }
-    contResidues = MstUtils::setunion(contResidues, bbscConts);
-    if (verbose) cout << "\t\tdTERMen::selfEnergies -> in total " << contResidues.size() << " contacts..." << endl;
-  }
+  vector<pair<Residue*, Residue*>> conts = getContactsWith({R}, C, 0, verbose);
+  vector<Residue*> contResidues(conts.size(), NULL);
+  for (int i = 0; i < conts.size(); i++) contResidues[i] = conts[i].second;
+
+  // if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
+  // contactList cL = C.getContacts(R, cdCut);
+  // cL.sortByDegree();
+  // vector<Residue*> contResidues = cL.destResidues();
+  // if (verbose) {
+  //   cout << "\t\tdTERMen::selfEnergies -> found " << contResidues.size() << " contact-degree contacts:";
+  //   for (int ii = 0; ii < contResidues.size(); ii++) cout << " " << *(contResidues[ii]);
+  //   cout << endl;
+  // }
+  // if (intCut <= 1.0) {
+  //   vector<Residue*> bbscConts = (C.getInterfering({R}, intCut)).destResidues();
+  //   if (verbose) {
+  //     cout << "\t\tadding interfering residues:";
+  //     for (int ii = 0; ii < bbscConts.size(); ii++) cout << " " << *(bbscConts[ii]);
+  //     cout << endl;
+  //   }
+  //   contResidues = MstUtils::setunion(contResidues, bbscConts);
+  //   if (verbose) cout << "\t\tdTERMen::selfEnergies -> in total " << contResidues.size() << " contacts..." << endl;
+  // }
 
   // consider each contacting residue with the central one and see if there are
   // enough matches. If so, create a clique to be grown later. If not, still
@@ -1006,7 +1174,7 @@ CartesianPoint dTERMen::singleBodyExpectations(fasstSolutionSet& matches, int cI
 }
 
 CartesianPoint dTERMen::backExpectation(const fasstSolution& m, int cInd) {
-  CartesianPoint p(globalAlphabetSize(), 0);
+  vector<mstreal> p(globalAlphabetSize(), 0);
   mstreal phi = F.getResidueProperties(m, "phi")[cInd];
   mstreal psi = F.getResidueProperties(m, "psi")[cInd];
   mstreal omg = F.getResidueProperties(m, "omega")[cInd];
@@ -1014,16 +1182,16 @@ CartesianPoint dTERMen::backExpectation(const fasstSolution& m, int cInd) {
   for (int aai = 0; aai < globalAlphabetSize(); aai++) {
     p[aai] = backEner(aai) + bbOmegaEner(omg, aai) + bbPhiPsiEner(phi, psi, aai) + envEner(env, aai);
   }
-  return dTERMen::enerToProb(p);
+  dTERMen::enerToProb(p);
+  return p;
 }
 
-CartesianPoint dTERMen::enerToProb(const vector<mstreal>& ener) {
+mstreal dTERMen::enerToProb(vector<mstreal>& ener) {
   mstreal minEner = MstUtils::min(ener);
   mstreal Z = 0;
-  vector<mstreal> p(ener.size(), 0);
-  for (int i = 0; i < ener.size(); i++) Z += exp(-(ener[i] - minEner)/kT);
-  for (int i = 0; i < ener.size(); i++) p[i] = exp(-(ener[i] - minEner)/kT)/Z;
-  return p;
+  for (int i = 0; i < ener.size(); i++) { ener[i] = exp(-(ener[i] - minEner)/kT); Z += ener[i]; }
+  for (int i = 0; i < ener.size(); i++) ener[i] /= Z;
+  return Z;
 }
 
 int dTERMen::pairToIdx(int aai, int aaj) const {

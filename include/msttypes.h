@@ -967,6 +967,11 @@ class MstUtils {
     template <class T>
     static vector<T> setunion(const vector<T>& A, const vector<T>& B);
 
+    /* Returns a vector with all of the elements that are both in vector A and B,
+    * in the order that they appear in A. */
+    template <class T>
+    static vector<T> setintersect(const vector<T>& A, const vector<T>& B);
+
     template <class T>
     static vector<T> range(const T& from, const T& to, const T& step = 1);
 
@@ -1166,6 +1171,17 @@ vector<T> MstUtils::setunion(const vector<T>& A, const vector<T>& B) {
     if (setA.find(B[i]) == setA.end()) U.push_back(B[i]);
   }
   return U;
+}
+
+
+template <class T>
+vector<T> MstUtils::setintersect(const vector<T>& A, const vector<T>& B) {
+  vector<T> inter;
+  set<T> setB = MstUtils::contents(B);
+  for (int i = 0; i < A.size(); i++) {
+    if (setB.find(A[i]) != setB.end()) inter.push_back(A[i]);
+  }
+  return inter;
 }
 
 template <class T>

@@ -1,6 +1,7 @@
 #include "msttypes.h"
 #include "mstoptions.h"
 #include "mstfasst.h"
+#include "mstsystem.h"
 #include <chrono>
 
 int main(int argc, char *argv[]) {
@@ -17,6 +18,8 @@ int main(int argc, char *argv[]) {
   op.addOption("sc", "specify sequence constraints as a semicolon-separated list of specifications. E.g., '0 3 LEU,ALA' means residue index 3 from the first query segment must be either LEU or ALA. Or, '0 3 LEU,ALA; 1 2 LYS' additionally specifies that residue index 2 from the second segment must be LYS.");
   op.addOption("outType", "what portion of matching sequences to output. Default is 'region', which refers to just the matching region. Also possible are: 'full' (for full structure) and 'withGaps' (for the matching regions plus any gaps between segments).");
   op.addOption("strOut", "dump structures into this directory.");
+  op.addOption("seqOut", "sequence output file.");
+  op.addOption("sc", "dump sidechains (not only the backbone).");
   op.addOption("pp", "store phi/psi properties in the database, if creating a new one from PDB files.");
   op.setOptions(argc, argv);
   if (op.isGiven("redProp")) MstUtils::assert(!op.getString("redProp").empty(), "--redProp must specify a property name");
@@ -31,13 +34,14 @@ int main(int argc, char *argv[]) {
       MstUtils::error("unknown output type '" + op.getString("outType") + "'");
     }
   }
+  if (op.isGiven("strOut") && !MstSys::isDir(op.getString("strOut"))) MstSys::cmkdir(op.getString("strOut"));
 
   FASST S;
   cout << "Reading the database..." << endl;
   auto begin = chrono::high_resolution_clock::now();
   Structure query(op.getString("q"));
   S.setQuery(query);
-  S.setMemorySaveMode(true);
+  S.setMemorySaveMode(!op.isGiven("sc"));
   if (op.isGiven("d")) {
     vector<string> pdbFiles = MstUtils::fileToArray(op.getString("d"));
     for (int i = 0; i < pdbFiles.size(); i++) {
@@ -105,12 +109,16 @@ int main(int argc, char *argv[]) {
     }
     if (op.isGiven("strOut")) {
       // Structure match = S.getMatchStructure(*it, true, FASST::matchType::FULL);
-      Structure match = S.getMatchStructure(*it, false, type);
+      Structure match = S.getMatchStructure(*it, op.isGiven("sc"), type);
       match.writePDB(op.getString("strOut") + "/match" + MstUtils::toString(i) + ".pdb");
     }
   }
+  fstream of;
+  if (op.isGiven("seqOut")) MstUtils::openFile(of, op.getString("seqOut"), ios::out);
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     Sequence seq = S.getMatchSequence(*it);
     cout << seq.toString() << endl;
+    if (op.isGiven("seqOut")) of << seq.toString() << endl;
   }
+  if (op.isGiven("seqOut")) of.close();
 }

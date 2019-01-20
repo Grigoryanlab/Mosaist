@@ -69,7 +69,7 @@ endif
 
 # targets and MST libraries
 TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testRotlib testTERMUtils testTransforms testdTERMen testTermanal
-PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments $(ARMA_PROGRAMS)
+PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments design $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes msttermanal
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans libdtermen
@@ -81,7 +81,7 @@ testAutofuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testConFind_DEPS		:= mstcondeg mstoptions mstrotlib mstsystem msttransforms msttypes
 testClusterer_DEPS		:= mstoptions msttypes mstfasst msttransforms mstsequence
 testSequence_DEPS		:= mstoptions msttypes mstsequence
-testFASST_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes
+testFASST_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes mstsystem
 testFuser_DEPS			:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testGrads_DEPS			:= msttypes
 testRotlib_DEPS			:= mstrotlib msttransforms msttypes
@@ -96,6 +96,7 @@ bind_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence m
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg
 testdTERMen_DEPS		:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
+design_DEPS			:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 analyzeLandscape_DEPS		:= msttypes msttransforms mstsequence mstoptions mstfasst dtermen mstcondeg mstrotlib mstmagic
 
 # MST library dependencies

@@ -36,11 +36,32 @@ class dTERMen {
     void readConfigFile(const string& configFile);
     void setEnergyFunction(const string& ver); // sets the energy function version and alters any necessary parameters
 
-    /* Builds an energy table for design, given a list of mutable positions and,
-     * optionally, a list of allowed amino acids at each. If the latter is not
-     * given, the entire amino-acid alphabet known to the dTERMen object will be
-     * allowed at each site. */
-    EnergyTable buildEnergyTable(const vector<Residue*>& variable, const vector<vector<string> >& allowed = vector<vector<string> >());
+    /* Builds an energy table for design. Parameters:
+     * - a list of mutable positions as vector<Residue*>. All residues must belong
+     *   to a single Structure objects.
+     * - (optional) a list of allowed amino acids at each position. If not given,
+     *   the entire amino-acid alphabet known to the dTERMen object will be
+     *   allowed at each site.
+     * - (optional) a list of images for crystal symmetry design. If given, the
+     *   "central" unit cell must be listed first, followed by all other images
+     *    that must have exactly the same number of residues listed in the same
+     *    order. The list of variable positions must come from the central unit
+     *    cell. Similarly, if the specificity context is specified (see below),
+     *    this selection must also be from the central unit cell.
+     * - (optional) a pointer to an EnergyTable object that will be filled with
+     *   "specificity gap" energies. This is a table that quantifies the extent
+     *   to which each amino-acid choice at each variable position is specific to
+     *   the fixed context (i.e., the specific decoration present at the fixed
+     *   sites--i.e., all those that are not variable).
+     * - (optional) a list of residues to consider as the fixed context for the
+     *   purposes of specificity-gap energy calculation. This can be used if not
+     *   all of the fixed residues are to be considered as the "context" for the
+     *   purposes of specificity calculation. For example, this could be the list
+     *   of sites a fixed interaction partner for which we are trying to design
+     *   a binder. While some of the binder positions may also be fixed, they are
+     *   not part of the specificity context.
+     */
+    EnergyTable buildEnergyTable(const vector<Residue*>& variable, const vector<vector<string>>& allowed = vector<vector<string>>(), const vector<vector<Residue*>>& images = vector<vector<Residue*>>(), EnergyTable* specTable = NULL, const vector<Residue*>& specContext = vector<Residue*>());
 
     mstreal getkT() const { return kT; }
     FASST* getFASST() { return &F; }
@@ -173,7 +194,7 @@ class dTERMen {
      * can be specified to collect the expectation in each match. */
     CartesianPoint singleBodyExpectations(fasstSolutionSet& matches, int cInd, vector<CartesianPoint>* breakDown = NULL);
 
-    CartesianPoint enerToProb(const vector<mstreal>& ener);
+    mstreal enerToProb(vector<mstreal>& ener);
 
     /* Amino-acid indices provide a convenient way to index into a array, while
      * also encoding the amino-acid type. For amino-acid pairs, this is tricky,
@@ -181,6 +202,20 @@ class dTERMen {
      * acid indices and a single index that uniquely identifies the pair. */
     int pairToIdx(int aai, int aaj) const;
     pair<int, int> idxToPair(int idx) const;
+
+    /* Given a list of source residues, and a ConFind object (already initialized
+     * with the relevant structure), returns a list of residue pairs that corres-
+     * pond to contacts with source residues. These are either intra contacts--,
+     * contacts formed between the source residues--or contacts between source
+     * residues and residues not belonging to that list. This is controlled by the
+     * last integer parameter (0, the default, corresponds to inter, 1 to intra,
+     * and two to both). In the case of inter-contacts, the source residue of
+     * each contact will be listed first in each pair (i.e., will be stored in
+     * the "first" field of each pair). The contacts in the returned list will
+     * be ordered as follows: first contact-degree based contacts, ordered by
+     * contact degree in descending order, then any additional contacts emerging
+     * from interference, ordered by interference. */
+    vector<pair<Residue*, Residue*>> getContactsWith(const vector<Residue*>& source, ConFind& C, int type = 0, bool verbose = false);
 
   private:
     FASST F;
