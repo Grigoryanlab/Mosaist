@@ -29,6 +29,8 @@ class fasstSolutionAddress {
 class fasstSolution {
   friend class fasstSolutionSet;
   public:
+    typedef pair<short,short> resAddress;
+
     fasstSolution() { rmsd = 0.0; context = NULL; }
     fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, const Transform& _tr, const vector<int>& _segLengths, vector<int> segOrder = vector<int>());
     fasstSolution(const fasstSolution& _sol);
@@ -40,6 +42,7 @@ class fasstSolution {
     vector<int> getAlignment() const { return alignment; }
     vector<int> getSegLengths() const { return segLengths; }
     int segLength(int i) const { return segLengths[i]; }
+    resAddress segCentralResidue(int i) const { return resAddress(targetIndex, alignment[i] + segLengths[i]/2); }
     int numSegments() const { return alignment.size(); }
     int operator[](int i) const { return alignment[i]; }
     Transform getTransform() const { return tr; }
@@ -140,13 +143,15 @@ class fasstSolution {
 
 class fasstSolutionSet {
   public:
+    typedef fasstSolution::resAddress resAddress;
+
     fasstSolutionSet() { updated = false; }
     fasstSolutionSet(const fasstSolution& sol);
     fasstSolutionSet(const fasstSolutionSet& sols);
     fasstSolutionSet(const vector<fasstSolutionAddress>& addresses, const vector<int>& segLengths);
     fasstSolutionSet& operator=(const fasstSolutionSet& sols);
     bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
-    bool insert(const fasstSolution& sol, map<int, map<int, map<int, set<int> > > >& relMap); // returns whether the insert was performed
+    bool insert(const fasstSolution& sol, simpleMap<resAddress, tightvector<resAddress>>& relMap); // returns whether the insert was performed
     void erase(fasstSolution& sol);
     set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it);
     set<fasstSolution>::iterator begin() const { return solsSet.begin(); }
@@ -156,11 +161,13 @@ class fasstSolutionSet {
     // const fasstSolution& operator[] (int i) const;
     fasstSolution& operator[] (int i);
     int size() const { return solsSet.size(); }
-    void clear() { solsSet.clear(); solsByTarget.clear(); updated = true; }
+    void init(int numSegs) { clear(); solsByCenRes.resize(numSegs); }
+    void clear() { solsSet.clear(); solsByCenRes.clear(); updated = true; }
     mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
     mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
     vector<fasstSolution*> orderByDiscovery();
     vector<fasstSolutionAddress> extractAddresses() const;
+    void clearTempData() { solsByCenRes.clear(); }
 
     void write(ostream &_os) const; // write fasstSolutionSet to a binary stream
     void read(istream &_os);  // read fasstSolutionSet from a binary stream
@@ -182,7 +189,10 @@ class fasstSolutionSet {
     // to its elements (i.e., it does not copy them upon resizing like vector).
     set<fasstSolution> solsSet;
     vector<fasstSolution*> solsVec;
-    map<int, set<fasstSolution*> > solsByTarget;
+    // solsByCenRes[i] is a map that of solutions keyed by the central residue
+    // of the i-th segment. This is only used during search (for redundancy re-
+    // moval) and is deleted before return. Not copied upon assignment.
+    vector<map<fasstSolution::resAddress, set<fasstSolution*>>> solsByCenRes;
     bool updated;
 };
 
@@ -316,6 +326,7 @@ class FASST {
     enum matchType { REGION = 1, FULL, WITHGAPS };
     enum searchType { CA = 1, FULLBB };
     enum targetFileType { PDB = 1, BINDATABASE, STRUCTURE };
+    typedef fasstSolution::resAddress resAddress;
 
     class targetInfo {
       public:
@@ -409,7 +420,7 @@ class FASST {
     void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
     // void addResidueRelationships(int ti, const string& propType, const map<int, map<int, map<int, set<int> > >& resRels);
     void addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj);
-    map<int, map<int, set<int> > > getResidueRelationships(int ti, const string& propType) { return resRelProperties[propType][ti]; }
+    // map<int, map<int, set<int> > > getResidueRelationships(int ti, const string& propType) { return resRelProperties[propType][ti]; }
 
     bool isResiduePropertyDefined(const string& propType);
     bool isResiduePropertyDefined(const string& propType, int ti);
@@ -490,7 +501,7 @@ class FASST {
      * property in the FASST database. */
     fasstSolutionSet removeRedundancy(const fasstSolutionSet& matches);
 
-    map<int, map<int, map<int, set<int> > > >& getRedundancyPropertyMap() { return resRelProperties[opts.getRedundancyProperty()]; }
+    simpleMap<resAddress, tightvector<resAddress>>& getRedundancyPropertyMap() { return resRelProperties[opts.getRedundancyProperty()]; }
 
   protected:
     void processQuery();
@@ -541,10 +552,11 @@ class FASST {
     map<string, map<int, map<int, map<int, mstreal> > > > resPairProperties;
 
     /* Object for holding residue-pair relational graphs. Specifically,
-     * resRelProperties["sim"][ti][tj][ri] is the set of all residues in target
-     * tj that are related by the property "sim" to the residue ri in target ti.
+     * resRelProperties["sim"][(ti, ri)] is the list of all residues in the data-
+     * base that are related by the property "sim" to the residue with the address
+     * (ti, ri) (i.e., target ti, residue ri).
      * NOTE: this property can be directional (i.e., relationships are not mirrored). */
-    map<string, map<int, map<int, map<int, set<int> > > > > resRelProperties;
+    map<string, simpleMap<resAddress, tightvector<resAddress>>> resRelProperties;
 
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
     int currentTarget;                       // the index of the target currently being searched for
