@@ -701,6 +701,9 @@ class ProximitySearch {
     void pointBucket(const CartesianPoint& p, int* i, int* j, int* k) { pointBucket(p.getX(), p.getY(), p.getZ(), i, j, k); }
     void pointBucket(mstreal px, mstreal py, mstreal pz, int* i, int* j, int* k);
     void limitIndex(int *ind);
+    mstreal limitX(mstreal x);
+    mstreal limitY(mstreal y);
+    mstreal limitZ(mstreal z);
     mstreal gridSpacingX() { return (xhi - xlo)/N; }
     mstreal gridSpacingY() { return (yhi - ylo)/N; }
     mstreal gridSpacingZ() { return (zhi - zlo)/N; }

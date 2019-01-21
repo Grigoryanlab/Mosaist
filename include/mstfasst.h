@@ -161,13 +161,21 @@ class fasstSolutionSet {
     // const fasstSolution& operator[] (int i) const;
     fasstSolution& operator[] (int i);
     int size() const { return solsSet.size(); }
-    void init(int numSegs) { clear(); solsByCenRes.resize(numSegs); }
+    void init(int numSegs) { clear(); solsByCenRes.resize(numSegs); algnRedBar.resize(numSegs); algnRedBarSource.resize(numSegs); }
     void clear() { solsSet.clear(); solsByCenRes.clear(); updated = true; }
     mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
     mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
     vector<fasstSolution*> orderByDiscovery();
     vector<fasstSolutionAddress> extractAddresses() const;
+
     void clearTempData() { solsByCenRes.clear(); }
+    void resetAlignRedBarrierData(int targetLen) {
+      for (int i = 0; i < algnRedBar.size(); i++) {
+        algnRedBar[i].clear(); algnRedBar[i].resize(targetLen, INFINITY);
+        algnRedBar[i].clear();
+      }
+    }
+    mstreal alignRedBarrier(int segIdx, int ri) const { return algnRedBar[segIdx][ri]; }
 
     void write(ostream &_os) const; // write fasstSolutionSet to a binary stream
     void read(istream &_os);  // read fasstSolutionSet from a binary stream
@@ -193,6 +201,12 @@ class fasstSolutionSet {
     // of the i-th segment. This is only used during search (for redundancy re-
     // moval) and is deleted before return. Not copied upon assignment.
     vector<map<fasstSolution::resAddress, set<fasstSolution*>>> solsByCenRes;
+
+    // these two member variables are for storing information about existing
+    // matches that have redundant segments to potential solutions from the
+    // current target
+    vector<vector<mstreal>> algnRedBar;
+    vector<map<fasstSolution*, set<int>>> algnRedBarSource;
     bool updated;
 };
 
@@ -505,7 +519,10 @@ class FASST {
 
   protected:
     void processQuery();
-    void setCurrentRMSDCutoff(mstreal cut);
+    void setCurrentRMSDCutoff(mstreal cut, int p = -1); // set the current RMSD for this priority level
+    void resetCurrentRMSDCutoff(int p = -1);            // reset current RMSD cutoff back to the value set for the given priority level
+    int rmsdPriority() const { return rPrior; }
+    mstreal getCurrentRMSDCutoff() const { return rmsdCut; }
     void prepForSearch(int ti);
     bool parseChain(const Chain& S, AtomPointerVector* searchable = NULL, Sequence* seq = NULL);
     mstreal currentAlignmentResidual(bool compute, bool setTransform = false);   // computes the accumulated residual up to and including segment recLevel
@@ -618,6 +635,10 @@ class FASST {
 
     // current RMSD and residual cutoffs (not user-set, but internal)
     mstreal rmsdCut, residualCut;
+
+    // facilitate the storage of a series of temporary RMSD cutoffs, by priority
+    vector<mstreal> rmsdCutTemp; // rmsdCutTemp[i] is the RMSD cutoff at priority level i (negative if not set)
+    int rPrior;                  // the priority level of the current RMSD (-1 if not currently at a temporary RMSD)
 
     // Atom subsets needed at different recursion levels. So queryMasks[i] stores
     // all atoms of the first i+1 segments of the query combined. The same for

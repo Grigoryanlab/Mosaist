@@ -190,9 +190,25 @@ FASST::~FASST() {
   for (int i = 0; i < ps.size(); i++) delete ps[i];
 }
 
-void FASST::setCurrentRMSDCutoff(mstreal cut) {
+void FASST::setCurrentRMSDCutoff(mstreal cut, int p) {
   rmsdCut = cut;
   residualCut = cut*cut*querySize;
+  rPrior = p;
+  if (p >= 0) {
+    if (p >= rmsdCutTemp.size()) rmsdCutTemp.resize(p + 1, -1);
+    rmsdCutTemp[p] = cut;
+  }
+}
+
+void FASST::resetCurrentRMSDCutoff(int p) {
+  if (p != rPrior) {
+    for (int i = rPrior; (i > p) && (i >= 0); i--) rmsdCutTemp[i] = -1; // wipe out all RMSD at levels below the given one
+    for (; p >= 0; p--) { // find the first priority level at/before the given one that has its RMSD set
+      if (rmsdCutTemp[p] >= 0) break;
+    }
+    setCurrentRMSDCutoff((p < 0) ? rmsdCut : rmsdCutTemp[p]);
+    rPrior = p;
+  }
 }
 
 /* This function sets up the query, in the process deciding which part of the
@@ -708,15 +724,21 @@ mstreal FASST::centToCentTol(int i) {
 fasstSolutionSet FASST::search() {
   // auto begin = chrono::high_resolution_clock::now();
   // int prepTime = 0;
-  opts.validateSearchRequest(query.size());
-  if (opts.isMinNumMatchesSet()) setCurrentRMSDCutoff(999.0);
+  int numSegs = query.size();
+  opts.validateSearchRequest(numSegs);
+  if (opts.isMinNumMatchesSet()) setCurrentRMSDCutoff(INFINITY);
   else setCurrentRMSDCutoff(opts.getRMSDCutoff());
-  solutions.init(query.size());
-  vector<int> segLen(query.size()); // number of residues in each query segment
-  for (int i = 0; i < query.size(); i++) segLen[i] = atomToResIdx(query[i].size());
-  vector<mstreal> ccTol(query.size(), -1.0);
+  solutions.init(numSegs);
+  bool redSet = opts.isRedundancyCutSet() || opts.isRedundancyPropertySet();
+  vector<int> segLen(numSegs); // number of residues in each query segment
+  for (int i = 0; i < numSegs; i++) segLen[i] = atomToResIdx(query[i].size());
+  vector<mstreal> ccTol(numSegs, -1.0);
   for (currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
     // auto beginPrep = chrono::high_resolution_clock::now();
+    if (redSet) {
+      resetCurrentRMSDCutoff(); // if it was previously temporarily set
+      solutions.resetAlignRedBarrierData(targets[currentTarget].size());
+    }
     prepForSearch(currentTarget);
     // auto endPrep = chrono::high_resolution_clock::now();
     // prepTime += chrono::duration_cast<std::chrono::microseconds>(endPrep-beginPrep).count();
@@ -738,6 +760,20 @@ fasstSolutionSet FASST::search() {
       currAlignment[recLevel] = remOptions[recLevel][recLevel].bestChoice();
       remOptions[recLevel][recLevel].removeOption(currAlignment[recLevel]);
 
+      // if redundancy removal is set, and there are matches in the current list
+      // of solutions that are redundant with the current partial solution, any
+      // full realization of the current partial solution will only be accepted
+      // if they it improves upon the best RMSD of any of these redundant solu-
+      // tions. So, temporarily lower the current RMSD threshold, if applicable,
+      // but keep track of which segment in the current alignment this was due
+      // to (which segment had the redundancy), so that this chane can be unwound
+      // when this segment's alignment changes in the partial solution.
+      if (redSet && (numSegs > 1)) {
+        if (rmsdPriority() >= recLevel) resetCurrentRMSDCutoff(recLevel - 1);
+        mstreal barrier = solutions.alignRedBarrier(qSegOrd[recLevel], currAlignment[recLevel]);
+        if (getCurrentRMSDCutoff() > barrier) setCurrentRMSDCutoff(barrier, recLevel);
+      }
+
       // 2. compute the total residual from the current alignment
       mstreal curBound = currentAlignmentResidual(true) + boundOnRemainder(true);
       if (curBound > residualCut) continue;
@@ -746,14 +782,14 @@ fasstSolutionSet FASST::search() {
       // 3. update update remaining options for subsequent segments based on the
       // newly made choice. The set of options on the next recursion level is a
       // subset of the set of options on the previous level.
-      int remSegs = query.size() - (recLevel + 1);
+      int remSegs = numSegs - (recLevel + 1);
       if (remSegs > 0) {
         bool levelExhausted = false;
         int nextLevel = recLevel + 1;
         // copy remaining options from the previous recursion level. This way,
         // we can compute bounds on this level and can do set intersections to
         // further narrow this down
-        for (int i = nextLevel; i < query.size(); i++) {
+        for (int i = nextLevel; i < numSegs; i++) {
           remOptions[nextLevel][i].copyIn(remOptions[nextLevel-1][i]);
           // except that segments cannot overlap, so remove from consideration
           // all alignments that overlap with the segments that was just placed
@@ -763,7 +799,7 @@ fasstSolutionSet FASST::search() {
         // if any gap constraints exist, limit options at this recursion level accordingly
         if (opts.gapConstraintsExist()) {
           for (int j = 0; j < nextLevel; j++) {
-            for (int i = nextLevel; i < query.size(); i++) {
+            for (int i = nextLevel; i < numSegs; i++) {
               remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], targChainEnd[currAlignment[j]]);
               if (opts.minGapConstrained(qSegOrd[i], qSegOrd[j]))
                 remOptions[nextLevel][i].constrainLE(currAlignment[j] - opts.getMinGap(qSegOrd[i], qSegOrd[j]) - segLen[i]);
@@ -787,7 +823,7 @@ fasstSolutionSet FASST::search() {
         CartesianPoint& currCent = currCents[recLevel];
         for (int c = 0; true; c++) {
           bool updated = false;
-          for (int i = nextLevel; i < query.size(); i++) {
+          for (int i = nextLevel; i < numSegs; i++) {
             FASST::optList& remSet = remOptions[nextLevel][i];
             de = centToCentTol(i);
             if (de < 0) { levelExhausted = true; break; }
@@ -831,13 +867,21 @@ fasstSolutionSet FASST::search() {
       } else {
         // if at the lowest recursion level already, then record the solution
         fasstSolution sol(currAlignment, sqrt(currResidual/querySize), currentTarget, currentTransform(), segLen, qSegOrd);
+        bool inserted = false;
         if (opts.isRedundancyCutSet()) {
           addSequenceContext(sol);
-          solutions.insert(sol, opts.getRedundancyCut());
+          inserted = solutions.insert(sol, opts.getRedundancyCut());
         } else if (opts.isRedundancyPropertySet()) {
-          solutions.insert(sol, getRedundancyPropertyMap());
+          inserted = solutions.insert(sol, getRedundancyPropertyMap());
         } else {
-          solutions.insert(sol);
+          inserted = solutions.insert(sol);
+        }
+
+        if (!inserted) {
+          for (int rL = 0; rL < numSegs; rL++) {
+            mstreal barrier = solutions.alignRedBarrier(qSegOrd[rL], currAlignment[rL]);
+            if (getCurrentRMSDCutoff() > barrier) setCurrentRMSDCutoff(barrier, rL);
+          }
         }
 
         if (opts.isSufficientNumMatchesSet() && (solutions.size() == opts.getSufficientNumMatches())) return solutions;
@@ -1367,8 +1411,13 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, simpleMap<resAddress, ti
       set<fasstSolution*>& simSols = solsByCenRes[i][rj];
       for (auto it = simSols.begin(); it != simSols.end(); ++it) {
         fasstSolution* psol = (fasstSolution*) *it;
-        if (psol->getRMSD() <= sol.getRMSD()) return false; // sol got trumped by a better previous solution
-        else {
+        if (psol->getRMSD() <= sol.getRMSD()) {
+          if (algnRedBar[i][sol[i]] > psol->getRMSD()) {
+            algnRedBar[i][sol[i]] = psol->getRMSD();
+            algnRedBarSource[i][psol].insert(sol[i]);
+          }
+          return false; // sol got trumped by a better previous solution
+        } else {
           // This previous solution gets trumped by sol, but we need to find the
           // best of the similar solutions to see if any trump sol. If none trump
           // sol, then the best of the similar previous solutions will be removed.
@@ -1379,7 +1428,16 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, simpleMap<resAddress, ti
     }
   }
 
-  if (toRemove != NULL) erase(*toRemove);
+  if (toRemove != NULL) {
+    for (int i = 0; i < sol.numSegments(); i++) {
+      if (algnRedBarSource[i].find(toRemove) != algnRedBarSource[i].end()) {
+        set<int>& wasTrumping = algnRedBarSource[i][toRemove];
+        for (int j : wasTrumping) algnRedBar[i][j] = INFINITY;
+      }
+      algnRedBarSource[i].erase(toRemove);
+    }
+    erase(*toRemove);
+  }
   pair<set<fasstSolution>::iterator, bool> ins = solsSet.insert(sol);
   fasstSolution* inserted = (fasstSolution*) &(*(ins.first));
   for (int i = 0; i < sol.numSegments(); i++) solsByCenRes[i][sol.segCentralResidue(i)].insert(inserted);

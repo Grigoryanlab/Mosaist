@@ -3113,6 +3113,24 @@ void ProximitySearch::limitIndex(int *ind) {
   if (*ind > N-1) *ind = N-1;
 }
 
+mstreal ProximitySearch::limitX(mstreal x) {
+  if (x < xlo) return xlo;
+  if (x > xhi) return xhi;
+  return x;
+}
+
+mstreal ProximitySearch::limitY(mstreal y) {
+  if (y < ylo) return ylo;
+  if (y > yhi) return yhi;
+  return y;
+}
+
+mstreal ProximitySearch::limitZ(mstreal z) {
+  if (z < zlo) return zlo;
+  if (z > zhi) return zhi;
+  return z;
+}
+
 bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstreal dmax, vector<int>* list, bool byTag) {
   mstreal cx = c.getX(); mstreal cy = c.getY(); mstreal cz = c.getZ();
   // first check if the point is outside of the bounding box of the point cloud by a sufficient amount
@@ -3122,9 +3140,9 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
   int ci, cj, ck;
   int iOutLo, jOutLo, kOutLo, iOutHi, jOutHi, kOutHi; // external box (no point in looking beyond it, points there are too far)
   int iInLo, jInLo, kInLo, iInHi, jInHi, kInHi;       // internal box (no point in looking within it, points there are too close)
-  pointBucket(cx, cy, cz, &ci, &cj, &ck);
-  pointBucket(cx - dmax, cy - dmax, cz - dmax, &iOutLo, &jOutLo, &kOutLo);
-  pointBucket(cx + dmax, cy + dmax, cz + dmax, &iOutHi, &jOutHi, &kOutHi);
+  pointBucket(limitX(cx), limitY(cy), limitZ(cz), &ci, &cj, &ck);
+  pointBucket(limitX(cx - dmax), limitY(cy - dmax), limitZ(cz - dmax), &iOutLo, &jOutLo, &kOutLo);
+  pointBucket(limitX(cx + dmax), limitY(cy + dmax), limitZ(cz + dmax), &iOutHi, &jOutHi, &kOutHi);
   if (dmin > 0) {
     mstreal sr3 = sqrt(3);
     pointBucket(cx - dmin/sr3, cy - dmin/sr3, cz - dmin/sr3, &iInLo, &jInLo, &kInLo);
@@ -3134,8 +3152,8 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
     jInLo = jInHi = cj;
     kInLo = kInHi = ck;
   }
-  limitIndex(&iInLo); limitIndex(&iInHi); limitIndex(&jInLo); limitIndex(&jInHi); limitIndex(&kInLo); limitIndex(&kInHi);
-  limitIndex(&iOutLo); limitIndex(&iOutHi); limitIndex(&jOutLo); limitIndex(&jOutHi); limitIndex(&kOutLo); limitIndex(&kOutHi);
+  // limitIndex(&iInLo); limitIndex(&iInHi); limitIndex(&jInLo); limitIndex(&jInHi); limitIndex(&kInLo); limitIndex(&kInHi);
+  // limitIndex(&iOutLo); limitIndex(&iOutHi); limitIndex(&jOutLo); limitIndex(&jOutHi); limitIndex(&kOutLo); limitIndex(&kOutHi);
 
   // search only within the boxes where points of interest can be, in principle
   if (list != NULL) list->clear();
