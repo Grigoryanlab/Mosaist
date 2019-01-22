@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
   op.addOption("redProp", "set redundancy property name. If defined, will assume the FASST database encodes this relational property and will define redundancy via it.");
   op.addOption("min", "min number of matches.");
   op.addOption("max", "max number of matches.");
-  op.addOption("sc", "specify sequence constraints as a semicolon-separated list of specifications. E.g., '0 3 LEU,ALA' means residue index 3 from the first query segment must be either LEU or ALA. Or, '0 3 LEU,ALA; 1 2 LYS' additionally specifies that residue index 2 from the second segment must be LYS.");
+  op.addOption("const", "specify sequence constraints as a semicolon-separated list of specifications. E.g., '0 3 LEU,ALA' means residue index 3 from the first query segment must be either LEU or ALA. Or, '0 3 LEU,ALA; 1 2 LYS' additionally specifies that residue index 2 from the second segment must be LYS.");
   op.addOption("outType", "what portion of matching sequences to output. Default is 'region', which refers to just the matching region. Also possible are: 'full' (for full structure) and 'withGaps' (for the matching regions plus any gaps between segments).");
   op.addOption("strOut", "dump structures into this directory.");
   op.addOption("seqOut", "sequence output file.");
@@ -79,11 +79,11 @@ int main(int argc, char *argv[]) {
   S.setRedundancyCut(op.getReal("red", 100.0)/100.0);
   if (op.isGiven("redProp")) S.setRedundancyProperty(op.getString("redProp"));
   fasstSeqConstSimple seqConst(S.getNumQuerySegments());
-  if (op.isGiven("sc")) {
-    vector<string> cons = MstUtils::split(op.getString("sc"), ";");
+  if (op.isGiven("const")) {
+    vector<string> cons = MstUtils::split(op.getString("const"), ";");
     for (int i = 0; i < cons.size(); i++) {
       vector<string> con = MstUtils::split(MstUtils::trim(cons[i]), " ");
-      MstUtils::assert(con.size() == 3, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("sc"));
+      MstUtils::assert(con.size() == 3, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("const"));
       int segIdx = MstUtils::toInt(con[0]);
       int resIdx = MstUtils::toInt(con[1]);
       vector<string> aas = MstUtils::split(MstUtils::trim(con[2]), "|");

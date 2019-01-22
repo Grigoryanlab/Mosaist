@@ -172,7 +172,7 @@ class fasstSolutionSet {
     void resetAlignRedBarrierData(int targetLen) {
       for (int i = 0; i < algnRedBar.size(); i++) {
         algnRedBar[i].clear(); algnRedBar[i].resize(targetLen, INFINITY);
-        algnRedBar[i].clear();
+        algnRedBarSource[i].clear();
       }
     }
     bool isAlignRedBarrierDataSet() const { return !algnRedBar.empty() && !algnRedBar[0].empty(); }

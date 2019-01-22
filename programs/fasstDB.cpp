@@ -90,21 +90,25 @@ int main(int argc, char *argv[]) {
         if (op.isGiven("env") || op.isGiven("cont")) {
           ConFind C(&RL, P); // both need the confind object
           // environment
-          vector<Residue*> residues = P.getResidues();
-          vector<mstreal> freedoms = C.getFreedom(residues);
-          S.addResidueProperties(ti, "env", freedoms);
+          if (op.isGiven("env")) {
+            vector<Residue*> residues = P.getResidues();
+            vector<mstreal> freedoms = C.getFreedom(residues);
+            S.addResidueProperties(ti, "env", freedoms);
+          }
 
           // contacts
-          mstreal cdcut = op.getReal("cont");
-          contactList list = C.getContacts(P, cdcut);
-          map<int, map<int, mstreal> > conts;
-          for (int i = 0; i < list.size(); i++) {
-            int rA = list.residueA(i)->getResidueIndex();
-            int rB = list.residueB(i)->getResidueIndex();
-            conts[rA][rB] = list.degree(i);
-            conts[rB][rA] = list.degree(i);
+          if (op.isGiven("cont")) {
+            mstreal cdcut = op.getReal("cont");
+            contactList list = C.getContacts(P, cdcut);
+            map<int, map<int, mstreal> > conts;
+            for (int i = 0; i < list.size(); i++) {
+              int rA = list.residueA(i)->getResidueIndex();
+              int rB = list.residueB(i)->getResidueIndex();
+              conts[rA][rB] = list.degree(i);
+              conts[rB][rA] = list.degree(i);
+            }
+            S.addResiduePairProperties(ti, "conts", conts);
           }
-          S.addResiduePairProperties(ti, "conts", conts);
         }
       }
     }

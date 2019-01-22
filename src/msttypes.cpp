@@ -515,6 +515,7 @@ void Structure::renumber() {
 
 Structure Structure::reassignChainsByConnectivity(mstreal maxPeptideBond) {
   Structure S;
+  S.setName(getName());
   reassignChainsByConnectivity(S, maxPeptideBond);
   return S;
 }

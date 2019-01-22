@@ -503,7 +503,7 @@ void FASST::readDatabase(const string& dbFile) {
         MstUtils::readBin(ifs, name);
         vector<mstreal>& vals = resProperties[name][ti];
         vals.resize(N, 0);
-        for (int i = 0; i < vals.size(); i++) {
+        for (int i = 0; i < N; i++) {
           MstUtils::readBin(ifs, val);
           vals[i] = val;
         }
@@ -518,7 +518,7 @@ void FASST::readDatabase(const string& dbFile) {
           for (int j = 0; j < n; j++) {
             MstUtils::readBin(ifs, rj);
             MstUtils::readBin(ifs, cd);
-            vals[ri][rj] = cd;
+           vals[ri][rj] = cd;
           }
         }
       } else if (sect == 'R') {
@@ -554,11 +554,12 @@ void FASST::readDatabase(const string& dbFile) {
               MstUtils::readBin(ifs, ri.second);
               tightvector<resAddress>& relatedList = resRelProperty[ri];
               MstUtils::readBin(ifs, n);
-              relatedList.resize(n);
+              int off = relatedList.size();
+              relatedList.resize(off + n);
               for (int j = 0; j < n; j++) {
                 MstUtils::readBin(ifs, rj.first);
                 MstUtils::readBin(ifs, rj.second);
-                relatedList[j] = rj;
+                relatedList[off + j] = rj;
               }
             }
             break;
