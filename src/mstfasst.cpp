@@ -192,11 +192,13 @@ FASST::~FASST() {
 
 void FASST::setCurrentRMSDCutoff(mstreal cut, int p) {
   rmsdCut = cut;
-  residualCut = cut*cut*querySize;
+  residualCut = rmsdCut*rmsdCut*querySize;
   rPrior = p;
   if (p >= 0) {
     if (p >= rmsdCutTemp.size()) rmsdCutTemp.resize(p + 1, -1);
     rmsdCutTemp[p] = cut;
+  } else {
+    rmsdCutDef = cut;
   }
 }
 
@@ -206,7 +208,8 @@ void FASST::resetCurrentRMSDCutoff(int p) {
     for (; p >= 0; p--) { // find the first priority level at/before the given one that has its RMSD set
       if (rmsdCutTemp[p] >= 0) break;
     }
-    setCurrentRMSDCutoff((p < 0) ? rmsdCut : rmsdCutTemp[p]);
+    rmsdCut = (p < 0) ? rmsdCutDef : rmsdCutTemp[p];
+    residualCut = rmsdCut*rmsdCut*querySize;
     rPrior = p;
   }
 }
@@ -730,12 +733,14 @@ fasstSolutionSet FASST::search() {
   else setCurrentRMSDCutoff(opts.getRMSDCutoff());
   solutions.init(numSegs);
   bool redSet = opts.isRedundancyCutSet() || opts.isRedundancyPropertySet();
+  bool doRedBar = redSet && (numSegs > 1); // should we apply special "barrier" RMSD cutoffs to partial matches that are
+                                           // already known to be redundant to something in the current list of solutions?
   vector<int> segLen(numSegs); // number of residues in each query segment
   for (int i = 0; i < numSegs; i++) segLen[i] = atomToResIdx(query[i].size());
   vector<mstreal> ccTol(numSegs, -1.0);
   for (currentTarget = 0; currentTarget < targets.size(); currentTarget++) {
     // auto beginPrep = chrono::high_resolution_clock::now();
-    if (redSet) {
+    if (doRedBar) {
       resetCurrentRMSDCutoff(); // if it was previously temporarily set
       solutions.resetAlignRedBarrierData(targets[currentTarget].size());
     }
@@ -768,7 +773,7 @@ fasstSolutionSet FASST::search() {
       // but keep track of which segment in the current alignment this was due
       // to (which segment had the redundancy), so that this chane can be unwound
       // when this segment's alignment changes in the partial solution.
-      if (redSet && (numSegs > 1)) {
+      if (doRedBar) {
         if (rmsdPriority() >= recLevel) resetCurrentRMSDCutoff(recLevel - 1);
         mstreal barrier = solutions.alignRedBarrier(qSegOrd[recLevel], currAlignment[recLevel]);
         if (getCurrentRMSDCutoff() > barrier) setCurrentRMSDCutoff(barrier, recLevel);
@@ -877,7 +882,7 @@ fasstSolutionSet FASST::search() {
           inserted = solutions.insert(sol);
         }
 
-        if (!inserted) {
+        if (doRedBar && !inserted) {
           for (int rL = 0; rL < numSegs; rL++) {
             mstreal barrier = solutions.alignRedBarrier(qSegOrd[rL], currAlignment[rL]);
             if (getCurrentRMSDCutoff() > barrier) setCurrentRMSDCutoff(barrier, rL);
@@ -1327,17 +1332,19 @@ fasstSolutionSet& fasstSolutionSet::operator=(const fasstSolutionSet& sols) {
 
 bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
   // apply a redudancy filter, if needed
+  fasstSolution* toRemove = NULL;
+  bool algnBarInfoSet = isAlignRedBarrierDataSet();
   if ((redundancyCut < 1) && sol.seqContextDefined()) {
     const vector<Sequence>& segSeqs = sol.segmentSeqs();
     const vector<Sequence>& nTermPad = sol.nTermContext();
     const vector<Sequence>& cTermPad = sol.cTermContext();
     // compare this solution to each previously accepted solution
-    for (auto psol = solsSet.begin(); psol != solsSet.end(); ) {
+    for (auto it = solsSet.begin(); it != solsSet.end(); ++it) {
+      fasstSolution* psol = (fasstSolution*) &(*it);
       const vector<Sequence>& segSeqsPrev = psol->segmentSeqs();
       const vector<Sequence>& nTermPadPrev = psol->nTermContext();
       const vector<Sequence>& cTermPadPrev = psol->cTermContext();
       // compare the contexts of each segment:
-      bool psolStays = true;
       for (int i = 0; i < sol.numSegments(); i++) {
         int numID = 0, numTot = 0;
         /* The total length of the alignment we want to have, at least some L,
@@ -1373,18 +1380,35 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
         }
         if (isWithinSeqID(contextLength, redundancyCut, numTot, numID)) {
           // psol and sol are redundant. Which should go?
-          if (psol->getRMSD() <= sol.getRMSD()) { return false; } // sol got trumped by a better previous solution
-          else {
-            // sol is staying, but psol will need to be removed
-            // psol = solsSet.erase(psol);
-            psol = erase(psol);
-            psolStays = false;
+          if (psol->getRMSD() <= sol.getRMSD()) { // sol got trumped by a better previous solution
+            if (algnBarInfoSet && (algnRedBar[i][sol[i]] > psol->getRMSD())) {
+              algnRedBar[i][sol[i]] = psol->getRMSD();
+              algnRedBarSource[i][psol].insert(sol[i]);
+            }
+            return false;
+          } else {
+            // This previous solution gets trumped by sol, but we need to find the
+            // best of the similar solutions to see if any trump sol. If none trump
+            // sol, then the best of the similar previous solutions will be removed.
+            // NOTE: why remove the best??? maybe the worst? or the one with the clostst RMSD?
+            if ((toRemove == NULL) || (toRemove->getRMSD() > psol->getRMSD())) toRemove = psol;
             break; // no need to check other segments
           }
         }
       }
-      if (psolStays) psol++;
     }
+  }
+  if (toRemove != NULL) {
+    if (algnBarInfoSet) {
+      for (int i = 0; i < sol.numSegments(); i++) {
+        if (algnRedBarSource[i].find(toRemove) != algnRedBarSource[i].end()) {
+          set<int>& wasTrumping = algnRedBarSource[i][toRemove];
+          for (int j : wasTrumping) algnRedBar[i][j] = INFINITY;
+        }
+        algnRedBarSource[i].erase(toRemove);
+      }
+    }
+    erase(*toRemove);
   }
   pair<set<fasstSolution>::iterator, bool> ins = solsSet.insert(sol);
   // NOTE: I currently do not believe that solsByCenRes should be returned to the user,
@@ -1398,6 +1422,7 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, mstreal redundancyCut) {
 bool fasstSolutionSet::insert(const fasstSolution& sol, simpleMap<resAddress, tightvector<resAddress>>& relMap) {
   // apply a redudancy filter based on a pre-computed map of inter-residue relationships
   fasstSolution* toRemove = NULL;
+  bool algnBarInfoSet = isAlignRedBarrierDataSet();
   for (int i = 0; i < sol.numSegments(); i++) {
     resAddress ri = sol.segCentralResidue(i);
     tightvector<resAddress> simList;
@@ -1412,7 +1437,7 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, simpleMap<resAddress, ti
       for (auto it = simSols.begin(); it != simSols.end(); ++it) {
         fasstSolution* psol = (fasstSolution*) *it;
         if (psol->getRMSD() <= sol.getRMSD()) {
-          if (algnRedBar[i][sol[i]] > psol->getRMSD()) {
+          if (algnBarInfoSet && (algnRedBar[i][sol[i]] > psol->getRMSD())) {
             algnRedBar[i][sol[i]] = psol->getRMSD();
             algnRedBarSource[i][psol].insert(sol[i]);
           }
@@ -1429,12 +1454,14 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, simpleMap<resAddress, ti
   }
 
   if (toRemove != NULL) {
-    for (int i = 0; i < sol.numSegments(); i++) {
-      if (algnRedBarSource[i].find(toRemove) != algnRedBarSource[i].end()) {
-        set<int>& wasTrumping = algnRedBarSource[i][toRemove];
-        for (int j : wasTrumping) algnRedBar[i][j] = INFINITY;
+    if (algnBarInfoSet) {
+      for (int i = 0; i < sol.numSegments(); i++) {
+        if (algnRedBarSource[i].find(toRemove) != algnRedBarSource[i].end()) {
+          set<int>& wasTrumping = algnRedBarSource[i][toRemove];
+          for (int j : wasTrumping) algnRedBar[i][j] = INFINITY;
+        }
+        algnRedBarSource[i].erase(toRemove);
       }
-      algnRedBarSource[i].erase(toRemove);
     }
     erase(*toRemove);
   }

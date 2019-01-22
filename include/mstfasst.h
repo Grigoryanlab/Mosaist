@@ -175,6 +175,7 @@ class fasstSolutionSet {
         algnRedBar[i].clear();
       }
     }
+    bool isAlignRedBarrierDataSet() const { return !algnRedBar.empty() && !algnRedBar[0].empty(); }
     mstreal alignRedBarrier(int segIdx, int ri) const { return algnRedBar[segIdx][ri]; }
 
     void write(ostream &_os) const; // write fasstSolutionSet to a binary stream
@@ -207,7 +208,7 @@ class fasstSolutionSet {
     // current target
     vector<vector<mstreal>> algnRedBar;
     vector<map<fasstSolution*, set<int>>> algnRedBarSource;
-    bool updated;
+    bool updated, algnRedBarDataSet;
 };
 
 /* A general virtual class for representing per-segment sequence constraints. */
@@ -637,7 +638,8 @@ class FASST {
     mstreal rmsdCut, residualCut;
 
     // facilitate the storage of a series of temporary RMSD cutoffs, by priority
-    vector<mstreal> rmsdCutTemp; // rmsdCutTemp[i] is the RMSD cutoff at priority level i (negative if not set)
+    vector<mstreal> rmsdCutTemp; // rmsdCutTemp[i] is the RMSD cutoff at priority level i (value is negative if not set)
+    mstreal rmsdCutDef;          // RMSD cutoff for the top priority (priority value -1)
     int rPrior;                  // the priority level of the current RMSD (-1 if not currently at a temporary RMSD)
 
     // Atom subsets needed at different recursion levels. So queryMasks[i] stores
