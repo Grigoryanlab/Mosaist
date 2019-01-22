@@ -425,13 +425,9 @@ void dTERMen::buildBackgroundPotentials() {
 
     // compute multiplicity of each residue
     vector<mstreal> mult(N, 1); // multiplicity of each residue in the structure
-    map<int, map<int, set<int> > > simsToTarget = F.getResidueRelationships(ti, "sim");
+    map<int, vector<FASST::resAddress>> simsToTarget = F.getResidueRelationships(ti, "sim");
     for (auto it = simsToTarget.begin(); it != simsToTarget.end(); ++it) {
-      map<int, set<int> >& simsInTarget = it->second;
-      for (auto jt = simsInTarget.begin(); jt != simsInTarget.end(); ++jt) {
-        int ri = jt->first;
-        mult[ri] += (jt->second).size();
-      }
+      mult[it->first] += (it->second).size();
     }
 
     // store all properties

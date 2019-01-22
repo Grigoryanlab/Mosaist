@@ -435,7 +435,7 @@ class FASST {
     void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
     // void addResidueRelationships(int ti, const string& propType, const map<int, map<int, map<int, set<int> > >& resRels);
     void addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj);
-    // map<int, map<int, set<int> > > getResidueRelationships(int ti, const string& propType) { return resRelProperties[propType][ti]; }
+    map<int, vector<FASST::resAddress>> getResidueRelationships(int ti, const string& propType);
 
     bool isResiduePropertyDefined(const string& propType);
     bool isResiduePropertyDefined(const string& propType, int ti);

@@ -386,6 +386,18 @@ void FASST::addResidueRelationship(int ti, const string& propType, int ri, int t
   resRelProperties[propType][resAddress(ti, ri)].push_back(resAddress(tj, rj));
 }
 
+map<int, vector<FASST::resAddress>> FASST::getResidueRelationships(int ti, const string& propType) {
+  simpleMap<resAddress, tightvector<resAddress>>& relMap = resRelProperties[propType];
+  map<int, vector<FASST::resAddress>> ret;
+  int beg = relMap.getLowerBound(resAddress(ti, 0));
+  for (int i = beg; i < relMap.size(); i++) {
+    resAddress ri = relMap.key(i);
+    if (ri.first != ti) break;
+    ret[ri.second] = relMap.value(i);
+  }
+  return ret;
+}
+
 bool FASST::hasResidueProperty(int ti, const string& propType, int ri) {
   return ((resProperties.find(propType) != resProperties.end()) &&
           (resProperties[propType].find(ti) != resProperties[propType].end()) &&

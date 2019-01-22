@@ -845,6 +845,10 @@ class simpleMap {
     void erase(const keyType& key);
     void clear() { keys.clear(); vals.clear(); }
 
+    /* Same meaning as for corresponding tightvector<T> functions, applied to keys. */
+    int getUpperBound(const keyType& k) { return lower_bound(keys.begin(), keys.end(), k) - keys.begin(); }
+    int getLowerBound(const keyType& k) { return upper_bound(keys.begin(), keys.end(), k) - keys.begin(); }
+
   protected:
     void insert(const keyType& key, const valType& val, int i);
 
@@ -904,6 +908,9 @@ class tightvector {
 
     tightvector<T>& operator=(const tightvector<T>& other);
     tightvector<T>& operator=(const vector<T>& other);
+
+    // cast into regular vector
+    operator vector<T>() const;
 
   private:
     T* vec;
@@ -1476,6 +1483,13 @@ int tightvector<T>::getLowerBound(const T& val) {
   }
   if (!(vec[lo] < val)) return lo;
   return size();
+}
+
+template<class T>
+tightvector<T>::operator vector<T>() const {
+  vector<T> ret(size());
+  for (int i = 0; i < size(); i++) ret[i] = (*this)[i];
+  return ret;
 }
 
 #endif
