@@ -208,7 +208,8 @@ class fasstSolutionSet {
     // current target
     vector<vector<mstreal>> algnRedBar;
     vector<map<fasstSolution*, set<int>>> algnRedBarSource;
-    bool updated, algnRedBarDataSet;
+
+    bool updated;
 };
 
 /* A general virtual class for representing per-segment sequence constraints. */

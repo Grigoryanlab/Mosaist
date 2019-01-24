@@ -398,7 +398,7 @@ int main(int argc, char** argv) {
       for (int ii = 0; ii < O.size(); ii++) {
         if (O[ii] == NULL) continue;
         Structure* altFrag = new Structure();
-        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(A.getResidue(resB->getResidueIndex()))}, *altFrag, pmPair);
+        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(O[ii]->getResidue(resB->getResidueIndex()))}, *altFrag, pmPair);
         numberResidues(*altFrag, fragResIdx);
         matches.push_back(altFrag);
       }

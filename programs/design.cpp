@@ -12,6 +12,11 @@ int main(int argc, char *argv[]) {
   op.addOption("c", "dTERMen configuration file.", true);
   op.addOption("s", "selection of variable positions that should be designed. By default, all positions are designed.");
   op.addOption("ctx", "selection of fixed positions that should be treated as the fixed specificity context. If specified, will produce a specificity gap table.");
+  op.addOption("sym", "design with crystallographic symmetry. Must specify a semicolon-separated list of unit cells, with the "
+                      "first one being the central unit cell that design will focus on (it must have all surrounding unit cells "
+                      "present). Each unit cell must be a space-separated list of chains. E.g., --sym 'A B; C D; E F' means that "
+                      "the unit cell has two chains, with the central unit cell composed of chains A and B, and two other unit"
+                      "cells (one composed of chains C and D and another one of chains E and F) also present in the structure.");
   op.addOption("o", "output base.", true);
   op.setOptions(argc, argv);
 
@@ -37,14 +42,32 @@ int main(int argc, char *argv[]) {
   string etabFile = op.getString("o") + ".etab";
   string specEtabFile = op.getString("o") + ".spec.etab";
 
+  // parse crystallographic symmetry information
+  vector<vector<Residue*>> images;
+  if (op.isGiven("sym")) {
+    vector<string> unitCells = MstUtils::split(op.getString("sym"), ";");
+    if (unitCells.size() < 2) MstUtils::error("at least two unit cells must be specified if --sym is used");
+    images.resize(unitCells.size());
+    for (int i = 0; i < unitCells.size(); i++) {
+      vector<string> uc = MstUtils::split(MstUtils::trim(unitCells[i]), " ");
+      if (uc.empty()) MstUtils::error("one of the unit cells is empty in symmetry string " + op.getString("sym"));
+      for (int j = 0; j < uc.size(); j++) {
+        Chain* C = S.getChainByID(uc[j]);
+        if (C == NULL) MstUtils::error("chain '" + uc[i] + "' not found, specified in symmetry string " + op.getString("sym"));
+        vector<Residue*> chainResis = C->getResidues();
+        images[i].insert(images[i].end(), chainResis.begin(), chainResis.end());
+      }
+    }
+  }
+
   // build the energy table
   if (!MstSys::fileExists(etabFile)) {
     dTERMen D(op.getString("c"));
     if (specContext.empty()) {
-      E = D.buildEnergyTable(variable);
+      E = D.buildEnergyTable(variable, vector<vector<string>>(), images);
       E.writeToFile(etabFile);
     } else {
-      E = D.buildEnergyTable(variable, vector<vector<string>>(), vector<vector<Residue*>>(), &specE, specContext);
+      E = D.buildEnergyTable(variable, vector<vector<string>>(), images, &specE, specContext);
       E.writeToFile(etabFile);
       specE.writeToFile(specEtabFile);
     }
