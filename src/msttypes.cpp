@@ -1289,9 +1289,8 @@ void Atom::read(istream& _os) {
   clearAlternatives();
   if (hasAlt) {
     int nAlts; MstUtils::readBin(_os, nAlts);
-    alternatives = new vector<altInfo>(nAlts);
-    for (int i = 0; i < alternatives->size(); i++) {
-      mstreal aX, aY, aZ, aO, aB, aA;
+    for (int i = 0; i < nAlts; i++) {
+      mstreal aX, aY, aZ, aO, aB; char aA;
       MstUtils::readBin(_os, aX); MstUtils::readBin(_os, aY); MstUtils::readBin(_os, aZ);
       MstUtils::readBin(_os, aO); MstUtils::readBin(_os, aB); MstUtils::readBin(_os, aA);
       addAlternative(aX, aY, aZ, aB, aO, aA);
