@@ -1383,19 +1383,13 @@ tightvector<T>::~tightvector() {
 
 template<class T>
 void tightvector<T>::resize(int len, const T& val) {
-  if (len == 0) {
-    delete(vec);
-    vec = NULL;
-    L = len;
-  } else {
-    T* vecNew = new T[len];
-    int commonLen = MstUtils::min(len, L);
-    for (int i = 0; i < commonLen; i++) vecNew[i] = vec[i];
-    for (int i = L; i < len; i++) vecNew[i] = val;
-    L = len;
-    if (vec != NULL) delete(vec);
-    vec = vecNew;
-  }
+  T* vecNew = (len == 0) ? NULL : new T[len];
+  int commonLen = MstUtils::min(len, L);
+  for (int i = 0; i < commonLen; i++) vecNew[i] = vec[i];
+  for (int i = L; i < len; i++) vecNew[i] = val;
+  L = len;
+  if (vec != NULL) delete(vec);
+  vec = vecNew;
 }
 
 template<class T>
