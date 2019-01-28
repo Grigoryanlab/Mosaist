@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
   op.addOption("sc", "dump sidechains (not only the backbone).");
   op.addOption("pp", "store phi/psi properties in the database, if creating a new one from PDB files.");
   op.setOptions(argc, argv);
-  cout << "initial memory usage: " << MstSys::memUsage() << " KB" << endl;
+  int memInit = MstSys::memUsage();
   if (op.isGiven("redProp")) MstUtils::assert(!op.getString("redProp").empty(), "--redProp must specify a property name");
   FASST::matchType type = FASST::matchType::REGION;
   if (op.isGiven("outType")) {
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
   }
   auto end = chrono::high_resolution_clock::now();
   cout << "DB reading took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
-  cout << "memory usage: " << MstSys::memUsage() << " KB" << endl;
+  cout << "memory usage: " << MstSys::memUsage() - memInit << " KB" << endl;
   cout << "Searching..." << endl;
   begin = chrono::high_resolution_clock::now();
   S.search();

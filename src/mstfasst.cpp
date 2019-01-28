@@ -471,8 +471,8 @@ void FASST::writeDatabase(const string& dbFile) {
       tightvector<resAddress>& relatedList = resRelProperty.value(i);
       MstUtils::writeBin(ofs, (int) relatedList.size());
       for (int j = 0; j < relatedList.size(); j++) {
-        MstUtils::writeBin(ofs, (int) relatedList[i].first);  // tj
-        MstUtils::writeBin(ofs, (int) relatedList[i].second); // rj
+        MstUtils::writeBin(ofs, (int) relatedList[j].first);  // tj
+        MstUtils::writeBin(ofs, (int) relatedList[j].second); // rj
       }
     }
   }
