@@ -546,7 +546,7 @@ class FASST {
     /* targetStructs[i] and targets[i] store the original i-th target structure
      * and just the part of it that will be searched over, respectively. NOTE:
      * Atoms* in targets[i] point to Atoms of targetStructs[i]. So there is only
-     * one compy of the target structure and there is no amboguity in mapping
+     * one copy of the target structure and there is no amboguity in mapping
      * targets[i] to targetStructs[i], even if when building tagrets[i] some of
      * the residues in targetStructs[i] had to be ignored for whatever reason
      * (e.g., missing backbone). */

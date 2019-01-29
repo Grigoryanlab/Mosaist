@@ -466,13 +466,13 @@ void FASST::writeDatabase(const string& dbFile) {
     MstUtils::writeBin(ofs, (string) p->first);
     MstUtils::writeBin(ofs, (int) resRelProperty.size());
     for (int i = 0; i < resRelProperty.size(); i++) {
-      MstUtils::writeBin(ofs, (int) resRelProperty.key(i).first);  // ti
-      MstUtils::writeBin(ofs, (int) resRelProperty.key(i).second); // ri
+      MstUtils::writeBin(ofs, resRelProperty.key(i).first);  // ti
+      MstUtils::writeBin(ofs, resRelProperty.key(i).second); // ri
       tightvector<resAddress>& relatedList = resRelProperty.value(i);
       MstUtils::writeBin(ofs, (int) relatedList.size());
       for (int j = 0; j < relatedList.size(); j++) {
-        MstUtils::writeBin(ofs, (int) relatedList[j].first);  // tj
-        MstUtils::writeBin(ofs, (int) relatedList[j].second); // rj
+        MstUtils::writeBin(ofs, relatedList[j].first);  // tj
+        MstUtils::writeBin(ofs, relatedList[j].second); // rj
       }
     }
   }
