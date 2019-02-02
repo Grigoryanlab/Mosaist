@@ -17,6 +17,7 @@ int main(int argc, char *argv[]) {
                       "present). Each unit cell must be a space-separated list of chains. E.g., --sym 'A B; C D; E F' means that "
                       "the unit cell has two chains, with the central unit cell composed of chains A and B, and two other unit"
                       "cells (one composed of chains C and D and another one of chains E and F) also present in the structure.");
+  op.addOption("seq", "skip design and simply put on this sequence, dumping the resulting PDB file.");
   op.addOption("o", "output base.", true);
   op.setOptions(argc, argv);
 
@@ -61,35 +62,46 @@ int main(int argc, char *argv[]) {
   }
 
   // build the energy table
-  if (!MstSys::fileExists(etabFile)) {
-    dTERMen D(op.getString("c"));
-    if (specContext.empty()) {
-      E = D.buildEnergyTable(variable, vector<vector<string>>(), images);
-      E.writeToFile(etabFile);
-    } else {
-      E = D.buildEnergyTable(variable, vector<vector<string>>(), images, &specE, specContext);
-      E.writeToFile(etabFile);
-      specE.writeToFile(specEtabFile);
-    }
+  Sequence bestSeq;
+  if (op.isGiven("seq")) {
+    bestSeq = Sequence(op.getString("seq"));
   } else {
-    cout << "reading previous energy table from " << etabFile << endl;
-    E.readFromFile(etabFile);
-    if (E.numSites() != variable.size()) MstUtils::error("pre-existing energy table has " + MstUtils::toString(E.numSites()) + " sites, while "  + MstUtils::toString(variable.size()) + " are selected for design");
+    if (!MstSys::fileExists(etabFile)) {
+      dTERMen D(op.getString("c"));
+      if (specContext.empty()) {
+        E = D.buildEnergyTable(variable, vector<vector<string>>(), images);
+        E.writeToFile(etabFile);
+      } else {
+        E = D.buildEnergyTable(variable, vector<vector<string>>(), images, &specE, specContext);
+        E.writeToFile(etabFile);
+        specE.writeToFile(specEtabFile);
+      }
+    } else {
+      cout << "reading previous energy table from " << etabFile << endl;
+      E.readFromFile(etabFile);
+      if (E.numSites() != variable.size()) MstUtils::error("pre-existing energy table has " + MstUtils::toString(E.numSites()) + " sites, while "  + MstUtils::toString(variable.size()) + " are selected for design");
+    }
+
+    vector<int> bestSol = E.mc(100, 1000000, 1.0, 0.01);
+    mstreal lowE = E.scoreSolution(bestSol);
+    cout << "lowest energy found is " << lowE << endl;
+    bestSeq = E.solutionToSequence(bestSol);
+    cout << "lowest-energy sequence: " << bestSeq.toString() << endl;
+    cout << "mean energy is " << E.meanEnergy() << endl;
+    cout << "estimated energy standard deviation is " << E.energyStdEst() << endl;
   }
 
-  vector<int> bestSol = E.mc(100, 1000000, 1.0, 0.01);
-  mstreal lowE = E.scoreSolution(bestSol);
-  cout << "lowest energy found is " << lowE << endl;
-  Sequence bestSeq = E.solutionToSequence(bestSol);
-  cout << "lowest-energy sequence: " << bestSeq.toString() << endl;
-  cout << "mean energy is " << E.meanEnergy() << endl;
-  cout << "estimated energy standard deviation is " << E.energyStdEst() << endl;
-
   // make a redesigned file, ready for repacking
+  if (!op.isGiven("sym")) images.push_back(variable);
   for (int i = 0; i < variable.size(); i++) {
-    vector<Atom*> sidechain = MstUtils::setdiff(variable[i]->getAtoms(), RotamerLibrary::getBackbone(*(variable[i])));
-    variable[i]->replaceAtoms(vector<Atom*>(), sidechain);
-    variable[i]->setName(bestSeq.getResidue(i, true));
+    // the variable selection must be from the first image
+    int idx = find(images[0].begin(), images[0].end(), variable[i]) - images[0].begin();
+    for (int j = 0; j < images.size(); j++) {
+      Residue* varRes = images[j][idx];
+      vector<Atom*> sidechain = MstUtils::setdiff(varRes->getAtoms(), RotamerLibrary::getBackbone(*varRes));
+      varRes->replaceAtoms(vector<Atom*>(), sidechain);
+      varRes->setName(bestSeq.getResidue(i, true));
+    }
   }
   S.writePDB(op.getString("o") + ".red.pdb");
 }
