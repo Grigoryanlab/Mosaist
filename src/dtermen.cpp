@@ -364,8 +364,7 @@ void dTERMen::setAminoAcidMap() {
   for (res_t aai = 0; aai <= SeqTools::maxIndex(); aai++) {
     if (aaMap.find(aai) == aaMap.end()) continue; // not an allowed amino acid
     int i = aaMap[aai];
-    if (aaIdx.find(i) != aaIdx.end()) { aaIdx[i] = aaIdx[i]; }
-    else { aaIdx[i] = aaIdx.size(); }
+    if (aaIdx.find(i) == aaIdx.end()) { int idx = aaIdx.size(); aaIdx[i] = idx; }
   }
   globAlph.resize(aaIdx.size());
   for (auto it = aaIdx.begin(); it != aaIdx.end(); ++it) {
