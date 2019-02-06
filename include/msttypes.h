@@ -701,6 +701,9 @@ class ProximitySearch {
     void pointBucket(const CartesianPoint& p, int* i, int* j, int* k) { pointBucket(p.getX(), p.getY(), p.getZ(), i, j, k); }
     void pointBucket(mstreal px, mstreal py, mstreal pz, int* i, int* j, int* k);
     void limitIndex(int *ind);
+    mstreal limitX(mstreal x);
+    mstreal limitY(mstreal y);
+    mstreal limitZ(mstreal z);
     mstreal gridSpacingX() { return (xhi - xlo)/N; }
     mstreal gridSpacingY() { return (yhi - ylo)/N; }
     mstreal gridSpacingZ() { return (zhi - zlo)/N; }
@@ -820,6 +823,99 @@ class Clusterer {
     RMSDCalculator rCalc;
 };
 
+/* A simple map data structure based on storing a sorted list of keys (sorted by
+ * the less-than operator). This is much more memory efficient than std::map and
+ * the time complexity for lookup is still logarithmic. However, time complexity
+ * for insertion (when inserting one by one) is still linear with size, while if
+ * all the keys are specified initially, then it is amortized logarithmic too. */
+template<class keyType, class valType>
+class simpleMap {
+  public:
+    simpleMap() {}
+    simpleMap(const vector<keyType>& _keys, const vector<valType>& _vals);
+    size_t size() const { return keys.size(); }
+
+    // access and modification
+    valType at(const keyType& key);
+    valType& operator[](const keyType& key); // will create entry if key missing, setting the value to the default value
+    valType& value(int idx) { return vals[idx]; } // get value by index
+    keyType key(int idx) const { return keys[idx]; } // get key by index
+    int find(const keyType& key); // returns a negative index if key is not found
+    void insert(const keyType& key, const valType& val);
+    void erase(const keyType& key);
+    void clear() { keys.clear(); vals.clear(); }
+
+    /* Same meaning as for corresponding tightvector<T> functions, applied to keys. */
+    int getUpperBound(const keyType& k) { return lower_bound(keys.begin(), keys.end(), k) - keys.begin(); }
+    int getLowerBound(const keyType& k) { return upper_bound(keys.begin(), keys.end(), k) - keys.begin(); }
+
+  protected:
+    void insert(const keyType& key, const valType& val, int i);
+
+  private:
+    vector<keyType> keys; // sorted keys
+    vector<valType> vals; // values, stored in corresponding order
+};
+
+/* A memory-efficient vector class (leaves no extra space). */
+template<class T>
+class tightvector {
+  public:
+    tightvector() { vec = NULL; L = 0; }
+    tightvector(int _L, const T& val = T());
+    tightvector(const tightvector& other);
+    tightvector(const vector<T>& other);
+    ~tightvector();
+
+    size_t size() const { return L; }
+    bool empty() const { return (L == 0); }
+    void resize(int len, const T& val = T());
+    void push_back(const T& val);
+
+    /* Inserts value into the vector at the given index by shifting all values
+     * after this index to the right by one and overwriting the value at the
+     * index with the given value. */
+    void insert(const T& val, int idx);
+
+    /* Insert value into vector, assuming the vector is currently sorted (based
+     * on the T::operator<), and in a way that leaves the vector sorted. */
+    int insertSorted(const T& val);
+
+    /* Linear search for value. Returns the first element (left to right) which
+     * matches the value, or a negative index if value not found. */
+    int find(const T& val);
+
+    /* Binary search that assumes the vector to be sorted according to T::operator<.
+     * The index of the first candidate element with the sought value is returned
+     * or a negative index if value not found. */
+    int findSorted(const T& val);
+
+    /* Both functions assume the vector to be sorted according to T::operator<.
+     * getUpperBound -- finds the first element (left to right) that evaluates
+     * to > val. If no such element exists (i.e., all elements are
+     * not greater than val), the size of the current vector is returned.
+     * getLowerBound -- finds the first element (left to right) that does NOT
+     * evaluate to < val. If no such element exists (i.e., all elements are
+     * less than val), the size of the current vector is returned. */
+    int getUpperBound(const T& val);
+    int getLowerBound(const T& val);
+
+    void clear();
+
+    // NOTE: subscript operators do not check for out-of-bounds indices!
+    T& operator[](int idx) { return vec[idx]; }
+    T operator[](int idx) const { return vec[idx]; }
+
+    tightvector<T>& operator=(const tightvector<T>& other);
+    tightvector<T>& operator=(const vector<T>& other);
+
+    // cast into regular vector
+    operator vector<T>() const;
+
+  private:
+    T* vec;
+    int L;
+};
 }
 
 /* A simple and accurate timer class built on top of chrono::high_resolution_clock */
@@ -966,6 +1062,11 @@ class MstUtils {
      * original order. */
     template <class T>
     static vector<T> setunion(const vector<T>& A, const vector<T>& B);
+
+    /* Returns a vector with all of the elements that are both in vector A and B,
+    * in the order that they appear in A. */
+    template <class T>
+    static vector<T> setintersect(const vector<T>& A, const vector<T>& B);
 
     template <class T>
     static vector<T> range(const T& from, const T& to, const T& step = 1);
@@ -1168,11 +1269,221 @@ vector<T> MstUtils::setunion(const vector<T>& A, const vector<T>& B) {
   return U;
 }
 
+
+template <class T>
+vector<T> MstUtils::setintersect(const vector<T>& A, const vector<T>& B) {
+  vector<T> inter;
+  set<T> setB = MstUtils::contents(B);
+  for (int i = 0; i < A.size(); i++) {
+    if (setB.find(A[i]) != setB.end()) inter.push_back(A[i]);
+  }
+  return inter;
+}
+
 template <class T>
 vector<T> MstUtils::range(const T& from, const T& to, const T& step) {
   vector<T> r;
   for (T v = from; v < to; v += step) r.push_back(v);
   return r;
+}
+
+using namespace MST;
+
+/* --------- simpleMap --------- */
+template<class keyType, class valType>
+simpleMap<keyType, valType>::simpleMap(const vector<keyType>& _keys, const vector<valType>& _vals) {
+  if (_keys.size() != _vals.size()) MstUtils::error("different number of keys and values specified", "simpleMap::simpleMap");
+  keys.resize(_keys.size());
+  vals.resize(_vals.size());
+  vector<int> sInds = MstUtils::sortIndices(_keys);
+  for (int i = 0; i < _keys.size(); i++) {
+    keys[i] = _keys[sInds[i]];
+    vals[i] = _vals[sInds[i]];
+    if ((i > 0) && (keys[i] == keys[i-1])) MstUtils::error("some of the specified keys are identical!", "simpleMap::simpleMap");
+  }
+};
+
+template<class keyType, class valType>
+valType simpleMap<keyType, valType>::at(const keyType& key) {
+  auto it = lower_bound(keys.begin(), keys.end(), key); // first element which does not compare less than key
+  if ((it == keys.end()) || (*it > key)) MstUtils::error("key not in map", "simpleMap::at");
+  return vals[it - keys.begin()];
+}
+
+template<class keyType, class valType>
+valType& simpleMap<keyType, valType>::operator[](const keyType& key) {
+  auto it = lower_bound(keys.begin(), keys.end(), key); // first element which does not compare less than key
+  int idx = it - keys.begin();
+  if ((it == keys.end()) || (*it > key)) insert(key, valType(), idx);
+  return vals[idx];
+}
+
+template<class keyType, class valType>
+int simpleMap<keyType, valType>::find(const keyType& key) {
+  auto it = lower_bound(keys.begin(), keys.end(), key); // first element which does not compare less than key
+  if ((it == keys.end()) || (*it > key)) return -1;
+  return (int) (it - keys.begin());
+}
+
+template<class keyType, class valType>
+void simpleMap<keyType, valType>::insert(const keyType& key, const valType& val, int i) {
+  keys.insert(keys.begin() + i, key);
+  vals.insert(vals.begin() + i, val);
+}
+
+template<class keyType, class valType>
+void simpleMap<keyType, valType>::insert(const keyType& key, const valType& val) {
+  auto it = lower_bound(keys.begin(), keys.end(), key); // first element which does not compare less than key
+  int idx = it - keys.begin();
+  if ((it == keys.end()) || (*it > key)) insert(key, val, idx);
+  else vals[idx] = val;
+}
+
+template<class keyType, class valType>
+void simpleMap<keyType, valType>::erase(const keyType& key) {
+  auto it = lower_bound(keys.begin(), keys.end(), key); // first element which does not compare less than key
+  if ((it == keys.end()) || (*it > key)) return;
+  vals.erase(vals.begin() + (it - keys.begin()));
+  keys.erase(it);
+}
+
+
+/* --------- tightvector --------- */
+template<class T>
+tightvector<T>::tightvector(int _L, const T& val) {
+  L = _L;
+  vec = new T[L];
+  for (int i = 0; i < L; i++) vec[i] = val;
+}
+
+template<class T>
+tightvector<T>::tightvector(const tightvector& other) {
+  if (other.empty()) { L = 0; vec = NULL; }
+  else {
+    L = other.size();
+    vec = new T[L];
+    for (int i = 0; i < L; i++) vec[i] = other[i];
+  }
+}
+
+template<class T>
+tightvector<T>::tightvector(const vector<T>& other) {
+  if (other.empty()) { L = 0; vec = NULL; }
+  else {
+    L = other.size();
+    vec = new T[L];
+    for (int i = 0; i < L; i++) vec[i] = other[i];
+  }
+}
+
+template<class T>
+tightvector<T>::~tightvector() {
+  if (vec != NULL) delete(vec);
+}
+
+template<class T>
+void tightvector<T>::resize(int len, const T& val) {
+  T* vecNew = (len == 0) ? NULL : new T[len];
+  int commonLen = MstUtils::min(len, L);
+  for (int i = 0; i < commonLen; i++) vecNew[i] = vec[i];
+  for (int i = L; i < len; i++) vecNew[i] = val;
+  L = len;
+  if (vec != NULL) delete(vec);
+  vec = vecNew;
+}
+
+template<class T>
+void tightvector<T>::clear() {
+  if (vec != NULL) delete(vec);
+  L = 0;
+}
+
+template<class T>
+tightvector<T>& tightvector<T>::operator=(const tightvector<T>& other) {
+  resize(other.size());
+  for (int i = 0; i < size(); i++) vec[i] = other[i];
+  return *this;
+}
+
+template<class T>
+tightvector<T>& tightvector<T>::operator=(const vector<T>& other) {
+  resize(other.size());
+  for (int i = 0; i < size(); i++) vec[i] = other[i];
+  return *this;
+}
+
+template<class T>
+void tightvector<T>::push_back(const T& val) {
+  resize(size() + 1);
+  vec[size() - 1] = val;
+}
+
+template<class T>
+int tightvector<T>::insertSorted(const T& val) {
+  int idx = getUpperBound(val);
+  insert(val, idx);
+  return idx;
+}
+
+template<class T>
+int tightvector<T>::find(const T& val) {
+  for (int i = 0; i < size(); i++) {
+    if (vec[i] == val) return i;
+  }
+  return -1;
+}
+
+template<class T>
+int tightvector<T>::findSorted(const T& val) {
+  int lo = 0, hi = size() - 1;
+  while (lo < hi) {
+    int mid = (lo + hi)/2;
+    if (vec[mid] < val) lo = mid + 1;
+    else if (val < vec[mid]) hi = mid - 1;
+    else return mid;
+  }
+  if (lo > hi) return -1;
+  return lo;
+}
+
+template<class T>
+void tightvector<T>::insert(const T& val, int idx) {
+  resize(size() + 1);
+  for (int i = size() - 1; i >= idx + 1; i--) vec[i] = vec[i-1];
+  vec[idx] = val;
+}
+
+template<class T>
+int tightvector<T>::getUpperBound(const T& val) {
+  if (size() == 0) return size();
+  int lo = 0, hi = size() - 1;
+  while (lo < hi) {
+    int mid = (lo + hi)/2;
+    if (val < vec[mid]) hi = mid;
+    else lo = mid + 1;
+  }
+  if (val < vec[lo]) return lo;
+  return size();
+}
+
+template<class T>
+int tightvector<T>::getLowerBound(const T& val) {
+  if (size() == 0) return size();
+  int lo = 0, hi = size() - 1;
+  while (lo < hi) {
+    int mid = (lo + hi)/2;
+    if (vec[mid] < val) lo = mid + 1;
+    else hi = mid;
+  }
+  if (!(vec[lo] < val)) return lo;
+  return size();
+}
+
+template<class T>
+tightvector<T>::operator vector<T>() const {
+  vector<T> ret(size());
+  for (int i = 0; i < size(); i++) ret[i] = (*this)[i];
+  return ret;
 }
 
 #endif

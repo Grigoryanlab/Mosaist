@@ -121,12 +121,12 @@ fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<in
   for (int si = 0; si < allMatches.size(); si++) {
     Structure& match = *(allMatches[si][picks[si]]);
     resTopo.addFragment(match);
-    if (matchOut.is_open()) { match.writePDB(matchOut); matchOut << "END" << endl; }
+    if (matchOut.is_open()) match.writePDB(matchOut);
   }
   if (global != NULL) {
     MstUtils::assert(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
     resTopo.addFragment(*global, MstUtils::range(0, L), -10.0);
-    if (matchOut.is_open()) { global->writePDB(matchOut); matchOut << "END" << endl; }
+    if (matchOut.is_open()) global->writePDB(matchOut);
   }
   return resTopo;
 }
@@ -137,13 +137,13 @@ fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<ve
     for (int j = 0; j < picks[si].size(); j++) {
       Structure& match = *(allMatches[si][picks[si][j]]);
       resTopo.addFragment(match);
-      if (matchOut.is_open()) { match.writePDB(matchOut); matchOut << "END" << endl; }
+      if (matchOut.is_open()) match.writePDB(matchOut);
     }
   }
   if (global != NULL) {
     MstUtils::assert(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
     resTopo.addFragment(*global, MstUtils::range(0, L), -10.0);
-    if (matchOut.is_open()) { global->writePDB(matchOut); matchOut << "END" << endl; }
+    if (matchOut.is_open()) global->writePDB(matchOut);
   }
   return resTopo;
 }
@@ -398,7 +398,7 @@ int main(int argc, char** argv) {
       for (int ii = 0; ii < O.size(); ii++) {
         if (O[ii] == NULL) continue;
         Structure* altFrag = new Structure();
-        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(A.getResidue(resB->getResidueIndex()))}, *altFrag, pmPair);
+        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(O[ii]->getResidue(resB->getResidueIndex()))}, *altFrag, pmPair);
         numberResidues(*altFrag, fragResIdx);
         matches.push_back(altFrag);
       }

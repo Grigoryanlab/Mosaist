@@ -29,6 +29,8 @@ class fasstSolutionAddress {
 class fasstSolution {
   friend class fasstSolutionSet;
   public:
+    typedef pair<short,short> resAddress;
+
     fasstSolution() { rmsd = 0.0; context = NULL; }
     fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, const Transform& _tr, const vector<int>& _segLengths, vector<int> segOrder = vector<int>());
     fasstSolution(const fasstSolution& _sol);
@@ -40,6 +42,7 @@ class fasstSolution {
     vector<int> getAlignment() const { return alignment; }
     vector<int> getSegLengths() const { return segLengths; }
     int segLength(int i) const { return segLengths[i]; }
+    resAddress segCentralResidue(int i) const { return resAddress(targetIndex, alignment[i] + segLengths[i]/2); }
     int numSegments() const { return alignment.size(); }
     int operator[](int i) const { return alignment[i]; }
     Transform getTransform() const { return tr; }
@@ -140,13 +143,15 @@ class fasstSolution {
 
 class fasstSolutionSet {
   public:
+    typedef fasstSolution::resAddress resAddress;
+
     fasstSolutionSet() { updated = false; }
     fasstSolutionSet(const fasstSolution& sol);
     fasstSolutionSet(const fasstSolutionSet& sols);
     fasstSolutionSet(const vector<fasstSolutionAddress>& addresses, const vector<int>& segLengths);
     fasstSolutionSet& operator=(const fasstSolutionSet& sols);
     bool insert(const fasstSolution& sol, mstreal redundancyCut = 1); // returns whether the insert was performed
-    bool insert(const fasstSolution& sol, map<int, map<int, map<int, set<int> > > >& relMap); // returns whether the insert was performed
+    bool insert(const fasstSolution& sol, simpleMap<resAddress, tightvector<resAddress>>& relMap); // returns whether the insert was performed
     void erase(fasstSolution& sol);
     set<fasstSolution>::iterator erase(const set<fasstSolution>::iterator it);
     set<fasstSolution>::iterator begin() const { return solsSet.begin(); }
@@ -156,11 +161,22 @@ class fasstSolutionSet {
     // const fasstSolution& operator[] (int i) const;
     fasstSolution& operator[] (int i);
     int size() const { return solsSet.size(); }
-    void clear() { solsSet.clear(); solsByTarget.clear(); updated = true; }
+    void init(int numSegs) { clear(); solsByCenRes.resize(numSegs); algnRedBar.resize(numSegs); algnRedBarSource.resize(numSegs); }
+    void clear() { solsSet.clear(); solsByCenRes.clear(); updated = true; }
     mstreal worstRMSD() { return (solsSet.rbegin())->getRMSD(); }
     mstreal bestRMSD() { return (solsSet.begin())->getRMSD(); }
     vector<fasstSolution*> orderByDiscovery();
     vector<fasstSolutionAddress> extractAddresses() const;
+
+    void clearTempData() { solsByCenRes.clear(); }
+    void resetAlignRedBarrierData(int targetLen) {
+      for (int i = 0; i < algnRedBar.size(); i++) {
+        algnRedBar[i].clear(); algnRedBar[i].resize(targetLen, INFINITY);
+        algnRedBarSource[i].clear();
+      }
+    }
+    bool isAlignRedBarrierDataSet() const { return !algnRedBar.empty() && !algnRedBar[0].empty(); }
+    mstreal alignRedBarrier(int segIdx, int ri) const { return algnRedBar[segIdx][ri]; }
 
     void write(ostream &_os) const; // write fasstSolutionSet to a binary stream
     void read(istream &_os);  // read fasstSolutionSet from a binary stream
@@ -182,7 +198,17 @@ class fasstSolutionSet {
     // to its elements (i.e., it does not copy them upon resizing like vector).
     set<fasstSolution> solsSet;
     vector<fasstSolution*> solsVec;
-    map<int, set<fasstSolution*> > solsByTarget;
+    // solsByCenRes[i] is a map that of solutions keyed by the central residue
+    // of the i-th segment. This is only used during search (for redundancy re-
+    // moval) and is deleted before return. Not copied upon assignment.
+    vector<map<fasstSolution::resAddress, set<fasstSolution*>>> solsByCenRes;
+
+    // these two member variables are for storing information about existing
+    // matches that have redundant segments to potential solutions from the
+    // current target
+    vector<vector<mstreal>> algnRedBar;
+    vector<map<fasstSolution*, set<int>>> algnRedBarSource;
+
     bool updated;
 };
 
@@ -316,6 +342,7 @@ class FASST {
     enum matchType { REGION = 1, FULL, WITHGAPS };
     enum searchType { CA = 1, FULLBB };
     enum targetFileType { PDB = 1, BINDATABASE, STRUCTURE };
+    typedef fasstSolution::resAddress resAddress;
 
     class targetInfo {
       public:
@@ -409,7 +436,7 @@ class FASST {
     void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
     // void addResidueRelationships(int ti, const string& propType, const map<int, map<int, map<int, set<int> > >& resRels);
     void addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj);
-    map<int, map<int, set<int> > > getResidueRelationships(int ti, const string& propType) { return resRelProperties[propType][ti]; }
+    map<int, vector<FASST::resAddress>> getResidueRelationships(int ti, const string& propType);
 
     bool isResiduePropertyDefined(const string& propType);
     bool isResiduePropertyDefined(const string& propType, int ti);
@@ -490,11 +517,14 @@ class FASST {
      * property in the FASST database. */
     fasstSolutionSet removeRedundancy(const fasstSolutionSet& matches);
 
-    map<int, map<int, map<int, set<int> > > >& getRedundancyPropertyMap() { return resRelProperties[opts.getRedundancyProperty()]; }
+    simpleMap<resAddress, tightvector<resAddress>>& getRedundancyPropertyMap() { return resRelProperties[opts.getRedundancyProperty()]; }
 
   protected:
     void processQuery();
-    void setCurrentRMSDCutoff(mstreal cut);
+    void setCurrentRMSDCutoff(mstreal cut, int p = -1); // set the current RMSD for this priority level
+    void resetCurrentRMSDCutoff(int p = -1);            // reset current RMSD cutoff back to the value set for the given priority level
+    int rmsdPriority() const { return rPrior; }
+    mstreal getCurrentRMSDCutoff() const { return rmsdCut; }
     void prepForSearch(int ti);
     bool parseChain(const Chain& S, AtomPointerVector* searchable = NULL, Sequence* seq = NULL);
     mstreal currentAlignmentResidual(bool compute, bool setTransform = false);   // computes the accumulated residual up to and including segment recLevel
@@ -516,7 +546,7 @@ class FASST {
     /* targetStructs[i] and targets[i] store the original i-th target structure
      * and just the part of it that will be searched over, respectively. NOTE:
      * Atoms* in targets[i] point to Atoms of targetStructs[i]. So there is only
-     * one compy of the target structure and there is no amboguity in mapping
+     * one copy of the target structure and there is no amboguity in mapping
      * targets[i] to targetStructs[i], even if when building tagrets[i] some of
      * the residues in targetStructs[i] had to be ignored for whatever reason
      * (e.g., missing backbone). */
@@ -541,10 +571,11 @@ class FASST {
     map<string, map<int, map<int, map<int, mstreal> > > > resPairProperties;
 
     /* Object for holding residue-pair relational graphs. Specifically,
-     * resRelProperties["sim"][ti][tj][ri] is the set of all residues in target
-     * tj that are related by the property "sim" to the residue ri in target ti.
+     * resRelProperties["sim"][(ti, ri)] is the list of all residues in the data-
+     * base that are related by the property "sim" to the residue with the address
+     * (ti, ri) (i.e., target ti, residue ri).
      * NOTE: this property can be directional (i.e., relationships are not mirrored). */
-    map<string, map<int, map<int, map<int, set<int> > > > > resRelProperties;
+    map<string, simpleMap<resAddress, tightvector<resAddress>>> resRelProperties;
 
     vector<Transform> tr;                    // transformations from the original frame to the common frames of reference for each target
     int currentTarget;                       // the index of the target currently being searched for
@@ -606,6 +637,11 @@ class FASST {
 
     // current RMSD and residual cutoffs (not user-set, but internal)
     mstreal rmsdCut, residualCut;
+
+    // facilitate the storage of a series of temporary RMSD cutoffs, by priority
+    vector<mstreal> rmsdCutTemp; // rmsdCutTemp[i] is the RMSD cutoff at priority level i (value is negative if not set)
+    mstreal rmsdCutDef;          // RMSD cutoff for the top priority (priority value -1)
+    int rPrior;                  // the priority level of the current RMSD (-1 if not currently at a temporary RMSD)
 
     // Atom subsets needed at different recursion levels. So queryMasks[i] stores
     // all atoms of the first i+1 segments of the query combined. The same for

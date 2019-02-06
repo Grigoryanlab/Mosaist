@@ -159,3 +159,13 @@ bool MstSys::releaseNetLock(const string& tag, const string& linuxHost) {
   }
   return false;
 }
+
+int MstSys::memUsage() {
+  string pid = MstUtils::toString((int) getpid());
+  string tmpFile = "/tmp/mu.out." + pid;
+  MstSys::csystem("ps -p " + pid + " -o rss | tail -1 > " + tmpFile);
+  vector<string> lines = MstUtils::fileToArray(tmpFile);
+  if ((lines.size() != 1) || (!MstUtils::isInt(lines[0]))) MstUtils::error("could not get memory usage, output in " + tmpFile);
+  MstSys::crm(tmpFile);
+  return MstUtils::toInt(lines[0]);
+}

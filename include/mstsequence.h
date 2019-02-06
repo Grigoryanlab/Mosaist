@@ -12,7 +12,7 @@ class Sequence {
   public:
     Sequence() {}
     Sequence(Chain& C);
-    // allows one to mixes of 3- and 1-letter codes, with a delimiter
+    // allows one to mix 3- and 1-letter codes, with a delimiter
     Sequence(const string& _seq, const string& _name = "", const string& delim = "");
     Sequence(const Sequence& S);
     Sequence(const vector<res_t> _seq, const string& _name = "") { seq = _seq; name = _name; }

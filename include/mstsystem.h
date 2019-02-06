@@ -29,6 +29,7 @@ class MstSys {
     static string getUserName();
     static bool getNetLock(const string& tag, bool shared = false, const string& linuxHost = "anthill.cs.dartmouth.edu");
     static bool releaseNetLock(const string& tag, const string& linuxHost = "anthill.cs.dartmouth.edu");
+    static int memUsage(); // total memory used in Kbytes
 
   private:
 };

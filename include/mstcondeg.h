@@ -46,7 +46,7 @@ class contactList {
     mstreal degree(Residue* _resi, Residue* _resj);
     string info(int i) { return infos[i]; }
     void sortByDegree(); // sorts the contact list by contact degree, highest to lowest
-    vector<pair<Residue*, Residue*> > getOrderedContacts();
+    vector<pair<Residue*, Residue*>> getOrderedContacts();
     bool areInContact(Residue* A, Residue* B);
 
 
