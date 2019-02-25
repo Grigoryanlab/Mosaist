@@ -63,7 +63,7 @@ void dTERMen::readConfigFile(const string& configFile) {
   }
 
   if (fasstdbPath.empty()) MstUtils::error("FASST database not defined in configuration file " + configFile, "dTERMen::dTERMen(const string&)");
-  F.readDatabase(fasstdbPath);
+  F.readDatabase(fasstdbPath, 2);
   if (!backPotFile.empty()) {
     readBackgroundPotentials(backPotFile);
   } else {
@@ -419,8 +419,8 @@ void dTERMen::buildBackgroundPotentials() {
   for (int i = 0; i < propNames.size(); i++) MstUtils::assert(F.isResiduePropertyDefined(propNames[i]), "property " + propNames[i] + " is not defined in the FASST database", "dTERMen::buildBackgroundPotentials()");
 
   for (int ti = 0; ti < F.numTargets(); ti++) {
-    Structure* S = F.getTarget(ti);
-    int N = S->residueSize();
+    Sequence S = F.getTargetSequence(ti);
+    int N = S.length();
 
     // compute multiplicity of each residue
     vector<mstreal> mult(N, 1); // multiplicity of each residue in the structure
@@ -431,7 +431,7 @@ void dTERMen::buildBackgroundPotentials() {
 
     // store all properties
     for (int ri = 0; ri < N; ri++) {
-      string aaName = (S->getResidue(ri)).getName();
+      string aaName = S.getResidue(ri, true);
       if (!isInGlobalAlphabet(aaName)) continue;
       aa.push_back(aaToIndex(aaName));
       for (int i = 0; i < propNames.size(); i++) {

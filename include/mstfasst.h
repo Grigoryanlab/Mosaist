@@ -6,6 +6,7 @@
 #include "mstsequence.h"
 #include <list>
 #include <chrono>
+#include <limits.h>
 
 using namespace MST;
 
@@ -29,7 +30,31 @@ class fasstSolutionAddress {
 class fasstSolution {
   friend class fasstSolutionSet;
   public:
-    typedef pair<short,short> resAddress;
+    class resAddress {
+      public:
+        resAddress(int ti = 0, int ri = 0) {
+          if ((ti < 0) || (ri < 0)) MstUtils::error("indices cannot be negative!", "fasstSolution::resAddress::resAddress(int, int)");
+          if ((ti > USHRT_MAX) || (ri > USHRT_MAX)) MstUtils::error("residue address indices (" + MstUtils::toString(ti) + ", " + MstUtils::toString(ri) + ") out of range for a short, recompile with int!", "fasstSolution::resAddress::resAddress(int, int)");
+          targIdx = ti; resIdx = ri;
+        }
+        unsigned short& targIndex() { return targIdx; }
+        unsigned short& resIndex() { return resIdx; }
+        friend bool operator<(const resAddress& ai, const resAddress& aj) {
+          if (ai.targIdx != aj.targIdx) return (ai.targIdx < aj.targIdx);
+          return (ai.resIdx < aj.resIdx);
+        }
+        friend bool operator>(const resAddress& ai, const resAddress& aj) {
+          if (ai.targIdx != aj.targIdx) return (ai.targIdx > aj.targIdx);
+          return (ai.resIdx > aj.resIdx);
+        }
+        friend bool operator==(const resAddress& ai, const resAddress& aj) {
+          return (ai.targIdx == aj.targIdx) && (ai.resIdx == aj.resIdx);
+        }
+
+      private:
+        unsigned short targIdx, resIdx;
+    };
+    // typedef pair<short,short> resAddress;
 
     fasstSolution() { rmsd = 0.0; context = NULL; }
     fasstSolution(const vector<int>& _alignment, mstreal _rmsd, int _target, const Transform& _tr, const vector<int>& _segLengths, vector<int> segOrder = vector<int>());
@@ -346,7 +371,7 @@ class FASST {
 
     class targetInfo {
       public:
-        targetInfo(const string& _file, targetFileType _type, int _loc, bool _memSave) {
+        targetInfo(const string& _file, targetFileType _type, streampos _loc, short _memSave) {
           file = _file; type = _type; loc = _loc; memSave = _memSave;
         }
         targetInfo(const targetInfo& I) {
@@ -354,8 +379,8 @@ class FASST {
         }
         string file;         // source file
         targetFileType type; // file type (PDB or database)
-        int loc;             // location info within file
-        bool memSave;        // was the target read with memory save on?
+        streampos loc;       // location info within file
+        short memSave;       // what memory save setting was the target read with?
     };
 
     /* A class for storing a sub-set of a fixed set of options, each with a fixed
@@ -427,16 +452,16 @@ class FASST {
     Structure getQuery() const { return queryStruct; }
     int getNumQuerySegments() const { return queryStruct.chainSize(); }
     AtomPointerVector getQuerySearchedAtoms() const;
-    void addTarget(const Structure& T);
-    void addTarget(const string& pdbFile);
-    void addTargets(const vector<string>& pdbFiles);
+    void addTarget(const Structure& T, short memSave = 0);
+    void addTarget(const string& pdbFile, short memSave = 0);
+    void addTargets(const vector<string>& pdbFiles, short memSave = 0);
     void stripSidechains(Structure& S);
 
     void addResidueProperties(int ti, const string& propType, const vector<mstreal>& propVals);
     void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
     // void addResidueRelationships(int ti, const string& propType, const map<int, map<int, map<int, set<int> > >& resRels);
     void addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj);
-    map<int, vector<FASST::resAddress>> getResidueRelationships(int ti, const string& propType);
+    map<int, vector<resAddress>> getResidueRelationships(int ti, const string& propType);
 
     bool isResiduePropertyDefined(const string& propType);
     bool isResiduePropertyDefined(const string& propType, int ti);
@@ -483,8 +508,10 @@ class FASST {
     int numTargets() const { return targetStructs.size(); }
     Structure getTargetCopy(int i) const { return *(targetStructs[i]); }
     Structure* getTarget(int i) { return targetStructs[i]; }
+    int getTargetResidueSize(int i) const { return (targetStructs[i] == NULL) ? atomToResIdx(targets[i].size()) : targetStructs[i]->residueSize(); }
+    string getTargetName(int ti) const { return (targetStructs[ti] == NULL) ? "not-saved" : targetStructs[ti]->getName(); }
+    Sequence getTargetSequence(int i) { return targSeqs[i]; }
     void setSearchType(searchType _searchType);
-    void setMemorySaveMode(bool _memSave) { memSave = _memSave; }
     void setGridSpacing(mstreal _spacing) { gridSpacing = _spacing; updateGrids = true; }
     fasstSolutionSet search();
     int numMatches() { return solutions.size(); }
@@ -492,7 +519,14 @@ class FASST {
     fasstSolutionSet getMatches() { return solutions; }
     string toString(const fasstSolution& sol);
     void writeDatabase(const string& dbFile);
-    void readDatabase(const string& dbFile);
+    /* The memSave parameter can be used to reduce the memory footprint. 0 is the
+     * default and does not do any memory savings. 1 means strip the side-chains
+     * (for when we will not typically need this information). 2 means destroy
+     * the original target structure upon reading, and only keep backbone coordi-
+     * nates. This is quite useful in practice, but it does mean that no reagions
+     * in the original target that are skipped over (e.g., due to missing backbone
+     * atoms) can be tollerated.*/
+    void readDatabase(const string& dbFile, short memSave = 0);
 
     // get various match properties
     void getMatchStructure(const fasstSolution& sol, Structure& match, bool detailed = false, matchType type = matchType::REGION, bool algn = true);
@@ -536,7 +570,7 @@ class FASST {
     mstreal centToCentTol(int i);
     mstreal segCentToPrevSegCentTol(int i);
     void rebuildProximityGrids();
-    void addTargetStructure(Structure* targetStruct);
+    void addTargetStructure(Structure* targetStruct, short memSave = 0);
     void addSequenceContext(fasstSolution& sol); // decorate the solution with sequence context
     void fillTargetChainInfo(int ti);
 
@@ -549,12 +583,19 @@ class FASST {
      * one copy of the target structure and there is no amboguity in mapping
      * targets[i] to targetStructs[i], even if when building tagrets[i] some of
      * the residues in targetStructs[i] had to be ignored for whatever reason
-     * (e.g., missing backbone). */
+     * (e.g., missing backbone). NOTE: it is also possible for any targetStructs[i]
+     * entry to be NULL. This means that the full structure was not retained, that
+     * atoms in targets[i] are "disembodied" copies that have been stripped of
+     * any extra information except coordinates, and therefore is a one-to-one
+     * correspondence between residues in the original full structure and atom
+     * indices in targets[i] (i.e., nothing was skipped upon processing). This
+     * is done for memory reasons. */
     vector<Structure*> targetStructs;
     vector<AtomPointerVector> targets;
 
     vector<Sequence> targSeqs;               // target sequences (of just the parts that will be searched over)
-    vector<targetInfo> targetSource;         // where each target was read from (in case need to re-read it)
+    vector<targetInfo> targetSource;         // from where and how each target was read (e.g., in case need to re-read it)
+    vector<tightvector<int>> targetChainLen; // chain lengths in each target, listed in the order chains appear in the corresponding Structure
     vector<int> targChainBeg, targChainEnd;  // targChainBeg[i] and targChainEnd[i] contain the chain start and end indices for the chain
                                              // that contains the residue with index i (in the overal concatenated sequence). Residue indices
                                              // are based on just the portion of the structure to be searched over.
@@ -585,7 +626,6 @@ class FASST {
     vector<AtomPointerVector> query;         // same as above, but with segments re-orderd for optimal searching
     vector<int> qSegOrd;                     // qSegOrd[i] is the index (in the original queryOrig) of the i-th segment in query
     mstreal xlo, ylo, zlo, xhi, yhi, zhi;    // bounding box of the search database
-    bool memSave;                            // save memory by storing only the backbone of targets?
 
     // segmentResiduals[i][j] is the residual of the alignment of segment i, in which
     // its starting residue aligns with the residue index j in the target

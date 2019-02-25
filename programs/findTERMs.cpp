@@ -35,7 +35,6 @@ int main(int argc, char** argv) {
   Structure T(op.getString("p"));
   FASST S;
   RMSDCalculator rc;
-  S.setMemorySaveMode(true);
   S.addTarget(T);
   vector<string> termPaths = MstUtils::fileToArray(op.getString("terms"));
   fstream ofs; MstUtils::openFile(ofs, op.getString("o"), fstream::out);

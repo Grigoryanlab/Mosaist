@@ -42,7 +42,6 @@ int main(int argc, char *argv[]) {
   auto begin = chrono::high_resolution_clock::now();
   Structure query(op.getString("q"));
   S.setQuery(query);
-  S.setMemorySaveMode(!op.isGiven("sc"));
   if (op.isGiven("d")) {
     vector<string> pdbFiles = MstUtils::fileToArray(op.getString("d"));
     for (int i = 0; i < pdbFiles.size(); i++) {
@@ -64,7 +63,7 @@ int main(int argc, char *argv[]) {
       S.writeDatabase(op.getString("b"));
     }
   } else if (op.isGiven("b")) {
-    S.readDatabase(op.getString("b"));
+    S.readDatabase(op.getString("b"), 2);
   } else {
     MstUtils::error("either --b or --d must be given!");
   }

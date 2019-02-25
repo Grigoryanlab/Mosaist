@@ -121,8 +121,7 @@ int main(int argc, char** argv) {
   selector sel(T);
   vector<Residue*> surf = sel.selectRes(op.getString("s"));
   FASST F;
-  F.setMemorySaveMode(true); // backbone only
-  F.readDatabase(op.getString("db"));
+  F.readDatabase(op.getString("db"), 2);
   if (!F.isResiduePairPropertyPopulated(contSec)) MstUtils::error("the FASST database does not appear to have a contact section");
   F.setRedundancyCut(0.5);
   F.setMaxNumMatches(1000);
