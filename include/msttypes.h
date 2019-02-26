@@ -196,7 +196,7 @@ class Residue {
     vector<Atom*> getAtoms() { return atoms; }
     Atom& operator[](int i) const { return *(atoms[i]); }
     Atom& getAtom(int i) const { return *(atoms[i]); }
-    Chain* getChain() { return parent; }
+    Chain* getChain() const { return parent; }
     string getChainID(bool strict = true);
     string getName() const { return resname; }
     int getNum() const { return resnum; }
@@ -1415,7 +1415,7 @@ tightvector<T>::tightvector(const vector<T>& other) {
 
 template<class T>
 tightvector<T>::~tightvector() {
-  if (vec != NULL) delete(vec);
+  if (vec != NULL) delete[] (vec);
 }
 
 template<class T>

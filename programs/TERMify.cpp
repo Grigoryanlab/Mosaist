@@ -48,21 +48,23 @@ void numberResidues(Structure& S, const vector<int>& resIdx) {
 }
 
 vector<Structure*> getMatches(FASST& C, Structure& frag, const vector<int>& fragResIdx, int need = 5, const vector<int>& centIdx = vector<int>()) {
-  // want at least "need" matches in the end; estimate how many to ask for at first
-  fasstSeqConstSimple seqConst(centIdx.size());
-  for (int i = 0; i < centIdx.size(); i++) {
-    if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) {
-      seqConst.addConstraint(i, centIdx[i], {frag.getResidue(centIdx[i]).getName()});
-    }
-  }
-  if (seqConst.hasConstraints()) C.options().setSequenceConstraints(seqConst);
-
   vector<Structure*> matchStructures;
   if (need == 0) return matchStructures;
   C.setQuery(frag, false);
   C.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
   C.options().setMaxNumMatches(need);
   C.options().setMinNumMatches(need);
+
+  // add sequence constraints, as needed
+  fasstSeqConstSimple seqConst(centIdx.size());
+  Structure splitQuery = C.getQuery();
+  for (int i = 0; i < centIdx.size(); i++) {
+    if (!SeqTools::isUnknown(frag.getResidue(centIdx[i]).getName())) {
+      const Residue& res = splitQuery.getResidue(centIdx[i]);
+      seqConst.addConstraint(res.getChain()->getIndex(), res.getResidueIndexInChain(), {res.getName()});
+    }
+  }
+  if (seqConst.hasConstraints()) C.options().setSequenceConstraints(seqConst);
 
   // limit iterations, because it is technically possible that a match meeting
   // the sequence constraints does not exist, at which point we will just give up
