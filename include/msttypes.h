@@ -284,43 +284,47 @@ class Atom {
   friend class Chain;
   friend class Residue;
   friend class AtomPointerVector;
+  friend class AtomContainer;
 
   public:
     Atom();
     Atom(const Atom& A, bool copyAlt = true);
     Atom(const Atom* A, bool copyAlt = true) : Atom(*A, copyAlt) {}
-    Atom(int _index, string _name, mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, bool _het, char _alt = ' ', Residue* _parent = NULL);
+    Atom(int _index, const string& _name, mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, bool _het, char _alt = ' ', Residue* _parent = NULL);
     ~Atom();
 
     mstreal getX() const { return x; }
     mstreal getY() const{ return y; }
     mstreal getZ() const{ return z; }
+    bool hasInfo() const { return info != NULL; }
     mstreal& operator[](int i);
     const mstreal& operator[](int i) const;
     CartesianPoint getCoor() const;
     CartesianPoint getAltCoor(int altInd) const;
-    mstreal getAltB(int altInd) const;
-    mstreal getAltOcc(int altInd) const;
-    char getAltLocID(int altInd) const;
-    mstreal getB() { return B; }
-    mstreal getOcc() { return occ; }
-    string getName() const { return string(name); }
-    char* getNameC() { return name; }
-    bool isHetero() const { return het; }
-    int getIndex() const { return index; }
-    char getAlt() const { return alt; }
-    bool isNamed(const char* _name) const { return (strcmp(name, _name) == 0); }
+    mstreal getAltB(int altInd) const { return info->getAltB(altInd); }
+    mstreal getAltOcc(int altInd) const { return info->getAltOcc(altInd); }
+    char getAltLocID(int altInd) const  { return info->getAltLocID(altInd); }
+    mstreal getB() const { return info->B; }
+    mstreal getOcc() const { return info->occ; }
+    string getName() const { return string(info->name); }
+    char* getNameC() { return info->name; }
+    bool isHetero() const { return info->het; }
+    int getIndex() const { return info->index; }
+    char getAlt() const { return info->alt; }
+    void setAlt(char a) const { info->alt = a; }
+    bool isNamed(const char* _name) const { return (strcmp(info->name, _name) == 0); }
     bool isNamed(const string& _name) const { return isNamed(_name.c_str()); }
-    int numAlternatives() { return (alternatives == NULL) ? 0 : alternatives->size(); }
-    Residue* getParent() const { return parent; }
-    Residue* getResidue() const { return parent; }
-    Chain* getChain() const { return (parent == NULL) ? NULL : parent->getParent(); }
+    bool hasAlternatives() const { return (info->alternatives != NULL); }
+    int numAlternatives() const { return (info->alternatives == NULL) ? 0 : info->alternatives->size(); }
+    Residue* getParent() const { return info->parent; }
+    Residue* getResidue() const { return info->parent; }
+    Chain* getChain() const { return (info->parent == NULL) ? NULL : info->parent->getParent(); }
     Structure* getStructure() { Chain* chain = getChain(); return (chain == NULL) ? NULL : chain->getParent(); }
-    mstreal getMass() const { return Atom::getMass(name); }
+    mstreal getMass() const { return Atom::getMass(info->name); }
     static mstreal getMass(const char* name);
 
-    void setName(const char* _name);
-    void setName(const string& _name);
+    void setName(const char* _name) { info->setName(_name); }
+    void setName(const string& _name) { info->setName(_name); }
     void setX(mstreal _x) { x = _x; }
     void setY(mstreal _y) { y = _y; }
     void setZ(mstreal _z) { z = _z; }
@@ -328,11 +332,11 @@ class Atom {
     void setCoor(const CartesianPoint& xyz);
     void setCoor(const Atom& a);
     void setCoor(const Atom* a) { setCoor(*a); }
-    void setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z);
-    void setOcc(mstreal _occ) { occ = _occ; }
-    void setB(mstreal _B) { B = _B; }
-    void seetHet(bool _het) { het = _het; }
-    void setIndex(int _index) { index = _index; }
+    void setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z) { info->setAltCoor(ai, _x, _y, _z); }
+    void setOcc(mstreal _occ) { info->occ = _occ; }
+    void setB(mstreal _B) { info->B = _B; }
+    void seetHet(bool _het) { info->het = _het; }
+    void setIndex(int _index) { info->index = _index; }
 
     /* make the alternative with the specified index the main one, making the current
      * main position the alternative with the specified index. Calling this twice with
@@ -343,10 +347,13 @@ class Atom {
      * with the specified index. */
     void makeAlternativeMain(int altInd);
 
-    void addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, char _alt = ' ');
-    void clearAlternatives();
+    void addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, char _alt = ' ') { info->addAlternative(_x, _y, _z, _B, _occ, _alt); }
+    void addAlternative(const Atom& a) { addAlternative(a.getX(), a.getY(), a.getZ(), a.getB(), a.getOcc()); }
+    void removeLastAlternative() { info->removeLastAlternative(); }
+    void removeAlternative(int i) { info->removeAlternative(i); }
+    void clearAlternatives() { info->clearAlternatives(); }
 
-    string pdbLine() { return pdbLine((this->parent == NULL) ? 1 : this->parent->getNum(), index); }
+    string pdbLine() { return pdbLine((info->parent == NULL) ? 1 : info->parent->getNum(), getIndex()); }
     string pdbLine(int resIndex, int atomIndex);
 
     mstreal distance(const Atom& another) const;
@@ -371,27 +378,57 @@ class Atom {
     void read(istream& _is);  // read Atom from a binary stream
     friend ostream & operator<<(ostream &_os, const Atom& _atom);
 
+    /* Strips the Atom of all of its additional information, besides the 3D coor-
+     * dinate. This can be useful when memory needs to be preserved and all the
+     * other info is not necessary. NOTE: after calling this function, attempts
+     * to access any properties other than coordinates will lead to undefined
+     * behavior, including segmentation faults. For efficiency, checking for
+     * whether the information exists or has been stripepd is not performed. */
+    void stripInfo();
+
   protected:
-    void setParent(Residue* _parent) { parent = _parent; } // will not itself update residue/atom counts in parents
+    void setParent(Residue* _parent) { info->parent = _parent; } // will not itself update residue/atom counts in parents
 
   private:
-    mstreal x, y, z, occ, B;
-    char *name, alt;
-    Residue* parent;
-    bool het;
-    int index;
-
-    // data structure for storing information about alternative atom locations
-    class altInfo {
+    mstreal x, y, z;
+    class atomInfo {
       public:
-        altInfo() { x = y = z = occ = B = 0; alt = ' '; }
-        altInfo(const altInfo& A) { x = A.x; y = A.y; z = A.z; B = A.B; occ = A.occ; alt = A.alt; }
-        altInfo(mstreal _x, mstreal _y, mstreal _z, mstreal _occ, mstreal _B, char _alt) { x = _x; y = _y; z = _z; B = _B; occ = _occ; alt = _alt; }
-        mstreal x, y, z, occ, B;
-        char alt;
+        // data structure for storing information about alternative atom locations
+        class altInfo {
+          public:
+            altInfo() { x = y = z = occ = B = 0; alt = ' '; }
+            altInfo(const altInfo& A) { x = A.x; y = A.y; z = A.z; B = A.B; occ = A.occ; alt = A.alt; }
+            altInfo(mstreal _x, mstreal _y, mstreal _z, mstreal _occ, mstreal _B, char _alt) { x = _x; y = _y; z = _z; B = _B; occ = _occ; alt = _alt; }
+            mstreal x, y, z, occ, B;
+            char alt;
+        };
+
+        atomInfo();
+        atomInfo(const atomInfo& other, bool copyAlt = true);
+        atomInfo(int _index, const string& _name, mstreal _B, mstreal _occ, bool _het, char _alt = ' ', Residue* _parent = NULL);
+        ~atomInfo();
+
+        void setName(const char* _name);
+        void setName(const string& _name) { setName(_name.c_str()); }
+        CartesianPoint getAltCoor(int altInd) const;
+        mstreal getAltB(int altInd) const;
+        mstreal getAltOcc(int altInd) const;
+        char getAltLocID(int altInd) const;
+        void setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z);
+        void addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, char _alt);
+        void removeLastAlternative();
+        void removeAlternative(int i);
+        void clearAlternatives();
+
+        mstreal occ, B;
+        char *name, alt;
+        Residue* parent;
+        bool het;
+        int index;
+        vector<altInfo>* alternatives; /* since this is a pointer, and will be NULL for most atoms, it's fine
+                                        * to use vector here in terms of memory, but very convenient for use */
     };
-    vector<altInfo>* alternatives; /* since this is a pointer, and will be NULL for most atoms, it's fine
-                                    * to use vector here in terms of memory, but very convenient for use */
+    atomInfo* info;
 };
 ostream & operator<<(ostream &_os, const Atom& _atom); // this just to silence a silly compiler warning
 

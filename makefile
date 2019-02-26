@@ -37,7 +37,7 @@
 # flags
 CC := g++
 CPP_FLAGS := -O3 -std=c++11 -fPIC
-DEBUG_FLAGS := -g
+DEBUG_FLAGS := -g -rdynamic
 
 # essential directories
 INCD := include

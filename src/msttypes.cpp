@@ -992,47 +992,40 @@ int Residue::getResidueIndexInChain() const {
 }
 
 /* --------- Atom --------- */
-Atom::Atom() {
+/* --------- Atom --------- */
+Atom::atomInfo::atomInfo() {
   parent = NULL;
   het = false;
   name = MstUtils::copyStringC("UNK");
-  // setName("");
   alternatives = NULL;
   alt = ' ';
-  x = y = z = 0;
   index = 0;
   occ = B = 0;
 }
 
-Atom::Atom(const Atom& A, bool copyAlt) {
-  index = A.index;
+Atom::atomInfo::atomInfo(const atomInfo& other, bool copyAlt) {
+  index = other.index;
   name = NULL;
-  setName(A.name);
-  x = A.x;
-  y = A.y;
-  z = A.z;
-  B = A.B;
-  occ = A.occ;
-  het = A.het;
-  alt = A.alt;
-  parent = A.parent;
-  if (copyAlt && (A.alternatives != NULL)) {
-    alternatives = new vector<altInfo>(A.alternatives->size());
-    for (int i = 0; i < A.alternatives->size(); i++) {
-      (*alternatives)[i] = (*(A.alternatives))[i];
+  setName(other.name);
+  B = other.B;
+  occ = other.occ;
+  het = other.het;
+  alt = other.alt;
+  parent = other.parent;
+  if (copyAlt && (other.alternatives != NULL)) {
+    alternatives = new vector<altInfo>(other.alternatives->size());
+    for (int i = 0; i < other.alternatives->size(); i++) {
+      (*alternatives)[i] = (*(other.alternatives))[i];
     }
   } else {
     alternatives = NULL;
   }
 }
 
-Atom::Atom(int _index, string _name, mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, bool _het, char _alt, Residue* _parent) {
+Atom::atomInfo::atomInfo(int _index, const string& _name, mstreal _B, mstreal _occ, bool _het, char _alt, Residue* _parent) {
   index = _index;
   name = NULL;
   setName(_name);
-  x = _x;
-  y = _y;
-  z = _z;
   B = _B;
   occ = _occ;
   het = _het;
@@ -1041,9 +1034,33 @@ Atom::Atom(int _index, string _name, mstreal _x, mstreal _y, mstreal _z, mstreal
   alternatives = NULL;
 }
 
-Atom::~Atom() {
+Atom::atomInfo::~atomInfo() {
   if (name != NULL) delete[] name;
   if (alternatives != NULL) delete alternatives;
+}
+
+Atom::Atom() {
+  x = y = z = 0;
+  info = new atomInfo();
+}
+
+Atom::Atom(const Atom& A, bool copyAlt) {
+  x = A.x;
+  y = A.y;
+  z = A.z;
+  info = NULL;
+  if (A.hasInfo()) info = new atomInfo(*(A.info));
+}
+
+Atom::Atom(int _index, const string& _name, mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, bool _het, char _alt, Residue* _parent) {
+  x = _x;
+  y = _y;
+  z = _z;
+  info = new atomInfo(_index, _name, _B, _occ, _het, _alt, _parent);
+}
+
+Atom::~Atom() {
+  if (info != NULL) delete info;
 }
 
 mstreal& Atom::operator[](int i) {
@@ -1078,24 +1095,31 @@ CartesianPoint Atom::getCoor() const {
   CartesianPoint coor(x, y, z); return coor;
 }
 
-CartesianPoint Atom::getAltCoor(int altInd) const {
+void Atom::atomInfo::setName(const char* _name) {
+  if (name != NULL) delete[] name;
+  name = new char[strlen(_name)+1];
+  strcpy(name, _name);
+}
+
+CartesianPoint Atom::atomInfo::getAltCoor(int altInd) const {
   if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltCoor");
   altInfo& targ = (*alternatives)[altInd];
   CartesianPoint coor(targ.x, targ.y, targ.z);
   return coor;
 }
+CartesianPoint Atom::getAltCoor(int altInd) const { return info->getAltCoor(altInd); }
 
-mstreal Atom::getAltB(int altInd) const {
+mstreal Atom::atomInfo::getAltB(int altInd) const {
   if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltB");
   return (*alternatives)[altInd].B;
 }
 
-mstreal Atom::getAltOcc(int altInd) const {
+mstreal Atom::atomInfo::getAltOcc(int altInd) const {
   if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltOcc");
   return (*alternatives)[altInd].occ;
 }
 
-char Atom::getAltLocID(int altInd) const {
+char Atom::atomInfo::getAltLocID(int altInd) const {
   if ((alternatives == NULL) || (altInd >= alternatives->size()) || (altInd < 0)) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::getAltLocID");
   return (*alternatives)[altInd].alt;
 }
@@ -1128,48 +1152,43 @@ void Atom::setCoor(const Atom& a) {
   x = a.getX(); y = a.getY(); z = a.getZ();
 }
 
-void Atom::setName(const char* _name) {
-  if (name != NULL) delete[] name;
-  name = new char[strlen(_name)+1];
-  strcpy(name, _name);
-}
-
-void Atom::setName(const string& _name) {
-  if (name != NULL) delete[] name;
-  name = new char[_name.size()+1];
-  strcpy(name, _name.c_str());
-}
-
-void Atom::setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z) {
+void Atom::atomInfo::setAltCoor(int ai, mstreal _x, mstreal _y, mstreal _z) {
   altInfo& A = (*alternatives)[ai];
   A.x = _x; A.y = _y; A.z = _z;
 }
 
 void Atom::swapWithAlternative(int altInd) {
-  if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
-  altInfo& targ = (*alternatives)[altInd];
-  altInfo temp = targ;
-  targ.x = x; targ.y = y; targ.z = z; targ.occ = occ; targ.B = B; targ.alt = alt;
-  x = temp.x; y = temp.y; z = temp.z; occ = temp.occ; B = temp.B; alt = temp.alt;
+  if (!hasInfo() || (altInd >= numAlternatives())) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(numAlternatives()) + " alternatives available)", "Atom::swapWithAlternative");
+  atomInfo::altInfo& targ = (*(info->alternatives))[altInd];
+  atomInfo::altInfo temp = targ;
+  targ.x = x; targ.y = y; targ.z = z; targ.occ = getOcc(); targ.B = getB(); targ.alt = getAlt();
+  x = temp.x; y = temp.y; z = temp.z; setOcc(temp.occ); setB(temp.B); setAlt(temp.alt);
 }
 
 void Atom::makeAlternativeMain(int altInd) {
-  if ((alternatives == NULL) || (altInd >= alternatives->size())) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(alternatives->size()) + " alternatives available)", "Atom::swapWithAlternative");
-  altInfo& targ = (*alternatives)[altInd];
-  x = targ.x; y = targ.y; z = targ.z; occ = targ.occ; B = targ.B; alt = targ.alt;
+  if (!hasInfo() || (altInd >= numAlternatives())) MstUtils::error("alternative index " + MstUtils::toString(altInd) + " out of bounds (" + MstUtils::toString(numAlternatives()) + " alternatives available)", "Atom::makeAlternativeMain");
+  atomInfo::altInfo& targ = (*(info->alternatives))[altInd];
+  x = targ.x; y = targ.y; z = targ.z; setOcc(targ.occ); setB(targ.B); setAlt(targ.alt);
 }
 
-void Atom::addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, char _alt) {
+void Atom::atomInfo::addAlternative(mstreal _x, mstreal _y, mstreal _z, mstreal _B, mstreal _occ, char _alt) {
   if (alternatives == NULL) {
     alternatives = new vector<altInfo>(0);
   }
   alternatives->push_back(altInfo(_x, _y, _z, _B, _occ, _alt));
 }
 
-void Atom::clearAlternatives() {
-  if (alternatives != NULL) { delete alternatives; alternatives = NULL; }
+void Atom::atomInfo::removeLastAlternative() {
+  alternatives->pop_back();
 }
 
+void Atom::atomInfo::removeAlternative(int i) {
+  alternatives->erase(alternatives->begin() + i);
+}
+
+void Atom::atomInfo::clearAlternatives() {
+  if (alternatives != NULL) { delete alternatives; alternatives = NULL; }
+}
 
 string Atom::pdbLine(int resIndex, int atomIndex) {
   char line[100]; // a PDB line is at most 80 characters, so this is plenty
@@ -1177,6 +1196,7 @@ string Atom::pdbLine(int resIndex, int atomIndex) {
   int resnum = 1; char icode = ' ';
 
   // chain and residue info
+  Residue* parent = getParent();
   if (parent != NULL) {
     resname = parent->getName();
     if (resname.length() > 4) resname = resname.substr(0, 4);
@@ -1193,13 +1213,13 @@ string Atom::pdbLine(int resIndex, int atomIndex) {
 
   // atom name placement is different when it is 4 characters long
   char atomname[5];
-  if (strlen(name) < 4) { sprintf(atomname, " %-.3s", name); }
-  else { sprintf(atomname, "%.4s", name); }
+  if (strlen(getNameC()) < 4) { sprintf(atomname, " %-.3s", getNameC()); }
+  else { sprintf(atomname, "%.4s", getNameC()); }
 
   // moduli are used to make sure numbers do not go over prescribe field widths (this is not enforced by sprintf like with strings)
   sprintf(line, "%6s%5d %-4s%c%-4s%.1s%4d%c   %8.3f%8.3f%8.3f%6.2f%6.2f      %.4s",
-          isHetero() ? "HETATM" : "ATOM  ", atomIndex % 100000, atomname, alt, resname.c_str(), chainID.c_str(),
-          resnum % 10000, icode, x, y, z, occ, B, segID.c_str());
+          isHetero() ? "HETATM" : "ATOM  ", atomIndex % 100000, atomname, getAlt(), resname.c_str(), chainID.c_str(),
+          resnum % 10000, icode, x, y, z, getOcc(), getB(), segID.c_str());
 
   return (string) line;
 }
@@ -1264,27 +1284,27 @@ bool Atom::build(const Atom& diA, const Atom& anA, const Atom& thA, mstreal di, 
 
 void Atom::write(ostream& _os) const {
   MstUtils::writeBin(_os, x); MstUtils::writeBin(_os, y); MstUtils::writeBin(_os, z);
-  MstUtils::writeBin(_os, occ); MstUtils::writeBin(_os, B);
-  MstUtils::writeBin(_os, getName()); MstUtils::writeBin(_os, alt);
-  MstUtils::writeBin(_os, het); MstUtils::writeBin(_os, index);
-  if (alternatives == NULL) {
+  MstUtils::writeBin(_os, getOcc()); MstUtils::writeBin(_os, getB());
+  MstUtils::writeBin(_os, getName()); MstUtils::writeBin(_os, getAlt());
+  MstUtils::writeBin(_os, isHetero()); MstUtils::writeBin(_os, getIndex());
+  if (numAlternatives() == 0) {
     MstUtils::writeBin(_os, false);
   } else {
     MstUtils::writeBin(_os, true);
-    MstUtils::writeBin(_os, (int) alternatives->size());
-    for (int i = 0; i < alternatives->size(); i++) {
-      Atom::altInfo& I = (*(alternatives))[i];
-      MstUtils::writeBin(_os, I.x); MstUtils::writeBin(_os, I.y); MstUtils::writeBin(_os, I.z);
-      MstUtils::writeBin(_os, I.occ); MstUtils::writeBin(_os, I.B); MstUtils::writeBin(_os, I.alt);
+    MstUtils::writeBin(_os, numAlternatives());
+    for (int i = 0; i < numAlternatives(); i++) {
+      CartesianPoint coor = getAltCoor(i);
+      MstUtils::writeBin(_os, coor[0]); MstUtils::writeBin(_os, coor[1]); MstUtils::writeBin(_os, coor[2]);
+      MstUtils::writeBin(_os, getAltOcc(i)); MstUtils::writeBin(_os, getAltB(i)); MstUtils::writeBin(_os, getAltLocID(i));
     }
   }
 }
 
 void Atom::read(istream& _os) {
   MstUtils::readBin(_os, x); MstUtils::readBin(_os, y); MstUtils::readBin(_os, z);
-  MstUtils::readBin(_os, occ); MstUtils::readBin(_os, B);
-  string _name; MstUtils::readBin(_os, _name); setName(_name); MstUtils::readBin(_os, alt);
-  MstUtils::readBin(_os, het); MstUtils::readBin(_os, index);
+  MstUtils::readBin(_os, info->occ); MstUtils::readBin(_os, info->B);
+  string _name; MstUtils::readBin(_os, _name); setName(_name); MstUtils::readBin(_os, info->alt);
+  MstUtils::readBin(_os, info->het); MstUtils::readBin(_os, info->index);
   bool hasAlt; MstUtils::readBin(_os, hasAlt);
   clearAlternatives();
   if (hasAlt) {
@@ -1299,9 +1319,16 @@ void Atom::read(istream& _os) {
 }
 
 ostream& MST::operator<<(ostream &_os, const Atom& _atom) {
-  _os << _atom.getName() << _atom.getAlt() << " " << _atom.index << " " << (_atom.isHetero() ? "HETERO" : "");
-  _os << _atom.x << " " << _atom.y << " " << _atom.z << " : " << _atom.occ << " " << _atom.B;
+  _os << _atom.getName() << _atom.getAlt() << " " << _atom.getIndex() << " " << (_atom.isHetero() ? "HETERO" : "");
+  _os << _atom.getX() << " " << _atom.getY() << " " << _atom.getZ() << " : " << _atom.getOcc() << " " << _atom.getB();
   return _os;
+}
+
+void Atom::stripInfo() {
+  if (info != NULL) {
+    delete info;
+    info = NULL;
+  }
 }
 
 /* --------- AtomPointerVector --------- */

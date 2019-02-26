@@ -163,8 +163,7 @@ int main(int argc, char** argv) {
   RotamerLibrary::standardizeBackboneNames(S);
 
   FASST F;
-  F.setMemorySaveMode(true);
-  F.readDatabase(op.getString("b"));
+  F.readDatabase(op.getString("b"), 2);
   F.setRedundancyCut(0.5);
   RotamerLibrary RL(op.getString("rLib"));
   Clusterer clusterGuru(false);

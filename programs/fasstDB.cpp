@@ -38,11 +38,11 @@ int main(int argc, char *argv[]) {
   }
   if (op.isGiven("sim") && (!op.isReal("sim") || (op.getReal("sim") < 0) || (op.getReal("sim") > 100))) MstUtils::error("--sim must be a non-negative value below 100.");
   if (op.isGiven("win") && (!op.isInt("win") || (op.getInt("win") <= 0) || (op.getInt("win") % 2 == 0))) MstUtils::error("--win must be a positive odd integer.");
+  short memSave = op.isGiven("m");
 
   if (!op.isGiven("batch")) {
     FASST S;
     cout << "Reading structures..." << endl;
-    S.setMemorySaveMode(op.isGiven("m"));
     if (op.isGiven("pL")) {
       vector<string> pdbFiles = MstUtils::fileToArray(op.getString("pL"));
       for (int i = 0; i < pdbFiles.size(); i++) {
@@ -57,16 +57,16 @@ int main(int argc, char *argv[]) {
         if (op.isGiven("s")) {
           P = P.reassignChainsByConnectivity();
         }
-        S.addTarget(P);
+        S.addTarget(P, memSave);
       }
     }
     if (op.isGiven("db")) {
-      S.readDatabase(op.getString("db"));
+      S.readDatabase(op.getString("db"), memSave);
     }
     if (op.isGiven("dL")) {
       vector<string> dbFiles = MstUtils::fileToArray(op.getString("dL"));
       for (int i = 0; i < dbFiles.size(); i++) {
-        S.readDatabase(dbFiles[i]);
+        S.readDatabase(dbFiles[i], memSave);
       }
     }
     if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont")) {

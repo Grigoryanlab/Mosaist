@@ -179,14 +179,16 @@ FASST::FASST() {
   querySize = 0;
   updateGrids = false;
   gridSpacing = 15.0;
-  memSave = false;
 }
 
 FASST::~FASST() {
   // need to delete atoms only on the lowest level of recursion, because at
   // higher levels we point to the same atoms
   if (targetMasks.size()) targetMasks.back().deletePointers();
-  for (int i = 0; i < targetStructs.size(); i++) delete targetStructs[i];
+  for (int i = 0; i < targetStructs.size(); i++) {
+    if (targetStructs[i]) delete targetStructs[i];
+    else targets[i].deletePointers();
+  }
   for (int i = 0; i < ps.size(); i++) delete ps[i];
 }
 
@@ -299,20 +301,20 @@ AtomPointerVector FASST::getQuerySearchedAtoms() const {
   return atoms;
 }
 
-void FASST::addTarget(const string& pdbFile) {
+void FASST::addTarget(const string& pdbFile, short memSave) {
   Structure* targetStruct = new Structure(pdbFile, "QUIET");
   targetSource.push_back(targetInfo(pdbFile, targetFileType::PDB, 0, memSave));
-  addTargetStructure(targetStruct);
+  addTargetStructure(targetStruct, memSave);
 }
 
-void FASST::addTarget(const Structure& T) {
+void FASST::addTarget(const Structure& T, short memSave) {
   Structure* targetStruct = new Structure(T);
   targetSource.push_back(targetInfo(T.getName(), targetFileType::STRUCTURE, 0, memSave));
-  addTargetStructure(targetStruct);
+  addTargetStructure(targetStruct, memSave);
 }
 
-void FASST::addTargetStructure(Structure* targetStruct) {
-  if (memSave) stripSidechains(*targetStruct);
+void FASST::addTargetStructure(Structure* targetStruct, short memSave) {
+  if (memSave == 1) stripSidechains(*targetStruct);
   targetStructs.push_back(targetStruct);
   targets.push_back(AtomPointerVector());
   targSeqs.push_back(Sequence());
@@ -320,7 +322,8 @@ void FASST::addTargetStructure(Structure* targetStruct) {
   Sequence& seq = targSeqs.back();
   // we don't care about the chain topology of the target, so append all residues
   for (int i = 0; i < targetStruct->chainSize(); i++) {
-    parseChain(targetStruct->getChain(i), &target, &seq);
+    bool foundAll = parseChain(targetStruct->getChain(i), &target, &seq);
+    if ((memSave == 2) && !foundAll) MstUtils::error("for targets added under strict memory savings, all residues must be searchable", "FASST::addTargetStructure(Structure*, short)");
   }
   MstUtils::assert(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
   seq.setName(targetStruct->getName());
@@ -340,10 +343,23 @@ void FASST::addTargetStructure(Structure* targetStruct) {
     xhi = max(xhi, _xhi); yhi = max(yhi, _yhi); zhi = max(zhi, _zhi);
   }
   updateGrids = true;
+
+  // chain lengths
+  tightvector<int> chainLens(targetStruct->chainSize(), 0);
+  for (int i = 0; i < chainLens.size(); i++) chainLens[i] = targetStruct->getChain(i).residueSize();
+  targetChainLen.push_back(chainLens);
+
+  // make stripped copies of atoms and destroy original target
+  if (memSave == 2) {
+    target = target.clone();
+    for (int i = 0; i < target.size(); i++) target[i]->stripInfo();
+    targetStructs.back() = NULL;
+    delete targetStruct;
+  }
 }
 
-void FASST::addTargets(const vector<string>& pdbFiles) {
-  for (int i = 0; i < pdbFiles.size(); i++) addTarget(pdbFiles[i]);
+void FASST::addTargets(const vector<string>& pdbFiles, short memSave) {
+  for (int i = 0; i < pdbFiles.size(); i++) addTarget(pdbFiles[i], memSave);
 }
 
 bool FASST::parseChain(const Chain& C, AtomPointerVector* searchable, Sequence* seq) {
@@ -382,18 +398,17 @@ void FASST::addResiduePairProperties(int ti, const string& propType, const map<i
 }
 
 void FASST::addResidueRelationship(int ti, const string& propType, int ri, int tj, int rj) {
-  // resRelProperties[propType][ti][tj][ri].insert(rj);
   resRelProperties[propType][resAddress(ti, ri)].push_back(resAddress(tj, rj));
 }
 
 map<int, vector<FASST::resAddress>> FASST::getResidueRelationships(int ti, const string& propType) {
   simpleMap<resAddress, tightvector<resAddress>>& relMap = resRelProperties[propType];
-  map<int, vector<FASST::resAddress>> ret;
+  map<int, vector<resAddress>> ret;
   int beg = relMap.getLowerBound(resAddress(ti, 0));
   for (int i = beg; i < relMap.size(); i++) {
     resAddress ri = relMap.key(i);
-    if (ri.first != ti) break;
-    ret[ri.second] = relMap.value(i);
+    if (ri.targIndex() != ti) break;
+    ret[ri.resIndex()] = relMap.value(i);
   }
   return ret;
 }
@@ -430,6 +445,7 @@ void FASST::writeDatabase(const string& dbFile) {
   fstream ofs; MstUtils::openFile(ofs, dbFile, fstream::out | fstream::binary, "FASST::writeDatabase");
   MstUtils::writeBin(ofs, 'V'); MstUtils::writeBin(ofs, (int) 1); // format version
   for (int ti = 0; ti < targetStructs.size(); ti++) {
+    if (targetStructs[ti] == NULL) MstUtils::error("cannot write a database, in which full structures are not populated", "FASST::writeDatabase");
     MstUtils::writeBin(ofs, 'S'); // marks the start of a structure section
     targetStructs[ti]->writeData(ofs);
     for (auto p = resProperties.begin(); p != resProperties.end(); ++p) {
@@ -466,20 +482,20 @@ void FASST::writeDatabase(const string& dbFile) {
     MstUtils::writeBin(ofs, (string) p->first);
     MstUtils::writeBin(ofs, (int) resRelProperty.size());
     for (int i = 0; i < resRelProperty.size(); i++) {
-      MstUtils::writeBin(ofs, resRelProperty.key(i).first);  // ti
-      MstUtils::writeBin(ofs, resRelProperty.key(i).second); // ri
+      MstUtils::writeBin(ofs, resRelProperty.key(i).targIndex());  // ti
+      MstUtils::writeBin(ofs, resRelProperty.key(i).resIndex()); // ri
       tightvector<resAddress>& relatedList = resRelProperty.value(i);
       MstUtils::writeBin(ofs, (int) relatedList.size());
       for (int j = 0; j < relatedList.size(); j++) {
-        MstUtils::writeBin(ofs, relatedList[j].first);  // tj
-        MstUtils::writeBin(ofs, relatedList[j].second); // rj
+        MstUtils::writeBin(ofs, relatedList[j].targIndex());  // tj
+        MstUtils::writeBin(ofs, relatedList[j].resIndex()); // rj
       }
     }
   }
   ofs.close();
 }
 
-void FASST::readDatabase(const string& dbFile) {
+void FASST::readDatabase(const string& dbFile, short memSave) {
   fstream ifs; MstUtils::openFile(ifs, dbFile, fstream::in | fstream::binary, "FASST::readDatabase");
   char sect; string name; mstreal val;
   int ver = 0;
@@ -492,18 +508,18 @@ void FASST::readDatabase(const string& dbFile) {
   if (sect != 'S') MstUtils::error("first section must be a structure one, while reading database file " + dbFile, "FASST::readDatabase(const string&)");
   while (ifs.peek() != EOF) {
     Structure* targetStruct = new Structure();
-    int loc = ifs.tellg();
+    streampos loc = ifs.tellg();
     targetStruct->readData(ifs);
     targetSource.push_back(targetInfo(dbFile, targetFileType::BINDATABASE, loc, memSave));
-    addTargetStructure(targetStruct);
+    int L = targetStruct->residueSize();
+    addTargetStructure(targetStruct, memSave);
     while (ifs.peek() != EOF) {
       MstUtils::readBin(ifs, sect);
       if (sect == 'P') {
-        int N = targetStruct->residueSize();
         MstUtils::readBin(ifs, name);
         vector<mstreal>& vals = resProperties[name][ti];
-        vals.resize(N, 0);
-        for (int i = 0; i < N; i++) {
+        vals.resize(L, 0);
+        for (int i = 0; i < L; i++) {
           MstUtils::readBin(ifs, val);
           vals[i] = val;
         }
@@ -518,7 +534,7 @@ void FASST::readDatabase(const string& dbFile) {
           for (int j = 0; j < n; j++) {
             MstUtils::readBin(ifs, rj);
             MstUtils::readBin(ifs, cd);
-           vals[ri][rj] = cd;
+            vals[ri][rj] = cd;
           }
         }
       } else if (sect == 'R') {
@@ -550,15 +566,15 @@ void FASST::readDatabase(const string& dbFile) {
             resAddress ri, rj; int N, n;
             MstUtils::readBin(ifs, N);
             for (int i = 0; i < N; i++) {
-              MstUtils::readBin(ifs, ri.first);
-              MstUtils::readBin(ifs, ri.second);
+              MstUtils::readBin(ifs, ri.targIndex());
+              MstUtils::readBin(ifs, ri.resIndex());
               tightvector<resAddress>& relatedList = resRelProperty[ri];
               MstUtils::readBin(ifs, n);
               int off = relatedList.size();
               relatedList.resize(off + n);
               for (int j = 0; j < n; j++) {
-                MstUtils::readBin(ifs, rj.first);
-                MstUtils::readBin(ifs, rj.second);
+                MstUtils::readBin(ifs, rj.targIndex());
+                MstUtils::readBin(ifs, rj.resIndex());
                 relatedList[off + j] = rj;
               }
             }
@@ -709,17 +725,17 @@ void FASST::prepForSearch(int ti) {
 
 void FASST::fillTargetChainInfo(int ti) {
   AtomPointerVector& target = targets[ti];
-  targChainBeg.clear();
-  targChainBeg.resize(atomToResIdx(target.size()), 0);
-  for (int i = 1; i < targChainBeg.size(); i++) {
-    if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i-1)]->getChain()) targChainBeg[i] = targChainBeg[i-1];
-    else targChainBeg[i] = i;
-  }
-  targChainEnd.clear();
-  targChainEnd.resize(atomToResIdx(target.size()), atomToResIdx(target.size()) - 1);
-  for (int i = targChainEnd.size() - 2; i >= 0; i--) {
-    if (target[resToAtomIdx(i)]->getChain() == target[resToAtomIdx(i+1)]->getChain()) targChainEnd[i] = targChainEnd[i+1];
-    else targChainEnd[i] = i;
+  targChainBeg.resize(atomToResIdx(target.size()));
+  targChainEnd.resize(atomToResIdx(target.size()));
+
+  tightvector<int>& chainLengths = targetChainLen[ti];
+  int ri = 0, cb = 0;
+  for (int i = 0; i < chainLengths.size(); i++) {
+    for (int j = 0; j < chainLengths[i]; j++, ri++) {
+      targChainBeg[ri] = cb;
+      targChainEnd[ri] = cb + chainLengths[i] - 1;
+    }
+    cb += chainLengths[i];
   }
 }
 
@@ -1000,7 +1016,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
     int idx = it->first;
     Structure* targetStruct = targetStructs[idx];
     AtomPointerVector& target = targets[idx];
-    bool reread = detailed && targetSource[idx].memSave; // should we re-read the target structure?
+    bool reread = (detailed && targetSource[idx].memSave) || (targetStruct == NULL); // should we re-read the target structure?
     Transform& transf = tr[idx];
     if (reread) {
       dummy.reset();
@@ -1019,6 +1035,7 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
       }
       transf.apply(dummy);
       targetStruct = &dummy;
+      if (!detailed) stripSidechains(*targetStruct);
     }
 
     // visit each solution from this target
@@ -1035,9 +1052,13 @@ void FASST::getMatchStructures(fasstSolutionSet& sols, vector<Structure>& matche
       } else {
         vector<int> resIndices = getMatchResidueIndices(sol, type);
         for (auto ri = resIndices.begin(); ri != resIndices.end(); ri++) {
-          Residue* res = target[resToAtomIdx(*ri)]->getResidue();
-          if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
-          match.addResidue(res);
+          if (targetStructs[idx] == NULL) {
+            match.addResidue(&(targetStruct->getResidue((*ri))));
+          } else {
+            Residue* res = target[resToAtomIdx(*ri)]->getResidue();
+            if (reread) res = &(targetStruct->getResidue(res->getResidueIndex()));
+            match.addResidue(res);
+          }
         }
       }
 
@@ -1093,9 +1114,13 @@ vector<vector<mstreal> > FASST::getResidueProperties(fasstSolutionSet& sols, con
     vector<int> resIndices = getMatchResidueIndices(sol, type);
     props[i].resize(resIndices.size()); int ii = 0;
     for (auto ri = resIndices.begin(); ri != resIndices.end(); ri++, ii++) {
-      // properties are defined for each residue in the original target structure
-      Residue* res = target[resToAtomIdx(*ri)]->getResidue();
-      props[i][ii] = propVals[res->getResidueIndex()];
+      // if we have the full structure, then we have the ability to differentiate
+      // between the original structure and the part that is searched over (e.g.,
+      // some residues could be skipped for any reason). if instead we are in a
+      // mode where the original structure was not saved, that implies that all
+      // residues in the original structure made it to the portion being searched
+      // over (otherwise, discarding the original would have been caught as an error)
+      props[i][ii] = (targetStructs[idx] != NULL) ? propVals[target[resToAtomIdx(*ri)]->getResidue()->getResidueIndex()] : propVals[*ri];
     }
   }
   return props;
@@ -1146,7 +1171,7 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
     case matchType::FULL: {
       int idx = sol.getTargetIndex();
       MstUtils::assert((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchResidueIndices");
-      for (int i = 0; i < targetStructs[idx]->residueSize(); i++) residueIndices.push_back(i);
+      for (int i = 0; i < getTargetResidueSize(idx); i++) residueIndices.push_back(i);
       break;
     }
     default:
@@ -1189,7 +1214,8 @@ vector<mstreal> FASST::matchRMSDs(fasstSolutionSet& sols, const AtomPointerVecto
 
 string FASST::toString(const fasstSolution& sol) {
   stringstream ss;
-  ss << std::setprecision(6) << std::fixed << sol.getRMSD() << " " << targetStructs[sol.getTargetIndex()]->getName() << " [" << MstUtils::vecToString(sol.getAlignment(), ", ") << "]";
+  int ti = sol.getTargetIndex();
+  ss << std::setprecision(6) << std::fixed << sol.getRMSD() << " " << ((targetStructs[ti] == NULL) ? MstUtils::toString(ti) : targetStructs[ti]->getName()) << " [" << MstUtils::vecToString(sol.getAlignment(), ", ") << "]";
   return ss.str();
 }
 

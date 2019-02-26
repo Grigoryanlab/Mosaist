@@ -257,14 +257,13 @@ int main(int argc, char** argv) {
       MstSys::releaseNetLock(tag);
     }
   }
-  search.setMemorySaveMode(true);
   if (op.isGiven("d")) {
     search.addTargets(MstUtils::fileToArray(op.getString("d")));
     if (op.isGiven("b")) {
       search.writeDatabase(op.getString("b"));
     }
   } else if (op.isGiven("b")) {
-    search.readDatabase(op.getString("b"));
+    search.readDatabase(op.getString("b"), 2);
   } else {
     MstUtils::error("either --b or --d must be given!");
   }

@@ -115,8 +115,7 @@ int main(int argc, char *argv[]) {
   vector<vector<int> > subMatrix(20, vector<int>(20, 0));
 
   // prepare FASST object
-  F.setMemorySaveMode(true);
-  F.readDatabase(op.getString("d"));
+  F.readDatabase(op.getString("d"), 2);
   F.options().setRedundancyCut(0.5);
   // F.setMaxNumMatches(1000); // these many matches are enough to compute reasonable frequencies
   // F.setMinNumMatches(20);   // need at least this many to compute anything reasonable
