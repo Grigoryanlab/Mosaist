@@ -839,7 +839,7 @@ class Clusterer {
      * Output a vector of clusters, in decreasing size, each of which is a vector of
      * indices of elements mapping to that cluster. The centroid is always listed first
      * in each cluster. */
-    vector<vector<int> > greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax = 10000);
+    vector<vector<int> > greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax = 10000, bool verbose = true);
 
     /* Perform k-means clustering of a point cloud in arbitrary dimension, using
      * Euclidean distance as the metric. Returns a list of clusters of size k,
