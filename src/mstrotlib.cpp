@@ -131,6 +131,7 @@ void RotamerLibrary::readRotamerLibrary(string rotLibFile) {
       rotamers[aa][i] = rot;
     }
   }
+  loaded = true;
 }
 
 mstreal RotamerLibrary::angleToStandardRange(mstreal angle) {
