@@ -72,7 +72,7 @@ TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSeque
 PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments design $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes msttermanal
-LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans libdtermen
+LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfasstcache libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans libdtermen
 
 # target dependencies
 findBestFreedom_DEPS	:= mstcondeg mstrotlib mstsystem msttransforms msttypes
@@ -103,6 +103,7 @@ analyzeLandscape_DEPS		:= msttypes msttransforms mstsequence mstoptions mstfasst
 libmst_DEPS			:= mstoptions mstsequence mstsystem msttypes
 libmstcondeg_DEPS		:= mstcondeg mstrotlib msttransforms
 libmstfasst_DEPS		:= mstfasst mstsequence msttransforms msttypes
+libmstfasstcache_DEPS	:= mstfasst mstfasstcache mstsequence msttransforms msttypes
 libmstfuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
 libmstlinalg_DEPS		:= mstlinalg
 libmstmagic_DEPS		:= msttypes mstmagic mstcondeg

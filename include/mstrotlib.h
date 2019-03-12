@@ -24,7 +24,7 @@ class rotamerID {
 class RotamerLibrary {
   public:
     enum bbAtomType { bbN = 0, bbCA, bbC, bbO, bbH };
-    RotamerLibrary() {}
+    RotamerLibrary() { loaded = false; }
     RotamerLibrary(string rotLibFile);
     ~RotamerLibrary();
 
@@ -76,6 +76,7 @@ class RotamerLibrary {
     mstreal rotamerProbability(rotamerID& rot) { return rotamerProbability(&rot); }
     mstreal rotamerProbability(rotamerID* rot);
     vector<string> availableAminoAcids() { return keys(rotamers); }
+    bool isLoaded() { return loaded; }
 
   protected:
     /* given an array of angles, stored in ascending order (i.e., in the counter-clockwise
@@ -148,6 +149,8 @@ class RotamerLibrary {
      * binPhiCenters[aa].size() * binPsiCenters[aa].size() */
     map<string, vector<mstreal> > binPhiCenters;
     map<string, vector<mstreal> > binPsiCenters;
+
+    bool loaded;
 };
 
 }

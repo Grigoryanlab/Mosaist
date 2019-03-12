@@ -42,6 +42,7 @@ fusionTopology::fusionTopology(int L) {
   overlappingResidues.resize(L);
   fixed.resize(L, false);
   updated = true;
+  verbose = false;
 }
 
 fusionTopology::fusionTopology(const vector<vector<Residue*> >& resTopo) {
@@ -71,6 +72,7 @@ fusionTopology::fusionTopology(const vector<vector<Residue*> >& resTopo) {
     fragWeights.push_back(1.0);
   }
   updated = true;
+  verbose = false;
 }
 
 fusionTopology::fusionTopology(const fusionTopology& topo) {
@@ -89,6 +91,7 @@ fusionTopology& fusionTopology::operator=(const fusionTopology& topo) {
   this->fragsByOverlap = topo.fragsByOverlap;
   this->chainLengths = topo.chainLengths;
   this->fixedInChain = topo.fixedInChain;
+  this->verbose = topo.verbose;
   return *this;
 }
 
@@ -186,7 +189,7 @@ int fusionTopology::numFixedInChain(int ci) {
   return num;
 }
 
-void fusionTopology::updateConnectivity(bool verbose) {
+void fusionTopology::updateConnectivity() {
   if (!updated) return;
   int L = overlappingResidues.size();
   int nbba = fusionTopology::bba.size();
