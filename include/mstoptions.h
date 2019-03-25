@@ -31,20 +31,21 @@ class MstOptions {
 
     // parsing command-line options
     void setOptions(int argc, char** argv);
-    bool isInt(const string& opt);
-    int getInt(const string& opt, int defVal = 0);
-    bool isReal(const string& opt);
-    mstreal getReal(const string& opt, mstreal defVal = 0.0);
-    string getString(const string& opt, string defVal = "");
-    bool getBool(const string& opt) { return isGiven(opt); }
+    bool isInt(const string& opt, int idx = 0);
+    int getInt(const string& opt, int defVal = 0, int idx = 0);
+    bool isReal(const string& opt, int idx = 0);
+    mstreal getReal(const string& opt, mstreal defVal = 0.0, int idx = 0);
+    string getString(const string& opt, string defVal = "", int idx = 0);
+    bool getBool(const string& opt, int idx = 0);
     bool isGiven(const string& opt) const;
+    int timesGiven(const string& opt) const;
     string getExecName() const { return execName; }
     vector<string> getAllGivenOptions() const { return MstUtils::keys(givenOptions); }
 
   private:
     int w, p1, p2;
     string execName, title;
-    map<string, string> givenOptions;
+    map<string, vector<string>> givenOptions;
     vector<string> options;
     vector<string> optionsInfo;
     set<string> required;

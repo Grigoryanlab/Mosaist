@@ -89,12 +89,12 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
   if (op.isGiven("sel")) iopts.focus = string(op.getString("sel"));
   if (op.isGiven("rLib")) iopts.rotLibFile = op.getString("rLib");
   if (op.isGiven("rout")) iopts.rotOutFile = op.getString("rout");
-  iopts.verbose = op.getBool("verb");
-  iopts.phi_psi = op.getBool("pp");
-  iopts.omega = op.getBool("omg");
-  iopts.renumPDB = op.getBool("ren");
-  iopts.printFileNames = op.getBool("pf");
-  iopts.freeB = op.getBool("freeB");
+  iopts.verbose = op.isGiven("verb");
+  iopts.phi_psi = op.isGiven("pp");
+  iopts.omega = op.isGiven("omg");
+  iopts.renumPDB = op.isGiven("ren");
+  iopts.printFileNames = op.isGiven("pf");
+  iopts.freeB = op.isGiven("freeB");
 
   // error checking
   // make sure lists are of the proper size

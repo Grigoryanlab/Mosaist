@@ -77,40 +77,6 @@ vector<Structure*> getMatches(FASST& C, Structure& frag, const vector<int>& frag
   }
   if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
 
-  // for (int c = 0; c < 10; c++) {
-  //   fasstSolutionSet matches = C.search();
-  //   for (auto it = matches.begin(); it != matches.end(); ++it) {
-  //     if (centIdx.size() > 0) {
-  //       // check for sequence compatibility
-  //       Sequence mseq = C.getMatchSequence(*it);
-  //       bool comp = true;
-  //       for (int i = 0; i < centIdx.size(); i++) {
-  //         Residue& res = frag.getResidue(centIdx[i]);
-  //         if (SeqTools::isUnknown(res.getName())) continue;
-  //         if (SeqTools::aaToIdx(res.getName()) != mseq[centIdx[i]]) { comp = false; break; }
-  //       }
-  //       if (!comp) continue; // skip non-compatible solutions
-  //     }
-  //     matchStructures.push_back(new Structure(C.getMatchStructure(*it, false, FASST::matchType::REGION)));
-  //     Structure& match = *(matchStructures.back());
-  //     MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
-  //     numberResidues(match, fragResIdx); // make residue numbers store indices into the original structure
-  //   }
-  //   if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
-  //   if (matchStructures.size() >= need) break;
-  //   for (int i = 0; i < matchStructures.size(); i++) delete(matchStructures[i]);
-  //   matchStructures.clear();
-  //   if (matches.size() == C.options().getMaxNumMatches()) {
-  //     C.options().setMaxNumMatches(C.options().getMaxNumMatches()*2);
-  //   } else {
-  //     C.options().setRMSDCutoff(C.options().getRMSDCutoff()*1.1);
-  //   }
-  //   if (C.isVerbose()) cout << "\t\tinsufficient, increasing params to " << C.options().getRMSDCutoff() << " / " << C.options().getMaxNumMatches() << endl;
-  // }
-  // if (matchStructures.size() > need) {
-  //   for (int i = need; i < matchStructures.size(); i++) delete(matchStructures[i]);
-  //   matchStructures.resize(need);
-  // }
   return matchStructures;
 }
 
@@ -211,6 +177,7 @@ int main(int argc, char** argv) {
   op.addOption("a", "alternate between optimizing without and with internal coordinate constraints. Can be useful for getting out of local minima.");
   op.addOption("f", "a quoted, space-separated list of 0-initiated residue integers to fix.");
   op.addOption("fs", "a selection string for residues to fix.");
+  op.addOption("frag", "a selection that will be used to define a single \"TERM\" to include in the fuser topology. This can be used to restrain some portion of the structure durring minimization/dynamics. This option can be given multiple times and will result in multiple suchh TERMs being defined.");
   op.addOption("us", "a selection string for residues to mark as having unknown identity (i.e., their identity will not matter if accounting for sequence).");
   op.addOption("rad", "compactness radius. Default will be based on protein length.");
   op.addOption("c", "path to a FASST cache file to use for initializing the cache.");
@@ -237,6 +204,17 @@ int main(int argc, char** argv) {
     map<Residue*, int> indices = MstUtils::indexMap(I.getResidues());
     fixed.resize(fixedResidues.size());
     for (int i = 0; i < fixedResidues.size(); i++) fixed[i] = indices[fixedResidues[i]];
+  }
+
+  // define any custom TERMs
+  vector<Structure> customTERMs(op.timesGiven("frag"));
+  for (int fi = 0; fi < op.timesGiven("frag"); fi++) {
+    selector sel(I);
+    vector<Residue*> customResidues = sel.selectRes(op.getString("frag", "", fi));
+    cout << "defining custom TERM " << fi << " with " << customResidues.size() << " residues..." << endl;
+    customTERMs[fi] = Structure(customResidues);
+    vector<Residue*> newResis = customTERMs[fi].getResidues();
+    for (int ri = 0; ri < newResis.size(); ri++) newResis[ri]->setNum(customResidues[ri]->getResidueIndex());
   }
 
   // figure out which FASST object will be used
@@ -452,6 +430,7 @@ int main(int argc, char** argv) {
         propPicks[si][mi] = MstUtils::randInt(allMatches[si].size());
       }
       fusionTopology propTopo = getTopo(I.residueSize(), allMatches, propPicks, (it == 0) ? shellOut : dummy, op.isGiven("m") ? &S : NULL);
+      for (int fi = 0; fi < customTERMs.size(); fi++) propTopo.addFragment(customTERMs[fi]);
       propTopo.addFixedPositions(fixed);
       Structure propFused;
       if (op.isGiven("dyn")) {

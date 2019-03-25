@@ -52,10 +52,10 @@ void MstOptions::setOptions(int argc, char** argv) {
     if (token.find("--") != 0) MstUtils::error("could not parse options, could not understand the token '" + token + "'", "MstOptions::setOptions");
     token = token.substr(2);
     if (nextToken.find("--") != 0) {
-      givenOptions[token] = nextToken;
+      givenOptions[token].push_back(nextToken);
       i += 2;
     } else {
-      givenOptions[token] = "";
+      givenOptions[token].push_back("");
       i++;
     }
     missingRequired.erase(token);
@@ -68,32 +68,43 @@ void MstOptions::setOptions(int argc, char** argv) {
   }
 }
 
-int MstOptions::getInt(const string& opt, int defVal) {
+int MstOptions::getInt(const string& opt, int defVal, int idx) {
   if (givenOptions.find(opt) == givenOptions.end()) return defVal;
-  return MstUtils::toInt(givenOptions[opt]);
+  return MstUtils::toInt(givenOptions[opt][idx]);
 }
 
-mstreal MstOptions::getReal(const string& opt, mstreal defVal) {
+mstreal MstOptions::getReal(const string& opt, mstreal defVal, int idx) {
   if (givenOptions.find(opt) == givenOptions.end()) return defVal;
-  return MstUtils::toReal(givenOptions[opt]);
+  return MstUtils::toReal(givenOptions[opt][idx]);
 }
 
-bool MstOptions::isInt(const string& opt) {
+bool MstOptions::isInt(const string& opt, int idx) {
   if (givenOptions.find(opt) == givenOptions.end()) return false;
-  return MstUtils::isInt(givenOptions[opt]);
+  return MstUtils::isInt(givenOptions[opt][idx]);
 }
 
-bool MstOptions::isReal(const string& opt) {
+bool MstOptions::isReal(const string& opt, int idx) {
   if (givenOptions.find(opt) == givenOptions.end()) return false;
-  return MstUtils::isReal(givenOptions[opt]);
+  return MstUtils::isReal(givenOptions[opt][idx]);
 }
 
-string MstOptions::getString(const string& opt, string defVal) {
+string MstOptions::getString(const string& opt, string defVal, int idx) {
   if (givenOptions.find(opt) == givenOptions.end()) return defVal;
-  return givenOptions[opt];
+  return givenOptions[opt][idx];
+}
+
+bool MstOptions::getBool(const string& opt, int idx) {
+  if (givenOptions.find(opt) == givenOptions.end()) return false;
+  if (!MstUtils::isInt(givenOptions[opt][idx])) return false;
+  return (MstUtils::toInt(givenOptions[opt][idx]) != 0);
 }
 
 bool MstOptions::isGiven(const string& opt) const {
   if (givenOptions.find(opt) == givenOptions.end()) return false;
   return true;
+}
+
+int MstOptions::timesGiven(const string& opt) const {
+  if (givenOptions.find(opt) == givenOptions.end()) return 0;
+  return givenOptions.at(opt).size();
 }
