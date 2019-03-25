@@ -231,6 +231,8 @@ class fusionTopology {
     vector<mstreal> getFragWeights() const { return fragWeights; }
     vector<int> getChainLengths() { updateConnectivity(); return chainLengths; }
     int numChains() { updateConnectivity(); return chainLengths.size(); }
+    bool isVerbose() { return verbose; }
+    void setVerbose(bool _verbose) { verbose = _verbose; }
 
     /* Assignment (copy constructor implemented using this) */
     fusionTopology& operator=(const fusionTopology& topo);
@@ -253,7 +255,7 @@ class fusionTopology {
      * fragments. If two consecutive residues are not found bonded to each other
      * in any fragment they are both a part of, then a chain break is said to
      * occur between them. */
-    void updateConnectivity(bool verbose = true);
+    void updateConnectivity();
 
     static vector<string> bba;
 
@@ -289,6 +291,7 @@ class fusionTopology {
     vector<int> numMobAtoms;
     vector<vector<bool> > fixedInChain;
     bool updated; // have changes to the topology been made that require an update of connectivity?
+    bool verbose; // print connectivity information during updateConnectivity
 };
 
 class fusionEvaluator: public optimizerEvaluator {

@@ -3228,7 +3228,7 @@ bool ProximitySearch::overlaps(ProximitySearch& other, mstreal pad) {
 }
 
 /* --------- Clusterer --------- */
-vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax) {
+vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax, bool verbose) {
   vector<vector<int> > clusters;
   if (units.empty()) return clusters;
   set<int> remIndices;
@@ -3248,11 +3248,11 @@ vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& unit
     // get the top cluster from these and use its centroid
     vector<int> topClustSub = Clusterer::greedyClusterBruteForce(units, subSample, rmsdCut, 1)[0];
     vector<int> topClust = Clusterer::elementsWithin(units, remIndices, units[topClustSub[0]], rmsdCut);
-    cout << "picked initial cluster with " << topClust.size() << " points..." << endl;
+    if (verbose) cout << "picked initial cluster with " << topClust.size() << " points..." << endl;
 
     // now try to improve the centroid by moving it closer to the average
     while (1) {
-      cout << "\timproving..." << endl;
+      if (verbose) cout << "\timproving..." << endl;
       mean.copyCoordinates(units[topClust[0]]);
       for (int i = 1; i < topClust.size(); i++) {
         copy.copyCoordinates(units[topClust[i]]);
@@ -3263,7 +3263,7 @@ vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& unit
       topClustNew = Clusterer::elementsWithin(units, remIndices, units[topClustNew[0]], rmsdCut);
       if (topClustNew.size() <= topClust.size()) break;
       topClust = topClustNew;
-      cout << "\timproved to " << topClust.size() << " points" << endl;
+      if (verbose) cout << "\timproved to " << topClust.size() << " points" << endl;
     }
 
     // // now try to grow the cluster by improving the centroid, if there are compute cycles left
@@ -3276,7 +3276,7 @@ vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& unit
     // keep whatever cluster end up with, exclude its elements
     clusters.push_back(topClust);
     for (int i = 0; i < topClust.size(); i++) remIndices.erase(topClust[i]);
-    cout << remIndices.size() << " points remaining" << endl;
+    if (verbose) cout << remIndices.size() << " points remaining" << endl;
   }
 
   // clean up
