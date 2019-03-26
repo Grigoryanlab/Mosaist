@@ -54,6 +54,7 @@ vector<Structure*> getMatches(FASST& C, Structure& frag, const vector<int>& frag
   C.setRMSDCutoff(RMSDCalculator::rmsdCutoff(frag));
   C.options().setMaxNumMatches(need);
   C.options().setMinNumMatches(need);
+  C.options().unsetSequenceConstraints();
 
   // add sequence constraints, as needed
   fasstSeqConstSimple seqConst(centIdx.size());
