@@ -13,6 +13,12 @@ Structure::Structure(string pdbFile, string options) {
   readPDB(pdbFile, options);
 }
 
+Structure::Structure(istream& is, string options) {
+  name = "";
+  numResidues = numAtoms = 0;
+  readPDB(is, options);
+}
+
 Structure::Structure(const Structure& S) {
   copy(S);
 }
@@ -79,6 +85,12 @@ Structure& Structure::operator=(const Structure& A) {
 
 void Structure::readPDB(const string& pdbFile, string options) {
   name = pdbFile;
+  fstream ifh; MstUtils::openFile(ifh, pdbFile, fstream::in, "Structure::readPDB");
+  readPDB(ifh, options);
+  ifh.close();
+}
+
+void Structure::readPDB(istream& is, string options) {
   int lastresnum = -999999;
   string lastresname = "XXXXXX";
   string lasticode = "";
@@ -113,9 +125,7 @@ void Structure::readPDB(const string& pdbFile, string options) {
 
   // read line by line
   string line;
-  fstream ifh; MstUtils::openFile(ifh, pdbFile, fstream::in, "Structure::readPDB");
-
-  while (getline(ifh, line)) {
+  while (getline(is, line)) {
     if (line.find("END") == 0) break;
     if ((line.find("TER") == 0) && !ignoreTER) { ter = true; continue; }
     if ((skipHetero && (line.find("ATOM") != 0)) || (!skipHetero && (line.find("ATOM") != 0) && (line.find("HETATM") != 0))) continue;
@@ -153,7 +163,7 @@ void Structure::readPDB(const string& pdbFile, string options) {
       // non-unique chains will be automatically renamed (unless the user specified not to rename chains), BUT we need to
       // remember the name that was actually read, since this name is what will be used to determine when the next chain comes
       if (verbose && chainID.compare(chain->getID())) {
-        MstUtils::warn("chain name '" + chainID + "' was repeated in '" + pdbFile + "', renaming the chain to '" + chain->getID() + "'", "Structure::readPDB");
+        MstUtils::warn("chain name '" + chainID + "' was repeated in '" + name + "', renaming the chain to '" + chain->getID() + "'", "Structure::readPDB");
       }
 
       // start to count residue numbers in this chain
@@ -206,7 +216,6 @@ void Structure::readPDB(const string& pdbFile, string options) {
     lastchainID = chainID;
     lastalt = alt;
   }
-  ifh.close();
 }
 
 void Structure::writePDB(const string& pdbFile, string options) const {
