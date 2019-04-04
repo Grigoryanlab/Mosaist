@@ -44,6 +44,7 @@ class Structure {
   public:
     Structure();
     Structure(string pdbFile, string options = "");
+    Structure(istream& is, string options = "");
     Structure(const Structure& S);
     Structure(Chain& C);
     Structure(Residue& R);
@@ -52,6 +53,7 @@ class Structure {
     ~Structure();
 
     void readPDB(const string& pdbFile, string options = "");
+    void readPDB(istream& is, string options = "");
     void writePDB(const string& pdbFile, string options = "") const;
     void writePDB(ostream& ofs, string options = "") const;
     void writeData(const string& dataFile) const;
