@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
   Sequence bestSeq;
   if (op.isGiven("seq")) {
     bestSeq = Sequence(op.getString("seq"));
+    if (bestSeq.size() != variable.size()) MstUtils::error("the sequence given with --seq should be the same length as the number of variable residues");
   } else {
     if (!MstSys::fileExists(etabFile)) {
       dTERMen D(op.getString("c"));
