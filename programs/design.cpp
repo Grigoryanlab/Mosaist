@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
   }
   if (op.isGiven("ctx")) {
     specContext = sel.selectRes(op.getString("ctx"));
-    cout << "selected " << specContext.size() << " residues as part of the fixed specificity context according to selection '" << op.getString("ctx") << "':" << endl;
+    cout << "selected " << specContext.size() << " residues as the fixed specificity context according to selection '" << op.getString("ctx") << "':" << endl;
     for (int i = 0; i < specContext.size(); i++) cout << "\t" << *(specContext[i]) << endl;
     if (!MstUtils::setintersect(specContext, variable).empty()) MstUtils::error("specificity context selection cannot contain variable positions!");
   }
