@@ -144,6 +144,8 @@ int main(int argc, char** argv) {
   op.addOption("L", "grow by this number of residues", true);
   op.addOption("n", "grow from the N-terminus.");
   op.addOption("c", "grow from the C-terminus.");
+  op.addOption("cid", "chain ID of the chain to grow (if more than one chain in structure).");
+  op.addOption("sid", "segment ID of the chain to grow (if more than one chain in structure). At most one of --cid or --sid should be specified.");
   op.addOption("rLib", "path to MST rotamer library.", true);
   op.addOption("o", "output base name.", true);
   op.addOption("b", "binary FASST database to use.", true);
@@ -187,9 +189,17 @@ int main(int argc, char** argv) {
       cout << "selecting TERM..." << endl;
       vector<int> termResIndices;
       vector<Residue*> cenResidues;
-      Residue& cres = nc ? S[0][0] : S.getChain(S.chainSize() - 1).getResidue(S[0].residueSize() - 1);
-      cenResidues.push_back(&cres);
-      Residue* next = &cres;
+      Chain* cChain = &(nc ? S[0] : S.getChain(S.chainSize() - 1)); // default chain of residues to grow
+      if (op.isGiven("cid")) {
+        Chain* cChain = S.getChainByID(op.getString("cid"));
+        MstUtils::assert(cChain != NULL, "did not find chain with ID " + op.getString("cid"));
+      } else if (op.isGiven("sid")) {
+        Chain* cChain = S.getChainBySegID(op.getString("sid"));
+        MstUtils::assert(cChain != NULL, "did not find segment with ID " + op.getString("sid"));
+      }
+      Residue* cres = &(nc ? cChain->getResidue(0) : cChain->getResidue(cChain->residueSize() - 1));
+      cenResidues.push_back(cres);
+      Residue* next = cres;
       for (int k = 1; k <= pm; k++) {
         next = next->iPlusDelta(del);
         if (next == NULL) break;

@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
   op.setTitle("dTERMen design. Options:");
   op.addOption("p", "template PDB file.", true);
   op.addOption("c", "dTERMen configuration file.", true);
-  op.addOption("s", "selection of variable positions that should be designed. By default, all positions are designed.");
+  op.addOption("s", "selection of variable positions that should be designed. By default, all positions are designed. In symmetric design instances, this selection should be from the central unit cell.");
   op.addOption("ctx", "selection of fixed positions that should be treated as the fixed specificity context. If specified, will produce a specificity gap table.");
   op.addOption("sym", "design with crystallographic symmetry. Must specify a semicolon-separated list of unit cells, with the "
                       "first one being the central unit cell that design will focus on (it must have all surrounding unit cells "
