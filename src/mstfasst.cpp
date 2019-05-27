@@ -239,14 +239,15 @@ void FASST::setQuery(const Structure& Q, bool autoSplitChains) {
 
 void FASST::processQuery() {
   querySize = 0;
-  // auto-splitting segments by connectivity, but can do diffeerntly
+  // auto-splitting segments by connectivity, but can do differently
+  if (queryStruct.chainSize() == 0) MstUtils::error("query should not be an empty structure", "FASST::processQuery");
   query.resize(queryStruct.chainSize());
   for (int i = 0; i < queryStruct.chainSize(); i++) {
     query[i].resize(0);
     if (!parseChain(queryStruct[i], &(query[i]))) {
-      MstUtils::error("could not set query, because some atoms for the specified search type were missing", "FASST::setQuery");
+      MstUtils::error("could not set query, because some atoms for the specified search type were missing", "FASST::processQuery");
     }
-    MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "FASST::setQuery");
+    MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "FASST::processQuery");
     querySize += query[i].size();
   }
   currAlignment.resize(query.size(), -1);

@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
   }
   if (op.isGiven("ctx")) {
     specContext = sel.selectRes(op.getString("ctx"));
-    cout << "selected " << specContext.size() << " residues as variable according to selection '" << op.getString("ctx") << "':" << endl;
+    cout << "selected " << specContext.size() << " residues as the fixed specificity context according to selection '" << op.getString("ctx") << "':" << endl;
     for (int i = 0; i < specContext.size(); i++) cout << "\t" << *(specContext[i]) << endl;
     if (!MstUtils::setintersect(specContext, variable).empty()) MstUtils::error("specificity context selection cannot contain variable positions!");
   }
@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
   Sequence bestSeq;
   if (op.isGiven("seq")) {
     bestSeq = Sequence(op.getString("seq"));
+    if (bestSeq.size() != variable.size()) MstUtils::error("the sequence given with --seq should be the same length as the number of variable residues");
   } else {
     if (!MstSys::fileExists(etabFile)) {
       dTERMen D(op.getString("c"));
