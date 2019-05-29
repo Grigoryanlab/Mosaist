@@ -2005,6 +2005,9 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
         case (expressionTree::selProperty::RESNAME):
           if (residues[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
           break;
+        case (expressionTree::selProperty::ICODE):
+          if (string(1, residues[i]->getIcode()) == tree->getString()) sel.push_back(atoms[i]);
+          break;
         case (expressionTree::selProperty::CHAIN):
           if (chains[i]->getID() == tree->getString()) sel.push_back(atoms[i]);
           break;
@@ -2015,7 +2018,7 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
           if (atoms[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
           break;
         default:
-          MstUtils::error("uknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
+          MstUtils::error("unknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
       }
     }
   } else {
@@ -2023,49 +2026,49 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
     switch(tree->getLogicalOperator()) {
       case (expressionTree::logicalOp::AND):
         if (tree->numChildren() != 2)
-          MstUtils::error("poorly parsed expressoin: expected two operands for AND", "selector::select(expressionTree* )");
+          MstUtils::error("poorly parsed expression: expected two operands for AND", "selector::select(expressionTree* )");
         select(tree->getChild(0), selA);
         select(tree->getChild(1), selB);
         sel = intersect(selA, selB);
         break;
       case (expressionTree::logicalOp::OR):
         if (tree->numChildren() != 2)
-          MstUtils::error("poorly parsed expressoin: expected two operands for OR", "selector::select(expressionTree* )");
+          MstUtils::error("poorly parsed expression: expected two operands for OR", "selector::select(expressionTree* )");
         select(tree->getChild(0), selA);
         select(tree->getChild(1), selB);
         sel = combine(selA, selB);
         break;
       case (expressionTree::logicalOp::NOT):
         if (tree->numChildren() != 1)
-          MstUtils::error("poorly parsed expressoin: expected one operand for NOT", "selector::select(expressionTree* )");
+          MstUtils::error("poorly parsed expression: expected one operand for NOT", "selector::select(expressionTree* )");
         select(tree->getChild(0), selA);
         sel = invert(selA);
         break;
       case (expressionTree::logicalOp::BYRES):
         if (tree->numChildren() != 1)
-          MstUtils::error("poorly parsed expressoin: expected one operand for BYRES", "selector::select(expressionTree* )");
+          MstUtils::error("poorly parsed expression: expected one operand for BYRES", "selector::select(expressionTree* )");
         select(tree->getChild(0), selA);
         sel = byRes(selA);
         break;
       case (expressionTree::logicalOp::BYCHAIN):
         if (tree->numChildren() != 1)
-          MstUtils::error("poorly parsed expressoin: expected one operand for BYCHAIN", "selector::select(expressionTree* )");
+          MstUtils::error("poorly parsed expression: expected one operand for BYCHAIN", "selector::select(expressionTree* )");
         select(tree->getChild(0), selA);
         sel = byChain(selA);
         break;
       case (expressionTree::logicalOp::IS):
         if (tree->numChildren() != 1)
-          MstUtils::error("poorly parsed expressoin: expected one operand for IS", "selector::select(expressionTree* )");
+          MstUtils::error("poorly parsed expression: expected one operand for IS", "selector::select(expressionTree* )");
         select(tree->getChild(0), sel);
         break;
       case (expressionTree::logicalOp::AROUND):
         if (tree->numChildren() != 1)
-          MstUtils::error("poorly parsed expressoin: expected one selection operand for AROUND", "selector::select(expressionTree* )");
+          MstUtils::error("poorly parsed expression: expected one selection operand for AROUND", "selector::select(expressionTree* )");
         select(tree->getChild(0), selA);
         sel = around(selA, tree->getVal());
         break;
       default:
-        MstUtils::error("uknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
+        MstUtils::error("unknown selectable property " + MstUtils::toString(tree->getProperty()), "selector::select");
     }
   }
 }
@@ -2101,6 +2104,11 @@ expressionTree* selector::buildExpressionTree(string selStr) {
     string str = getNextSelectionToken(selStr);
     tree->setLogicalOperator(expressionTree::logicalOp::IS);
     tree->setProperty(expressionTree::selProperty::RESNAME);
+    tree->setString(str);
+  } else if (MstUtils::stringsEqual(token, "icode")) {
+    string str = getNextSelectionToken(selStr);
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->setProperty(expressionTree::selProperty::ICODE);
     tree->setString(str);
   } else if (MstUtils::stringsEqual(token, "chain")) {
     string str = getNextSelectionToken(selStr);
@@ -2150,14 +2158,19 @@ expressionTree* selector::buildExpressionTree(string selStr) {
 
 string selector::getNextSelectionToken(string& selStr) {
   selStr = MstUtils::trim(selStr);
-  if (selStr.empty()) { return ""; }
+  if (selStr.empty()) return "";
 
   if (selStr[0] == '(') { // if parenthetical, find matching paren
     // find matching closing paren
     int n = 1; int i;
+    char quoteChar = '\0';
     for (i = 1; i < selStr.size(); i++) {
-      if (selStr[i] == '(') n++;
-      if (selStr[i] == ')') n--;
+      if (quoteChar == '\0') {
+        if (selStr[i] == '(') n++;
+        else if (selStr[i] == ')') n--;
+        else if ((selStr[i] == '\'') && (selStr[i-1] != '\\')) quoteChar = '\'';
+        else if ((selStr[i] == '"') && (selStr[i-1] != '\\')) quoteChar = '"';
+      } else if ((selStr[i] == quoteChar) && (selStr[i-1] != '\\')) quoteChar = '\0';
       if (n == 0) break;
     }
     if (n != 0) MstUtils::error("ill-formed selection expression '" + selStr + "'", "Structure::getNextSelectionToken");
@@ -2167,7 +2180,7 @@ string selector::getNextSelectionToken(string& selStr) {
   }
 
   // otherwise, just get the next space-delimited token
-  string token = MstUtils::nextToken(selStr);
+  string token = MstUtils::nextQuoteAwareToken(selStr);
   return token;
 }
 
@@ -3447,11 +3460,101 @@ string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDeli
       return ret;
     }
   } else {
-    i = min(1, (int) str.length()); // interpret an empty list of delimiters in the same way as perl's split("", $string)
+    i = min((size_t) 1, str.length()); // interpret an empty list of delimiters in the same way as perl's split("", $string)
   }
   ret = str.substr(0, i);
-  str = str.substr(i);
+  str = str.substr(i+1);
   return ret;
+}
+
+string MstUtils::nextQuoteAwareToken(string& str, string quoteMarks, string delimiters, bool skipTrailingDelims) {
+  string ret;
+  if (!delimiters.empty()) {
+    if (skipTrailingDelims) str = trim(str, delimiters);
+    size_t firstQuote = string::npos;
+    for (size_t i = 0; i < str.size(); i++) {
+      for (int j = 0; j < quoteMarks.size(); j++) {
+        if ((str[i] == quoteMarks[j]) && ((i == 0) || (str[i-1] != '\\'))) { firstQuote = i; break; }
+      }
+      if (firstQuote != string::npos) break;
+    }
+    size_t firstDelim = string::npos;
+    for (int i = 0; i < delimiters.size(); i++) firstDelim = min(firstDelim, str.find_first_of(delimiters[i]));
+    if (firstQuote < firstDelim) {
+      char quoteChar = str[firstQuote];
+      size_t nextQuote = string::npos;
+      for (size_t i = firstQuote+1; i < str.size(); i++) {
+        if ((str[i] == quoteChar) && (str[i-1] != '\\')) { nextQuote = i; break; }
+      }
+      if (nextQuote == string::npos) {
+        MstUtils::error("malformed quotation (missing the trailing quote mark " + string(1, quoteChar) + ")", "MstUtils::nextQuoteAwareToken");
+      }
+      string beforeQuote = str.substr(0, firstQuote);
+      string insideQuote = str.substr(firstQuote+1, nextQuote-firstQuote-1);
+      string trailingChars = str.substr(nextQuote+1);
+      string afterQuote = MstUtils::nextToken(trailingChars, delimiters, false);
+      ret = beforeQuote + insideQuote + afterQuote;
+      str = trailingChars;
+    } else {
+      string beforeQuote = str.substr(0, firstQuote);
+      string quoteStart = str.substr(min(firstQuote, str.size()));
+      ret = MstUtils::nextToken(beforeQuote, delimiters, false);
+      str = beforeQuote + quoteStart;
+    }
+    ret = unescape(ret);
+  } else {
+    if (!str.empty()) {
+      bool foundDelim = false;
+      for (int i = 0; i < quoteMarks.size(); i++) {
+        if (str[0] == quoteMarks[i]) {
+          char quoteChar = quoteMarks[i];
+          int j = 1;
+          while ((j < str.size()) && !((str[j] == quoteChar) && (str[j-1] != '\\'))) j++;
+          if (j == str.size()) {
+            MstUtils::error("malformed quotation (missing the trailing quote mark " + string(1, quoteChar) + ")", "MstUtils::nextQuoteAwareToken");
+          }
+          ret = str.substr(1, j-1);
+          str = str.substr(j+1);
+          foundDelim = true;
+          break;
+        }
+      }
+      if (!foundDelim) {
+        if (str[0] == '\\') str = unescape(str.substr(0, 2)) + str.substr(2);
+        ret = str.substr(0, 1);
+        str = str.substr(1);
+      }
+    } else ret = "";
+  }
+  return ret;
+}
+
+string MstUtils::escape(string str, string special) {
+  for (int i = 0; i < str.size()-1; i++) {
+    for (int j = 0; j < special.size(); j++) {
+      if (str[i] == special[j]) {
+        str.replace(i, 1, "\\" + string(1, str[i]));
+        i++; break;
+      }
+    }
+  }
+  if (str[str.size()-1] == '\\') {
+    MstUtils::error("malformed escape sequence (any \\ must be followed by another character, with another \\ producing a literal backslash)", "MstUtils::escape");
+  }
+  return str;
+}
+
+string MstUtils::unescape(string str) {
+  string unescapedStr = str;
+  int i = 0;
+  while (i < unescapedStr.size()) {
+    if (unescapedStr[i] == '\\') {
+      if (i+1 < unescapedStr.size()) unescapedStr = unescapedStr.substr(0, i) + unescapedStr.substr(i+1);
+      else MstUtils::error("malformed escape sequence (any \\ must be followed by another character, with another \\ producing a literal backslash)", "MstUtils::unescape");
+    }
+    i++;
+  }
+  return unescapedStr;
 }
 
 vector<string> MstUtils::split(const string& str, string delimiters, bool skipTrailingDelims) {
