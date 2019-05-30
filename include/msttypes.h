@@ -590,7 +590,7 @@ ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms); // this jus
 
 class expressionTree {
   public:
-    enum selProperty { RESID = 1, RESNAME, CHAIN, SEGID, NAME };      // selectable properties
+    enum selProperty { RESID = 1, RESNAME, ICODE, CHAIN, SEGID, NAME };      // selectable properties
     enum logicalOp { AND = 1, OR, NOT, BYRES, BYCHAIN, IS, AROUND, RANGE };  // logical operators
 
     expressionTree(logicalOp _op = logicalOp::IS) { op = _op; }
@@ -1040,6 +1040,9 @@ class MstUtils {
     static MST::mstreal mod(MST::mstreal num, MST::mstreal den);
     static MST::mstreal sign(MST::mstreal val) { return (val > 0) ? 1.0 : ((val < 0) ? -1.0 : 0.0); }
     static string nextToken(string& str, string delimiters = " ", bool skipTrailingDelims = true);
+    static string nextQuoteAwareToken(string& str, string quoteMarks = "'\"", string delimiters = " ", bool skipTrailingDelims = true);
+    static string escape(string str, string special);
+    static string unescape(string str);
     static vector<string> split(const string& str, string delimiters = " ", bool skipTrailingDelims = true);
     static string removeComment(const string& str, string commStart = "#");
     static vector<MST::mstreal> splitToReal(const string& str, string delimiters = " ", bool skipTrailingDelims = true, bool strict = true);
