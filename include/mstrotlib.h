@@ -1,5 +1,5 @@
-#ifndef _MSTLIB_H
-#define _MSTLIB_H
+#ifndef _MSTROTLIB_H
+#define _MSTROTLIB_H
 
 #include "msttypes.h"
 #include "msttransforms.h"
