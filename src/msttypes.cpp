@@ -3463,7 +3463,7 @@ string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDeli
     i = min((size_t) 1, str.length()); // interpret an empty list of delimiters in the same way as perl's split("", $string)
   }
   ret = str.substr(0, i);
-  str = str.substr(i+1);
+  str = str.substr(min((size_t) i+1, str.length()-1));
   return ret;
 }
 
