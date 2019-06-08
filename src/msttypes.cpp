@@ -506,13 +506,13 @@ vector<Residue*> Structure::getResidues() const {
   return vec;
 }
 
-void Structure::renumber() {
-  int index = 1;
+void Structure::renumber(int startResNum, int startAtomIndex) {
+  int index = startAtomIndex;
   for (int i = 0; i < chains.size(); i++) {
     Chain& chain = (*this)[i];
     for (int j = 0; j < chain.residueSize(); j++) {
       Residue& res = chain[j];
-      res.setNum(j+1);
+      res.setNum(startResNum+j);
       for (int k = 0; k < res.atomSize(); k++) {
         Atom& a = res[k];
         a.setIndex(index);
@@ -3463,7 +3463,7 @@ string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDeli
     i = min((size_t) 1, str.length()); // interpret an empty list of delimiters in the same way as perl's split("", $string)
   }
   ret = str.substr(0, i);
-  str = str.substr(i+1);
+  str = str.substr(min((size_t) i+1, str.length()-1));
   return ret;
 }
 

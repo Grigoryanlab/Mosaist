@@ -18,6 +18,7 @@ int main(int argc, char *argv[]) {
                       "the unit cell has two chains, with the central unit cell composed of chains A and B, and two other unit"
                       "cells (one composed of chains C and D and another one of chains E and F) also present in the structure.");
   op.addOption("seq", "skip design and simply put on this sequence, dumping the resulting PDB file.");
+  op.addOption("aa3", "accept 3 letter amino acid codes (not 1 letter) for input to --seq");
   op.addOption("o", "output base.", true);
   op.setOptions(argc, argv);
 
@@ -64,7 +65,8 @@ int main(int argc, char *argv[]) {
   // build the energy table
   Sequence bestSeq;
   if (op.isGiven("seq")) {
-    bestSeq = Sequence(op.getString("seq"));
+    string delim = op.isGiven("aa3") ? " " : "";
+    bestSeq = Sequence(op.getString("seq"), "", delim);
     if (bestSeq.size() != variable.size()) MstUtils::error("the sequence given with --seq should be the same length as the number of variable residues");
   } else {
     if (!MstSys::fileExists(etabFile)) {

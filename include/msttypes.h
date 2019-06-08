@@ -76,7 +76,7 @@ class Structure {
     vector<Residue*> getResidues() const;
     void setName(const string& _name) { name = _name; }
     string getName() const { return name; }
-    void renumber(); // make residue numbering consequitive in each chain and atom index consequitive throughout
+    void renumber(int startResNum=1, int startAtomIndex=1); // make residue numbering consequitive in each chain and atom index consequitive throughout
 
     // looks at the length of the peptide bond between adjacent residues to figure out where chains break
     void reassignChainsByConnectivity(Structure& dest, mstreal maxPeptideBond = 2.0);
