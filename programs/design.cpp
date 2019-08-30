@@ -68,6 +68,17 @@ int main(int argc, char *argv[]) {
     string delim = op.isGiven("aa3") ? " " : "";
     bestSeq = Sequence(op.getString("seq"), "", delim);
     if (bestSeq.size() != variable.size()) MstUtils::error("the sequence given with --seq should be the same length as the number of variable residues");
+    if (MstSys::fileExists(etabFile) || MstSys::fileExists(specEtabFile)) {
+      cout << "specified sequence: " << bestSeq.toString() << endl;
+      if (MstSys::fileExists(etabFile)) {
+        E.readFromFile(etabFile);
+        cout << "energy: " << E.scoreSequence(bestSeq) << endl;
+      }
+      if (MstSys::fileExists(specEtabFile)) {
+        specE.readFromFile(specEtabFile);
+        cout << "specificity gap: " << specE.scoreSequence(bestSeq) << endl;
+      }
+    }
   } else {
     if (!MstSys::fileExists(etabFile)) {
       dTERMen D(op.getString("c"));
