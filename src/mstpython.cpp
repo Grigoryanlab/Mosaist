@@ -48,7 +48,7 @@ BOOST_PYTHON_MODULE(mstpython) {
         .def("atomSize", &MST::Structure::atomSize)
         .def("getChain", &MST::Structure::getChain, return_value_policy<reference_existing_object>())
         // the static_cast is needed to disambiguate an overloaded function
-        .def("writePDB", static_cast<void (MST::Structure::*) (std::string, std::string)>(&MST::Structure::writePDB))
+        .def("writePDB", static_cast<void (MST::Structure::*) (const std::string&, std::string) const>(&MST::Structure::writePDB))
         .add_property("name", &MST::Structure::getName, &MST::Structure::setName)
     ;
 }
