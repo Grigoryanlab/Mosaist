@@ -809,12 +809,8 @@ void Residue::copyAtoms(Residue& R, bool copyAlt) {
 }
 
 void Residue::copyAtoms(const vector<Atom*>& _atoms, bool copyAlt) {
-  if (parent != NULL) parent->incrementNumAtoms(_atoms.size() - atoms.size());
   deleteAtoms();
-  for (int i = 0; i < _atoms.size(); i++) {
-    atoms.push_back(new Atom(_atoms[i], copyAlt));
-    atoms.back()->setParent(this);
-  }
+  for (int i = 0; i < _atoms.size(); i++) appendAtom(new Atom(_atoms[i], copyAlt));
 }
 
 void Residue::makeAlternativeMain(int altInd) {
