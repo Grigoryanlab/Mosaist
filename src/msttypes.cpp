@@ -3455,11 +3455,12 @@ string MstUtils::nextToken(string& str, string delimiters, bool skipTrailingDeli
       str = "";
       return ret;
     }
-  } else {
-    i = min((size_t) 1, str.length()); // interpret an empty list of delimiters in the same way as perl's split("", $string)
+    ret = str.substr(0, i);
+    str = str.substr(min((size_t) i+1, str.length()-1));
+    return ret;
   }
-  ret = str.substr(0, i);
-  str = str.substr(min((size_t) i+1, str.length()-1));
+  ret = str.substr(0, 1);
+  str = str.substr(min((size_t) 1, str.length()));
   return ret;
 }
 
