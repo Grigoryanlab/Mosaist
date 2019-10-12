@@ -114,6 +114,7 @@ int main(int argc, char *argv[]) {
     }
     if (op.isGiven("sim")) {
       cout << "Computing local-window sequence similarity..." << endl;
+      S.dropResidueRelationship("sim"); // overwrite any previously populated similarity property (could have been calculated differently)
       // first cluster all local windows
       cout << "\tgathering local sequence windows..." << endl;
       int Nr = 0;
