@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
   op.addOption("s", "split final PDB files into chains by connectivity. Among other things, this avoids \"gaps\" within chains (where missing residues would go), which may simplify redundancy identification.");
   op.addOption("pp", "store phi/psi/omega properties in the database.");
   op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
-  op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees below the specified limit). If this is given, --rLib must also be given.");
+  op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
   op.addOption("sim", "percent sequence identity cutoff. If specified, will store local-window sequence similarity between all pairs of positions in the database, using this cutoff.");
   op.addOption("win", "window size to use with the similarity searching with --sim; must be an odd integer. Default is 31 (i.e., +/- 15 from the residue in question).");
   op.addOption("rLib", "path to an MST rotamer library file.");

@@ -66,6 +66,7 @@ class dTERMen {
     mstreal getkT() const { return kT; }
     FASST* getFASST() { return &F; }
     RotamerLibrary* getRotamerLibrary() { return &RL; }
+    vector<res_t> getGlobalAlph() {return globAlph;}
     void setAminoAcidMap();
     void printAminoAcidMap();
     int globalAlphabetSize() const { return globAlph.size(); }
