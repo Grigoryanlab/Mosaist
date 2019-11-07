@@ -3246,8 +3246,8 @@ bool ProximitySearch::overlaps(ProximitySearch& other, mstreal pad) {
 }
 
 /* --------- Clusterer --------- */
-vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax, bool verbose) {
-  vector<vector<int> > clusters;
+vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units, mstreal rmsdCut, int Nmax, mstreal coverage, bool verbose) {
+  vector<vector<int>> clusters;
   if (units.empty()) return clusters;
   set<int> remIndices;
   for (int i = 0; i < units.size(); i++) remIndices.insert(i);
@@ -3258,8 +3258,12 @@ vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& unit
   AtomPointerVector mean(L, NULL), copy(L, NULL);
   for (int i = 0; i < L; i++) { mean[i] = new Atom(); copy[i] = new Atom(); }
 
+  // determine how many points can be left over (to be distributed to already formed clusters) given the specified coverage fraction
+  int total = remIndices.size();
+  int numToLeave = total * (1 - coverage);
+
   // iterate to find a new cluster each time
-  while (remIndices.size() > Nmax) {
+  while ((remIndices.size() > Nmax) && (remIndices.size() > numToLeave)) {
     // sub-sample Nmax elements
     set<int> subSample = Clusterer::randomSubsample(remIndices, Nmax);
 
@@ -3297,13 +3301,24 @@ vector<vector<int> > Clusterer::greedyCluster(const vector<vector<Atom*> >& unit
     if (verbose) cout << remIndices.size() << " points remaining" << endl;
   }
 
+  // brute force through the rest
+  int numToCluster = remIndices.size() - numToLeave;
+  if (numToCluster >= 1) {
+    set<int> indsToCluster;
+    auto curInd = remIndices.begin();
+    for (int i = 0; i < numToCluster; i++) {
+      auto it = remIndices.begin();
+      indsToCluster.insert(*it);
+      remIndices.erase(it);
+    }
+    vector<vector<int>> remClusters = greedyClusterBruteForce(units, indsToCluster, rmsdCut);
+    clusters.insert(clusters.end(), remClusters.begin(), remClusters.end());
+  }
+
   // clean up
   mean.deletePointers();
   copy.deletePointers();
 
-  // brute force through the rest
-  vector<vector<int> > remClusters = greedyClusterBruteForce(units, remIndices, rmsdCut);
-  clusters.insert(clusters.end(), remClusters.begin(), remClusters.end());
   return clusters;
 }
 
