@@ -73,8 +73,8 @@ class contactList {
 
 class ConFind {
   public:
-    ConFind(string rotLibFile, Structure& S);
-    ConFind(RotamerLibrary* _rotLib, Structure& S);
+    ConFind(string rotLibFile, Structure& S, bool tolerateMissingBBatoms = false);
+    ConFind(RotamerLibrary* _rotLib, Structure& S, bool tolerateMissingBBatoms = false);
     ~ConFind();
     void setFreedomParams(mstreal _loCollProbCut, mstreal _hiCollProbCut, int type) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; freedomType = type; }
 
@@ -87,6 +87,8 @@ class ConFind {
     vector<Residue*> getNeighbors(Residue* residue);
     vector<Residue*> getNeighbors(vector<Residue*>& residues);
     bool areNeighbors(Residue* resA, Residue* resB);
+    
+    /* Bac*/
 
     /* this function encodes whether a given atom counts as "side-chain" for the
      * purposes of finding sidechain-to-sidechain contacts. */
@@ -114,6 +116,20 @@ class ConFind {
     contactList getInterfering(const vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
     contactList getInterfering(const Structure& S, mstreal incut = 0.0, contactList* list = NULL);
 
+    /* Backbone interaction is a backbone-to-backbone contact, defined as ANY
+     * of the backbone atoms (N,Ca,C,O) of two residues being within the cutoff
+     * distance. If this criterion is met, the exact distance between the closest
+     * pair of backbone atoms from the two sets is reported. Note that by default
+     * the residues directly adjacent to the residue of interest are not considered
+     * when searching for backbone interactions, this can be adjusted by setting
+     * ignoreFlanking. */
+    
+    mstreal bbInteraction(Residue* resA, Residue* resB);
+    contactList getBBInteraction(Residue* res, mstreal dcut = 0.0, int ignoreFlanking = 1, contactList* list = NULL);
+    contactList getBBInteraction(Structure& S, mstreal dcut = 0.0, int ignoreFlanking = 1, contactList* list = NULL);
+    contactList getBBInteraction(const vector<Residue*>& residues, mstreal dcut = 0.0, int ignoreFlanking = 1, contactList* list = NULL);
+    vector<Residue*> getBBInteractingResidues(Residue* res, mstreal dcut = 0.0, int ignoreFlanking = 1);
+    
     mstreal getCrowdedness(Residue* res);
     vector<mstreal> getCrowdedness(vector<Residue*>& residues);
 
@@ -126,7 +142,7 @@ class ConFind {
 
   protected:
     mstreal weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
-    void init(Structure& S);
+    void init(Structure& S, bool tolerateMissingBBatoms);
     void setParams();
     /* given pre-computed collision probabilities, sums up freedom scores. NOTE,
      * does not check whether all the relevant contacting residues have been
@@ -140,6 +156,7 @@ class ConFind {
     bool isRotLibLocal;
     AtomPointerVector backbone, ca;
     ProximitySearch *bbNN, *caNN;
+    fastmap<Residue*, bool> missingBBatom; //true iff missing N, Ca, or C.
     fastmap<Residue*, set<int> > permanentContacts;
     fastmap<Residue*, mstreal> fractionPruned;
     fastmap<Residue*, mstreal> freedom;
@@ -150,7 +167,7 @@ class ConFind {
     fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
     fastmap<Residue*, fastmap<Residue*, mstreal> > interference; // interferance[resA][resB] will store home much the backbone of
                                                                  // resB can potentially interfere with the amino-acid choice at resA
-
+    bool tolerateMissingBBatoms;
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
     mstreal dcut;                  // CA-CA distance cutoff beyond which we do not consider pairwise interactions
     mstreal clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively

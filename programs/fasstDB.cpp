@@ -20,6 +20,8 @@ int main(int argc, char *argv[]) {
   op.addOption("pp", "store phi/psi/omega properties in the database.");
   op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
   op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
+  op.addOption("int", "store residue to backbone contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
+  op.addOption("bb", "store the minimum distance between backbone atoms of two residues (for all residue pairs below the specified cutoff).");
   op.addOption("sim", "percent sequence identity cutoff. If specified, will store local-window sequence similarity between all pairs of positions in the database, using this cutoff.");
   op.addOption("win", "window size to use with the similarity searching with --sim; must be an odd integer. Default is 31 (i.e., +/- 15 from the residue in question).");
   op.addOption("rLib", "path to an MST rotamer library file.");
@@ -32,7 +34,9 @@ int main(int argc, char *argv[]) {
   if (!op.isGiven("pL") && !op.isGiven("dL") && !op.isGiven("db")) MstUtils::error("either --pL, --dL, or --db must be given!");
   if (op.isGiven("rLib")) MstUtils::assert(MstSys::fileExists(op.getString("rLib")), "--rLib is not a valid file path");
   if (op.isGiven("cont") && (!op.isReal("cont") || (op.getReal("cont") < 0) || (op.getReal("cont") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
-  if ((op.isGiven("env") || op.isGiven("cont"))) {
+  if (op.isGiven("int") && (!op.isReal("int") || (op.getReal("int") < 0) || (op.getReal("int") > 1))) MstUtils::error("--int must be a real in range [0; 1]");
+  if (op.isGiven("bb") && (!op.isReal("bb") || (op.getReal("bb") < 0))) MstUtils::error("--bb must be a real greater than 0.");
+  if ((op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb"))) {
     if (!op.isGiven("rLib")) MstUtils::error("--rLib is needed, but not given");
     RL.readRotamerLibrary(op.getString("rLib"));
   }
@@ -69,7 +73,7 @@ int main(int argc, char *argv[]) {
         S.readDatabase(dbFiles[i], memSave);
       }
     }
-    if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont")) {
+    if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb")) {
       cout << "Computing per-target residue properties..." << endl;
       // compute and add some properties
       for (int ti = 0; ti < S.numTargets(); ti++) {
@@ -87,16 +91,16 @@ int main(int argc, char *argv[]) {
           S.addResidueProperties(ti, "psi", psi);
           S.addResidueProperties(ti, "omega", omega);
         }
-        if (op.isGiven("env") || op.isGiven("cont")) {
-          ConFind C(&RL, P); // both need the confind object
+        if (op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb")) {
+          bool tolerateMissingBBatoms = true; // otherwise, a single missing bb atom (N,Ca, or C) in a structure will crash the process
+          ConFind C(&RL, P, tolerateMissingBBatoms); // both need the confind object
           // environment
           if (op.isGiven("env")) {
             vector<Residue*> residues = P.getResidues();
             vector<mstreal> freedoms = C.getFreedom(residues);
             S.addResidueProperties(ti, "env", freedoms);
           }
-
-          // contacts
+          // contact degree
           if (op.isGiven("cont")) {
             mstreal cdcut = op.getReal("cont");
             contactList list = C.getContacts(P, cdcut);
@@ -107,7 +111,41 @@ int main(int argc, char *argv[]) {
               conts[rA][rB] = list.degree(i);
               conts[rB][rA] = list.degree(i);
             }
-            S.addResiduePairProperties(ti, "conts", conts);
+            S.addResiduePairProperties(ti, "cont", conts);
+          }
+            // interference
+            /* To account for the directionality of interference, the property is stored in two maps:
+             interfer_ing_ and interfer_ed_. These are named based on the first key, so calling
+             interfering[rA] returns a map with residues whose sidechains interfere with the backbone
+             of rA and interfered[rA] returns a map with residues whose backbones are interfered by the
+             sidechain of rA. Note that while these store the exact same info, they simplify access.
+             */
+            if (op.isGiven("int")) {
+                mstreal incut = op.getReal("int");
+                contactList list = C.getInterference(P, incut);
+                map<int, map<int, mstreal> > interfering;
+                map<int, map<int, mstreal> > interfered;
+                for (int i = 0; i < list.size(); i++) {
+                    int rA = list.residueA(i)->getResidueIndex();
+                    int rB = list.residueB(i)->getResidueIndex();
+                    interfering[rB][rA] = list.degree(i);
+                    interfered[rA][rB] = list.degree(i);
+                }
+                S.addResiduePairProperties(ti, "interfering", interfering);
+                S.addResiduePairProperties(ti, "interfered", interfered);
+            }
+          // backbone-backbone interaction
+          if (op.isGiven("bb")) {
+              mstreal dcut = op.getReal("bb");
+              contactList list = C.getBBInteraction(P,dcut);
+              map<int, map<int, mstreal>> bbInteraction;
+              for (int i = 0; i < list.size(); i++) {
+                  int rA = list.residueA(i)->getResidueIndex();
+                  int rB = list.residueB(i)->getResidueIndex();
+                  bbInteraction[rA][rB] = list.degree(i);
+                  bbInteraction[rB][rA] = list.degree(i);
+              }
+              S.addResiduePairProperties(ti, "bb", bbInteraction);
           }
         }
       }

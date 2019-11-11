@@ -34,17 +34,17 @@ bool contactList::areInContact(Residue* A, Residue* B) {
   return true;
 }
 
-ConFind::ConFind(string rotLibFile, Structure& S) {
+ConFind::ConFind(string rotLibFile, Structure& S, bool tolerateMissingBBatoms) {
   setParams();
   rotLib = new RotamerLibrary(rotLibFile);
   isRotLibLocal = true;
-  init(S);
+  init(S,tolerateMissingBBatoms);
 }
-ConFind::ConFind(RotamerLibrary* _rotLib, Structure& S) {
+ConFind::ConFind(RotamerLibrary* _rotLib, Structure& S, bool tolerateMissingBBatoms) {
   setParams();
   rotLib = _rotLib;
   isRotLibLocal = false;
-  init(S);
+  init(S,tolerateMissingBBatoms);
 }
 
 void ConFind::setParams() {
@@ -76,7 +76,7 @@ ConFind::~ConFind() {
   }
 }
 
-void ConFind::init(Structure& S) {
+void ConFind::init(Structure& S, bool _tolerateMissingBBatoms) {
   AtomPointerVector atoms = S.getAtoms();
   for (int i = 0; i < atoms.size(); i++) {
     Atom* a = atoms[i];
@@ -87,10 +87,22 @@ void ConFind::init(Structure& S) {
   }
   bbNN = new ProximitySearch(backbone, clashDist/2);
   caNN = new ProximitySearch(ca, dcut/2);
+  
+  // build map that stores which residues are missing N,Ca,C
+  tolerateMissingBBatoms = _tolerateMissingBBatoms;
+  vector<Residue*> residues = S.getResidues();
+  for (int i = 0; i < residues.size(); i++) {
+    Residue* R = residues[i];
+    vector<Atom*> bb = RotamerLibrary::getBackbone(R);
+    bool missing = false;
+    if ((bb[RotamerLibrary::bbN] == NULL) || (bb[RotamerLibrary::bbCA] == NULL) || (bb[RotamerLibrary::bbC] == NULL)) missing = true;
+    missingBBatom[R] = missing;
+  }
 }
 
 void ConFind::cache(Residue* res) {
   if (rotamerHeavySC.find(res) != rotamerHeavySC.end()) return;
+  if (tolerateMissingBBatoms && missingBBatom[res]) return;
   AtomPointerVector pointCloud;      // side-chain atoms of surviving rotames
   vector<rotamerID*> pointCloudTags; // corresponding tags (i.e.,  rotamer identity)
   survivingRotamers[res].resize(0);
@@ -99,7 +111,7 @@ void ConFind::cache(Residue* res) {
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
   vector<Atom*> bb = RotamerLibrary::getBackbone(res);
-  if ((bb[RotamerLibrary::bbN] == NULL) || (bb[RotamerLibrary::bbCA] == NULL) || (bb[RotamerLibrary::bbC] == NULL)) {
+  if (missingBBatom[res]) {
     MstUtils::error("cannot build rotamers at position " + MstUtils::toString(*res) + " as it lacks proper backbone!", "ConFind::cache(Residue*)");
   }
   mstreal phi = res->getPhi(false); mstreal psi = res->getPsi(false);
@@ -142,6 +154,7 @@ void ConFind::cache(Residue* res) {
         set<Residue*> interfering;
         for (int ci = 0; ci < closeOnes.size(); ci++) {
           Residue* resB = backbone[closeOnes[ci]]->getResidue();
+          if (missingBBatom[resB]) continue; // as a rule, a residue is invaldated if missing BB atoms
           if (interfering.find(resB) != interfering.end()) continue;
           if (resB != res) {
             interfering.insert(resB);
@@ -193,6 +206,7 @@ void ConFind::cache(const Structure& S) {
 }
 
 mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cacheB, bool checkNeighbors) {
+  if (tolerateMissingBBatoms && (missingBBatom[resA] || missingBBatom[resB])) return 0.0;
   bool updateA = (updateCollProb.find(resA) != updateCollProb.end()) && updateCollProb[resA];
   bool updateB = (updateCollProb.find(resB) != updateCollProb.end()) && updateCollProb[resB];
   // if collision probabilities need to be updated, then go into CD calculation even if value already available
@@ -267,10 +281,12 @@ contactList ConFind::getContacts(const vector<Residue*>& residues, mstreal cdcut
   if (list == NULL) list = &L;
   for (int i = 0; i < residues.size(); i++) {
     Residue* resi = residues[i];
+    if (missingBBatom[resi]) continue;
     collProbUpdateOn(resi);
     vector<Residue*> neighborhood = getNeighbors(resi);
     for (int j = 0; j < neighborhood.size(); j++) {
       Residue* resj = neighborhood[j];
+      if (missingBBatom[resj]) continue;
       if ((resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
         if (ofInterest.find(resj) != ofInterest.end()) collProbUpdateOn(resj);
         checked[resj][resi] = true;
@@ -305,9 +321,11 @@ contactList ConFind::getInterference(const vector<Residue*>& residues, mstreal i
   // because interference is directional, need to check if the desired residues
   // are involved in either direction
   for (auto itA = interference.begin(); itA != interference.end(); ++itA) {
+    if (missingBBatom[itA->first]) continue;
     fastmap<Residue*, mstreal>& interB = itA->second;
     bool wantA = (wanted.find(itA->first) != wanted.end());
     for (auto itB = interB.begin(); itB != interB.end(); ++itB) {
+      if (missingBBatom[itB->first]) continue; //shouldn't be in interference if missing BB atoms, but just in case
       mstreal in = itB->second;
       if (wantA || (wanted.find(itB->first) != wanted.end())) {
         if (in >= incut) {
@@ -338,9 +356,11 @@ contactList ConFind::getInterfering(const vector<Residue*>& residues, mstreal in
   // check only in one direction, where one the specified residues is the source
   for (int i = 0; i < residues.size(); i++) {
     Residue* resA = residues[i];
+    if (missingBBatom[resA]) continue;
     if (interference.find(resA) == interference.end()) continue;
     fastmap<Residue*, mstreal>& interB = interference[resA];
     for (auto itB = interB.begin(); itB != interB.end(); ++itB) {
+      if (missingBBatom[itB->first]) continue; //shouldn't be in interference if missing BB atoms, but just in case
       mstreal in = itB->second;
       if (in >= incut) {
         list->addContact(resA, itB->first, in, "", true);
@@ -367,6 +387,65 @@ contactList ConFind::getContacts(Structure& S, mstreal cdcut, contactList* list)
 
   return *list;
 }
+
+mstreal ConFind::bbInteraction(Residue *resA, Residue *resB) {
+  /* Get pointers to all of the ResA/ResB backbone atoms and then for each pair of atoms
+   between the two sets calculate distance. Report the distance of the closest pair of atoms.
+   */
+  if (missingBBatom[resA] || missingBBatom[resB]) return 10000; //arbitrarily large
+  vector<Atom*> resA_bb = RotamerLibrary::getBackbone(resA);
+  vector<Atom*> resB_bb = RotamerLibrary::getBackbone(resB);
+  mstreal min_dist = 0; //initialized to keep the compiler happy
+  mstreal curr_dist;
+  for (int i = 0; i < resA_bb.size(); i++) {
+    for (int j = 0; j < resB_bb.size(); j++) {
+      if (resA_bb[i] == NULL || resB_bb[j] == NULL) continue; //in the case that an O is missing from the backbone
+      curr_dist = resA_bb[i]->distance(resB_bb[j]);
+      if (i == 0 || curr_dist < min_dist) min_dist = curr_dist;
+    }
+  }
+  return min_dist;
+}
+
+contactList ConFind::getBBInteraction(Residue* res, mstreal dcut, int ignoreFlanking, contactList* list) {
+  return getBBInteraction(vector<Residue*>(1, res), dcut, ignoreFlanking, list);
+}
+
+contactList ConFind::getBBInteraction(Structure& S, mstreal dcut, int ignoreFlanking, contactList* list) {
+  contactList L;
+  if (list == NULL) list = &L;
+  vector<Residue*> allRes = S.getResidues();
+  return getBBInteraction(allRes, dcut, ignoreFlanking, list);
+}
+
+contactList ConFind::getBBInteraction(const vector<Residue*>& residues, mstreal dcut, int ignoreFlanking, contactList* list) {
+  fastmap<Residue*, fastmap<Residue*, bool> > checked;
+  
+  contactList L;
+  if (list == NULL) list = &L;
+  for (int i = 0; i < residues.size(); i++) {
+    Residue* resi = residues[i];
+    vector<Residue*> neighborhood = getNeighbors(resi);
+    for (int j = 0; j < neighborhood.size(); j++) {
+      Residue* resj = neighborhood[j];
+      // Check if the residues are 1) on the same chain and 2) within the ignore range
+      bool ignore = false;
+      if (resi->getChain() == resj->getChain()) {
+        int distance = abs(resi->getResidueIndex()-resj->getResidueIndex());
+        if (distance <= ignoreFlanking) ignore = true;
+      }
+      if ((!ignore) && (resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
+        checked[resj][resi] = true;
+        mstreal dist = bbInteraction(resi, resj);
+        if (dist < dcut) {
+            list->addContact(resi, resj, dist);
+        }
+      }
+    }
+  }
+  return *list;
+}
+
 
 mstreal ConFind::getCrowdedness(Residue* res) {
   cache(res);
@@ -444,6 +523,10 @@ mstreal ConFind::computeFreedom(Residue* res) {
 
 vector<Residue*> ConFind::getNeighbors(Residue* residue) {
   // find all residues around this one that are within cutoff distance and can affects it
+    if (tolerateMissingBBatoms && missingBBatom[residue]) {
+        vector<Residue*> none;
+        return none;
+    }
   vector<int> close = caNN->getPointsWithin(residue->findAtom("CA"), 0, dcut);
   vector<Residue*> neighborhood(close.size(), NULL);
   bool foundSelf = false;
@@ -473,6 +556,7 @@ vector<Residue*> ConFind::getNeighbors(vector<Residue*>& residues) {
 }
 
 bool ConFind::areNeighbors(Residue* resA, Residue* resB) {
+  if (tolerateMissingBBatoms && (missingBBatom[resA] || missingBBatom[resB])) return false;
   Atom* CAA = resA->findAtom("CA");
   Atom* CAB = resB->findAtom("CA");
   return (CAA->distance(*CAB) <= dcut);
