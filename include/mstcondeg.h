@@ -87,8 +87,6 @@ class ConFind {
     vector<Residue*> getNeighbors(Residue* residue);
     vector<Residue*> getNeighbors(vector<Residue*>& residues);
     bool areNeighbors(Residue* resA, Residue* resB);
-    
-    /* Bac*/
 
     /* this function encodes whether a given atom counts as "side-chain" for the
      * purposes of finding sidechain-to-sidechain contacts. */
