@@ -92,8 +92,7 @@ int main(int argc, char *argv[]) {
           S.addResidueProperties(ti, "omega", omega);
         }
         if (op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb")) {
-          bool tolerateMissingBBatoms = true; // otherwise, a single missing bb atom (N,Ca, or C) in a structure will crash the process
-          ConFind C(&RL, P, tolerateMissingBBatoms); // both need the confind object
+          ConFind C(&RL, P); // both need the confind object
           // environment
           if (op.isGiven("env")) {
             vector<Residue*> residues = P.getResidues();

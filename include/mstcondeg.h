@@ -73,8 +73,8 @@ class contactList {
 
 class ConFind {
   public:
-    ConFind(string rotLibFile, Structure& S, bool tolerateMissingBBatoms = false);
-    ConFind(RotamerLibrary* _rotLib, Structure& S, bool tolerateMissingBBatoms = false);
+    ConFind(string rotLibFile, Structure& S);
+    ConFind(RotamerLibrary* _rotLib, Structure& S);
     ~ConFind();
     void setFreedomParams(mstreal _loCollProbCut, mstreal _hiCollProbCut, int type) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; freedomType = type; }
 
@@ -140,7 +140,7 @@ class ConFind {
 
   protected:
     mstreal weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
-    void init(Structure& S, bool tolerateMissingBBatoms);
+    void init(Structure& S);
     void setParams();
     /* given pre-computed collision probabilities, sums up freedom scores. NOTE,
      * does not check whether all the relevant contacting residues have been
@@ -154,7 +154,6 @@ class ConFind {
     bool isRotLibLocal;
     AtomPointerVector backbone, ca;
     ProximitySearch *bbNN, *caNN;
-    fastmap<Residue*, bool> missingBBatom; //true iff missing N, Ca, or C.
     fastmap<Residue*, set<int> > permanentContacts;
     fastmap<Residue*, mstreal> fractionPruned;
     fastmap<Residue*, mstreal> freedom;
@@ -165,7 +164,6 @@ class ConFind {
     fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
     fastmap<Residue*, fastmap<Residue*, mstreal> > interference; // interferance[resA][resB] will store home much the backbone of
                                                                  // resB can potentially interfere with the amino-acid choice at resA
-    bool tolerateMissingBBatoms;
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
     mstreal dcut;                  // CA-CA distance cutoff beyond which we do not consider pairwise interactions
     mstreal clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively
