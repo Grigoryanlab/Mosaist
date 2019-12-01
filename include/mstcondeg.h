@@ -114,6 +114,20 @@ class ConFind {
     contactList getInterfering(const vector<Residue*>& residues, mstreal incut = 0.0, contactList* list = NULL);
     contactList getInterfering(const Structure& S, mstreal incut = 0.0, contactList* list = NULL);
 
+    /* Backbone interaction is a backbone-to-backbone contact, defined as ANY
+     * of the backbone atoms (N,Ca,C,O) of two residues being within the cutoff
+     * distance. If this criterion is met, the exact distance between the closest
+     * pair of backbone atoms from the two sets is reported. Note that by default
+     * the residues directly adjacent to the residue of interest are not considered
+     * when searching for backbone interactions, this can be adjusted by setting
+     * ignoreFlanking. */
+    
+    mstreal bbInteraction(Residue* resA, Residue* resB);
+    contactList getBBInteraction(Residue* res, mstreal dcut = 0.0, int ignoreFlanking = 1, contactList* list = NULL);
+    contactList getBBInteraction(Structure& S, mstreal dcut = 0.0, int ignoreFlanking = 1, contactList* list = NULL);
+    contactList getBBInteraction(const vector<Residue*>& residues, mstreal dcut = 0.0, int ignoreFlanking = 1, contactList* list = NULL);
+    vector<Residue*> getBBInteractingResidues(Residue* res, mstreal dcut = 0.0, int ignoreFlanking = 1);
+    
     mstreal getCrowdedness(Residue* res);
     vector<mstreal> getCrowdedness(vector<Residue*>& residues);
 
@@ -150,7 +164,6 @@ class ConFind {
     fastmap<Residue*, DecoratedProximitySearch<rotamerID*>* > rotamerHeavySC;
     fastmap<Residue*, fastmap<Residue*, mstreal> > interference; // interferance[resA][resB] will store home much the backbone of
                                                                  // resB can potentially interfere with the amino-acid choice at resA
-
     vector<string> aaNames;     // amino acids whose rotamers will be considered (all except GLY and PRO)
     mstreal dcut;                  // CA-CA distance cutoff beyond which we do not consider pairwise interactions
     mstreal clashDist, contDist;   // inter-atomic distances for counting main-chain clashes and inter-rotamer contacts, respectively

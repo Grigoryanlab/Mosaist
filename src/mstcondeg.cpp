@@ -368,6 +368,64 @@ contactList ConFind::getContacts(Structure& S, mstreal cdcut, contactList* list)
   return *list;
 }
 
+mstreal ConFind::bbInteraction(Residue *resA, Residue *resB) {
+  /* Get pointers to all of the ResA/ResB backbone atoms and then for each pair of atoms
+   between the two sets calculate distance. Report the distance of the closest pair of atoms.
+   */
+  vector<Atom*> resA_bb = RotamerLibrary::getBackbone(resA);
+  vector<Atom*> resB_bb = RotamerLibrary::getBackbone(resB);
+  mstreal min_dist = 0; //initialized to keep the compiler happy
+  mstreal curr_dist;
+  for (int i = 0; i < resA_bb.size(); i++) {
+    for (int j = 0; j < resB_bb.size(); j++) {
+      if (resA_bb[i] == NULL || resB_bb[j] == NULL) continue; //in the case that an O is missing from the backbone
+      curr_dist = resA_bb[i]->distance(resB_bb[j]);
+      if (i == 0 || curr_dist < min_dist) min_dist = curr_dist;
+    }
+  }
+  return min_dist;
+}
+
+contactList ConFind::getBBInteraction(Residue* res, mstreal dcut, int ignoreFlanking, contactList* list) {
+  return getBBInteraction(vector<Residue*>(1, res), dcut, ignoreFlanking, list);
+}
+
+contactList ConFind::getBBInteraction(Structure& S, mstreal dcut, int ignoreFlanking, contactList* list) {
+  contactList L;
+  if (list == NULL) list = &L;
+  vector<Residue*> allRes = S.getResidues();
+  return getBBInteraction(allRes, dcut, ignoreFlanking, list);
+}
+
+contactList ConFind::getBBInteraction(const vector<Residue*>& residues, mstreal dcut, int ignoreFlanking, contactList* list) {
+  fastmap<Residue*, fastmap<Residue*, bool> > checked;
+  
+  contactList L;
+  if (list == NULL) list = &L;
+  for (int i = 0; i < residues.size(); i++) {
+    Residue* resi = residues[i];
+    vector<Residue*> neighborhood = getNeighbors(resi);
+    for (int j = 0; j < neighborhood.size(); j++) {
+      Residue* resj = neighborhood[j];
+      // Check if the residues are 1) on the same chain and 2) within the ignore range
+      bool ignore = false;
+      if (resi->getChain() == resj->getChain()) {
+        int distance = abs(resi->getResidueIndex()-resj->getResidueIndex());
+        if (distance <= ignoreFlanking) ignore = true;
+      }
+      if ((!ignore) && (resi != resj) && (checked[resi].find(resj) == checked[resi].end())) {
+        checked[resj][resi] = true;
+        mstreal dist = bbInteraction(resi, resj);
+        if (dist < dcut) {
+            list->addContact(resi, resj, dist);
+        }
+      }
+    }
+  }
+  return *list;
+}
+
+
 mstreal ConFind::getCrowdedness(Residue* res) {
   cache(res);
   return fractionPruned[res];
