@@ -1955,12 +1955,13 @@ template mstreal CartesianGeometry::dihedral<vector<mstreal> >(const CartesianPo
 
 selector::selector(const Structure& S) {
   atoms = S.getAtoms();
-  residues.resize(atoms.size());
-  chains.resize(atoms.size());
+  residues = S.getResidues();
+  atomResidues.resize(atoms.size());
+  atomChains.resize(atoms.size());
   for (int i = 0; i < atoms.size(); i++) {
-    residues[i] = atoms[i]->getParent();
-    if (residues[i] != NULL) chains[i] = residues[i]->getParent();
-    if ((residues[i] == NULL) || (chains[i] == NULL)) MstUtils::error("internally inconsistent Structure given", "selector::selector");
+    atomResidues[i] = atoms[i]->getParent();
+    if (atomResidues[i] != NULL) atomChains[i] = atomResidues[i]->getParent();
+    if ((atomResidues[i] == NULL) || (atomChains[i] == NULL)) MstUtils::error("internally inconsistent Structure given", "selector::selector");
   }
 }
 
@@ -1971,20 +1972,21 @@ AtomPointerVector selector::select(string selStr) {
   delete tree;
   set<Atom*> selAtoms(sel.begin(), sel.end());
   AtomPointerVector sortedSel;
-  for (int i = 0; i < atoms.size(); i++) if (selAtoms.find(atoms[i]) != selAtoms.end()) sortedSel.push_back(atoms[i]);
+  for (int i = 0; i < atoms.size(); i++) {
+    if (selAtoms.find(atoms[i]) != selAtoms.end()) sortedSel.push_back(atoms[i]);
+  }
   return sortedSel;
 }
 
 vector<Residue*> selector::selectRes(string selStr) {
   AtomPointerVector sel = select(selStr);
-  map<Residue*, bool> selResMap;
-  for (int i = 0; i < sel.size(); i++) selResMap[sel[i]->getParent()] = true;
-  vector<Residue*> selRes(selResMap.size());
-  int i = 0;
-  for (map<Residue*, bool>::iterator it = selResMap.begin(); it != selResMap.end(); ++it, i++) {
-    selRes[i] = it->first;
+  set<Residue*> selRes;
+  for (int i = 0; i < sel.size(); i++) selRes.insert(sel[i]->getParent());
+  vector<Residue*> selResSorted;
+  for (int i = 0; i < residues.size(); i++) {
+    if (selRes.find(residues[i]) != selRes.end()) selResSorted.push_back(residues[i]);
   }
-  return selRes;
+  return selResSorted;
 }
 
 void selector::select(expressionTree* tree, AtomPointerVector& sel) {
@@ -1993,22 +1995,22 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
     for (int i = 0; i < atoms.size(); i++) {
       switch(tree->getProperty()) {
         case (expressionTree::selProperty::RESID):
-          if ((tree->hasNums() && (residues[i]->getNum() >= tree->getNumByIdx(0)) && (residues[i]->getNum() <= tree->getNumByIdx(1))) ||
-              (!tree->hasNums() && (residues[i]->getNum() == tree->getNum()))) {
+          if ((tree->hasNums() && (atomResidues[i]->getNum() >= tree->getNumByIdx(0)) && (atomResidues[i]->getNum() <= tree->getNumByIdx(1))) ||
+              (!tree->hasNums() && (atomResidues[i]->getNum() == tree->getNum()))) {
             sel.push_back(atoms[i]);
           }
           break;
         case (expressionTree::selProperty::RESNAME):
-          if (residues[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
+          if (atomResidues[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
           break;
         case (expressionTree::selProperty::ICODE):
-          if (string(1, residues[i]->getIcode()) == tree->getString()) sel.push_back(atoms[i]);
+          if (string(1, atomResidues[i]->getIcode()) == tree->getString()) sel.push_back(atoms[i]);
           break;
         case (expressionTree::selProperty::CHAIN):
-          if (chains[i]->getID() == tree->getString()) sel.push_back(atoms[i]);
+          if (atomChains[i]->getID() == tree->getString()) sel.push_back(atoms[i]);
           break;
         case (expressionTree::selProperty::SEGID):
-          if (chains[i]->getSegID() == tree->getString()) sel.push_back(atoms[i]);
+          if (atomChains[i]->getSegID() == tree->getString()) sel.push_back(atoms[i]);
           break;
         case (expressionTree::selProperty::NAME):
           if (atoms[i]->getName() == tree->getString()) sel.push_back(atoms[i]);
