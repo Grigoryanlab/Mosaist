@@ -471,6 +471,7 @@ class FASST {
     mstreal isResiduePairPropertyPopulated(const string& propType);
     map<int, mstreal> getResiduePairProperties(int ti, const string& propType, int ri);
     mstreal isResidueRelationshipPopulated(const string& propType);
+    void dropResidueRelationship(const string& propType) { resRelProperties.erase(propType); }
 
     // access to search options
     fasstSearchOptions& options() { return opts; }

@@ -642,8 +642,8 @@ class selector {
   private:
     string getNextSelectionToken(string& selStr);
     vector<Atom*> atoms;
-    vector<Residue*> residues;
-    vector<Chain*> chains;
+    vector<Residue*> atomResidues, residues;
+    vector<Chain*> atomChains;
 };
 
 class RMSDCalculator {
