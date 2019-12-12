@@ -15,13 +15,21 @@ int main(int argc, char *argv[]) {
   op.setOptions(argc, argv);
 
   MstUtils::setSignalHandlers();
-  Structure motif(op.getString("t") + "/heptad.0388_0001.pdb");
+
+  Structure S(op.getString("t") + "/2ZTA.pdb");
+  vector<Residue*> R = S.getResidues(), subregion;
+  for (Residue* res : R) if (RotamerLibrary::hasFullBackbone(res)) subregion.push_back(res);
+  Structure subS(subregion);
+  vector<Residue*> subR = subS.getResidues();
+
   FASST F; F.readDatabase(op.getString("b"));
-  TERMANAL T(&F);
+  TERMANAL T(&F); T.readRotamerLibrary("testfiles/rotlib.bin");
+
   auto begin = chrono::high_resolution_clock::now();
   cout << "scoring..." << endl;
-  mstreal ss = T.structureScore(motif, {&(motif.getResidue(8))}, true);
+  bool verbose = true;
+  vector<mstreal> structScores = T.scoreStructure(subS, verbose);
+  for (int i = 0; i < subR.size(); i++) cout << "structure score for " << *(subR[i]) << " = " << structScores[i] << endl;
   auto end = chrono::high_resolution_clock::now();
   cout << "scoring took " << chrono::duration_cast<std::chrono::milliseconds>(end-begin).count() << " ms" << endl;
-  cout << "structure score = " << ss << endl;
 }
