@@ -73,8 +73,8 @@ class contactList {
 
 class ConFind {
   public:
-    ConFind(string rotLibFile, Structure& S);
-    ConFind(RotamerLibrary* _rotLib, Structure& S);
+    ConFind(string rotLibFile, const Structure& S);
+    ConFind(RotamerLibrary* _rotLib, const Structure& S);
     ~ConFind();
     void setFreedomParams(mstreal _loCollProbCut, mstreal _hiCollProbCut, int type) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; freedomType = type; }
 
@@ -140,7 +140,7 @@ class ConFind {
 
   protected:
     mstreal weightOfAvailableRotamers(Residue* res); // computes the total weight of all rotamers available at this position
-    void init(Structure& S);
+    void init(const Structure& S);
     void setParams();
     /* given pre-computed collision probabilities, sums up freedom scores. NOTE,
      * does not check whether all the relevant contacting residues have been

@@ -34,13 +34,13 @@ bool contactList::areInContact(Residue* A, Residue* B) {
   return true;
 }
 
-ConFind::ConFind(string rotLibFile, Structure& S) {
+ConFind::ConFind(string rotLibFile, const Structure& S) {
   setParams();
   rotLib = new RotamerLibrary(rotLibFile);
   isRotLibLocal = true;
   init(S);
 }
-ConFind::ConFind(RotamerLibrary* _rotLib, Structure& S) {
+ConFind::ConFind(RotamerLibrary* _rotLib, const Structure& S) {
   setParams();
   rotLib = _rotLib;
   isRotLibLocal = false;
@@ -76,7 +76,7 @@ ConFind::~ConFind() {
   }
 }
 
-void ConFind::init(Structure& S) {
+void ConFind::init(const Structure& S) {
   AtomPointerVector atoms = S.getAtoms();
   for (int i = 0; i < atoms.size(); i++) {
     Atom* a = atoms[i];
