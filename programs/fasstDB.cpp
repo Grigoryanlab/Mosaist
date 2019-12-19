@@ -61,7 +61,8 @@ int main(int argc, char *argv[]) {
         if (op.isGiven("s")) {
           P = P.reassignChainsByConnectivity();
         }
-        S.addTarget(P, memSave);
+        if (P.residueSize() != 0) S.addTarget(P, memSave);
+        else cout << "skipping " << pdbFiles[i] << " as it ends up having no residues..." << endl;
       }
     }
     if (op.isGiven("db")) {
