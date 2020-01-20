@@ -66,7 +66,7 @@ vector<mstreal> TERMANAL::scoreStructure(const Structure& S, const vector<Residu
   // Smooth and combine each pair of score parts by incorporating the scores from each TERM that a residue belongs to
   vector<mstreal> structScores(numTerms);
   if (scoreParts != NULL) scoreParts->resize(numTerms);
-  if (verbose) cout << "Position | Design score | abundance score | structure score" << fixed << setprecision(6) << endl;
+  if (verbose) cout << "Position | Design score | Abundance score | Structure score" << fixed << setprecision(6) << endl;
   for (int i = 0; i < numTerms; i++) {
     pair<mstreal, mstreal> parts = smoothScores(structScoreParts, resOverlaps[i]);
     structScores[i] = combineScoreParts(parts);

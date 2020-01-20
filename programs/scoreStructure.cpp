@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
   vector<Residue*> bbR;
   for (Residue* res : selR) if (RotamerLibrary::hasFullBackbone(res)) bbR.push_back(res);
   Structure bbS(bbR);
-  FASST F; F.readDatabase(op.getString("fdb"));
+  FASST F; F.readDatabase(op.getString("fdb"), 2);
   TERMANAL T(&F); T.readRotamerLibrary(op.getString("rlib"));
   if (op.isGiven("cd")) T.setCDCut(op.getReal("cd"));
   if (op.isGiven("pad")) T.setPad(op.getInt("pad"));
