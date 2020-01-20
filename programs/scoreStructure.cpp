@@ -13,12 +13,12 @@ int main(int argc, char** argv) {
   op.addOption("tab", "output file containing the three sets of scores in tabular format.");
   op.addOption("fdb", "binary FASST database to search for matches in.", true);
   op.addOption("rlib", "rotamer library to compute contact degree with.", true);
-  op.addOption("verb", "if true, prints scoring details as they are computed.");
-  op.addOption("cd", "contact degree cutoff when forming TERMs.");
-  op.addOption("pad", "number of residues to pad contacting residues with when forming TERMs.");
-  op.addOption("rmsd", "RMSD cutoff when searching for matches.");
-  op.addOption("count", "maximum number of matches to search for within the specified RMSD cutoff.");
-  op.addOption("ps", "pseudocount to add to the smoothed scores before computing their logs.");
+  op.addOption("verb", "if true, prints scoring details as they are computed (default=false).");
+  op.addOption("cd", "contact degree cutoff when forming TERMs (default=0.1).");
+  op.addOption("pad", "number of residues to pad contacting residues with when forming TERMs (default=2).");
+  op.addOption("rmsd", "RMSD cutoff when searching for matches (default=2.0).");
+  op.addOption("count", "maximum number of matches to search for within the specified RMSD cutoff (default=50).");
+  op.addOption("ps", "pseudocount to add to the smoothed scores before computing their logs (default=0.01).");
   op.setOptions(argc, argv);
 
   // Read in the structure, FASST database, and rotamer library
