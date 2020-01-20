@@ -304,7 +304,7 @@ vector<Atom*> RotamerLibrary::getBackbone(const Residue& res, bool noHyd) {
   return bb;
 }
 
-vector<Atom*> RotamerLibrary::getBackbone(System& S, bool noHyd) {
+vector<Atom*> RotamerLibrary::getBackbone(const System& S, bool noHyd) {
   vector<Atom*> bbAll;
   for (int ci = 0; ci < S.chainSize(); ci++) {
     Chain& C = S[ci];
