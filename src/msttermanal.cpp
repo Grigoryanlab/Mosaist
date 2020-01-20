@@ -131,20 +131,22 @@ mstreal TERMANAL::calcSeqFreq(Residue* res, vector<Sequence>& matchSeqs) {
 }
 
 mstreal TERMANAL::calcStructFreq(vector<fasstSolution*>& matches, vector<mstreal>& rmsds, bool verbose) {
-  Structure firstMatch = F->getMatchStructure(*matches[0]);
-  F->setQuery(firstMatch);
-  fasstSolutionSet matchesToClosestNative = F->search();
-  mstreal r;
-  if (compatMode) {
-    vector<Atom*> firstMatchBB = RotamerLibrary::getBackbone(firstMatch);
-    vector<mstreal> nativeRmsds;
-    getTopMatches(F, matchesToClosestNative, firstMatchBB, &nativeRmsds);
-    r = nativeRmsds.back();
-  } else r = matchesToClosestNative.worstRMSD();
   int n;
-  for (n = 0; n < matches.size(); n++) {
-    if (rmsds[n] > r) break;
-  }
+  if (matches.size() >= 1) {
+    Structure firstMatch = F->getMatchStructure(*matches[0]);
+    F->setQuery(firstMatch);
+    fasstSolutionSet matchesToClosestNative = F->search();
+    mstreal r;
+    if (compatMode) {
+      vector<Atom*> firstMatchBB = RotamerLibrary::getBackbone(firstMatch);
+      vector<mstreal> nativeRmsds;
+      getTopMatches(F, matchesToClosestNative, firstMatchBB, &nativeRmsds);
+      r = nativeRmsds.back();
+    } else r = matchesToClosestNative.worstRMSD();
+    for (n = 0; n < matches.size(); n++) {
+      if (rmsds[n] > r) break;
+    }
+  } else n = 0;
   mstreal structFreq = min(1.0, (1.0*n)/matchCount);
   if (verbose) cout << "structure frequency = " << structFreq << endl;
   return structFreq;
