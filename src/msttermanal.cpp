@@ -9,6 +9,10 @@ mstreal TERMANAL::structureScore(const Structure& term, const vector<Residue*>& 
 
 pair<mstreal, mstreal> TERMANAL::structureScoreParts(const Structure& term, const vector<Residue*>& central, bool verbose) {
   if (F == NULL) MstUtils::error("FASST object not set", "TERMANAL::structureScoreParts");
+  if (verbose) {
+    cout << "\tvisiting TERM (" << MstUtils::vecPtrToString(central) << "): " << MstUtils::vecPtrToString(term.getResidues()) << endl;
+    // term.writePDB(cout);
+  }
 
   // get the top hits
   fasstSearchOptions origOpts = setupSearch(term);
@@ -48,31 +52,61 @@ mstreal TERMANAL::combineScoreParts(const pair<mstreal, mstreal>& parts) {
 vector<mstreal> TERMANAL::scoreStructure(const Structure& S, const vector<Residue*>& subregion, vector<pair<mstreal, mstreal>>* scoreParts, bool verbose) {
   if (!RL.isLoaded()) MstUtils::error("Rotamer library not loaded", "TERMANAL::scoreStructure");
 
-  // Create a TERM for each residsue and keep track of which TERMs each residue belongs to via 'resOverlaps'
+  // This map will store the score components for various visited TERMs that. The
+  // key is the residue index of the central residue of the corresponding TERM.
+  map<int, pair<mstreal, mstreal>> structScoreParts;
+
+  // NOTE: we need to identify all TERMs, even if we are interested in scores at
+  // a subset of residues. This is because the final smoothed score of a residue
+  // depends on all TERMs that it is a part of, whether the central residues of
+  // those TERMs happen to be in our subset or not.
+  // Variable resOverlaps keeps track of which TERMs each residue belongs to,
+  // index by full residue index into S.
   ConFind C(&RL, S);
   vector<Residue*> centrals;
   vector<vector<int>> resOverlaps;
-  vector<Structure> terms = collectTERMs(C, subregion, centrals, resOverlaps);
+  // vector<Structure> terms = collectTERMs(C, subregion, centrals, resOverlaps);
+  vector<Structure> terms = collectTERMs(C, S.getResidues(), centrals, resOverlaps);
 
-  // Calculate the score parts for each TERM
-  int numTerms = terms.size();
-  vector<Residue*> R = S.getResidues();
-  vector<pair<mstreal, mstreal>> structScoreParts(numTerms);
-  for (int i = 0; i < numTerms; i++) {
-    if (verbose) cout << "Scoring " << *R[i] << " ..." << endl;
-    structScoreParts[i] = structureScoreParts(terms[i], {centrals[i]}, verbose);
-  }
+  // // Calculate the score parts for each TERM
+  // // vector<pair<mstreal, mstreal>> structScoreParts(numTerms);
+  // for (int i = 0; i < terms.size(); i++) {
+  //   if (verbose) cout << "Scoring " << *(subregion[i]) << " ..." << endl;
+  //   structScoreParts[i] = structureScoreParts(terms[i], {centrals[i]}, verbose);
+  // }
+
+  // // Calculate additional score parts for TERMs upon which the smoothed scores
+  // // of the above TERMs depend
+  // vector<int> subregionIndices(subregion.size());
+  // for (int i = 0; i < subregion.size(); i++) subregionIndices[i] = subregion[i]->getResidueIndex();
+  // vector<int> involvedIndices;
+  // for (int i = 0; i < resOverlaps.size(); i++) involvedIndices = MstUtils::setunion(involvedIndices, resOverlaps[i]);
+  // vector<int> additionalIndices = MstUtils::setdiff(involvedIndices, subregionIndices);
+  // vector<Residue*> addregion = MstUtils::subVector(S.getResidues(), additionalIndices);
+  // vector<Structure> addterms = collectTERMs(C, addregion, addcentrals, addresOverlaps);
 
   // Smooth and combine each pair of score parts by incorporating the scores from each TERM that a residue belongs to
-  vector<mstreal> structScores(numTerms);
-  if (scoreParts != NULL) scoreParts->resize(numTerms);
-  if (verbose) cout << "Position | Design score | abundance score | structure score" << fixed << setprecision(6) << endl;
-  for (int i = 0; i < numTerms; i++) {
-    pair<mstreal, mstreal> parts = smoothScores(structScoreParts, resOverlaps[i]);
+  vector<mstreal> structScores(subregion.size());
+  if (scoreParts != NULL) scoreParts->resize(subregion.size());
+  for (int i = 0; i < subregion.size(); i++) {
+    int idx = subregion[i]->getResidueIndex();
+    if (verbose) cout << "Scoring " << *(subregion[i]) << " ..." << endl;
+
+    // visit any TERMs necessary for computing the scores at residue index idx
+    for (int ti : resOverlaps[idx]) {
+      if (structScoreParts.find(ti) == structScoreParts.end()) {
+        structScoreParts[ti] = structureScoreParts(terms[ti], {centrals[ti]}, verbose);
+      }
+    }
+
+    // apply smoothing to score components
+    pair<mstreal, mstreal> parts = smoothScores(structScoreParts, resOverlaps[idx]);
+
+    // compute and output total score
     structScores[i] = combineScoreParts(parts);
     mstreal designScore = log(parts.first + pseudoCount), abundanceScore = log(parts.second + pseudoCount);
     if (scoreParts != NULL) (*scoreParts)[i] = make_pair(designScore, abundanceScore);
-    if (verbose) cout << *R[i] << "\t" << designScore << "\t" << abundanceScore << "\t" << structScores[i] << endl;
+    if (verbose) cout << "scores for " << *(subregion[i]) << ": " << *(subregion[i]) << "\t" << designScore << "\t" << abundanceScore << "\t" << structScores[i] << endl;
   }
   return structScores;
 }
@@ -116,7 +150,7 @@ mstreal TERMANAL::calcSeqLikelihood(vector<fasstSolution*>& matches, const vecto
   vector<mstreal> seqLike(central.size(), 0);
   for (int i = 0; i < central.size(); i++) seqLike[i] = calcSeqFreq(central[i], matchSeqs);
   mstreal seqLikeComb = !central.empty() ? CartesianPoint(seqLike).mean() : 1.0;
-  if (verbose) cout << "sequence likelihood = [" << MstUtils::vecToString(seqLike) << "], overall = " << seqLikeComb << endl;
+  if (verbose) cout << "\tsequence likelihood = [" << MstUtils::vecToString(seqLike) << "], overall = " << seqLikeComb << endl;
   return seqLikeComb;
 }
 
@@ -148,7 +182,7 @@ mstreal TERMANAL::calcStructFreq(vector<fasstSolution*>& matches, vector<mstreal
     }
   } else n = 0;
   mstreal structFreq = min(1.0, (1.0*n)/matchCount);
-  if (verbose) cout << "structure frequency = " << structFreq << endl;
+  if (verbose) cout << "\tstructure frequency = " << structFreq << endl;
   return structFreq;
 }
 
@@ -160,16 +194,17 @@ vector<Structure> TERMANAL::collectTERMs(ConFind& C, const vector<Residue*>& sub
   resOverlaps.resize(S->residueSize());
   for (int i = 0; i < numTerms; i++) {
     vector<int> fragResIdx;
-    int resInd = TERMUtils::selectTERM(*subregion[i], C, terms[i], pad, cdCut, &fragResIdx);
+    int resInd = TERMUtils::selectTERM(*(subregion[i]), C, terms[i], pad, cdCut, &fragResIdx);
     centrals[i] = &terms[i].getResidue(resInd);
     for (int j = 0; j < fragResIdx.size(); j++) resOverlaps[fragResIdx[j]].push_back(i);
   }
   return terms;
 }
 
-pair<mstreal, mstreal> TERMANAL::smoothScores(vector<pair<mstreal, mstreal>>& structScoreParts, vector<int>& overlapResInds) {
+pair<mstreal, mstreal> TERMANAL::smoothScores(map<int, pair<mstreal, mstreal>>& structScoreParts, vector<int>& overlapResInds) {
   mstreal seqLike = 0.0, structFreq = 0.0;
   for (int i : overlapResInds) {
+    if (structScoreParts.find(i) == structScoreParts.end()) MstUtils::error("not all required structure score parts are precalculated (ex: residue index " + MstUtils::toString(i) + ")", "TERMANAL::smoothScores");
     seqLike += structScoreParts[i].first;
     structFreq += structScoreParts[i].second;
   }

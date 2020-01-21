@@ -1071,6 +1071,8 @@ class MstUtils {
     static string toString(const T* obj);
     template <class T>
     static vector<int> sortIndices(const vector<T>& vec, bool descending = false);
+    template <class T>
+    static vector<T> subVector(const vector<T>& vec, const vector<int>& inds);
     template <class T1, class T2>
     static vector<T1> keys(const map<T1, T2>& _map);
     template <class T>
@@ -1079,6 +1081,8 @@ class MstUtils {
     static vector<T2> values(map<T1, T2>& _map);
     template <class T>
     static string vecToString(const vector<T>& vec, string del = " ");
+    template <class T>
+    static string vecPtrToString(const vector<T*>& vec, string del = " ");
     template <class T>
     static T min(const T& a, const T& b);
     template <class T>
@@ -1149,6 +1153,13 @@ vector<int> MstUtils::sortIndices(const vector<T>& vec, bool descending) {
   return sortedIndices;
 }
 
+template <class T>
+vector<T> MstUtils::subVector(const vector<T>& vec, const vector<int>& inds) {
+  vector<T> sub(inds.size());
+  for (int i = 0; i < inds.size(); i++) sub[i] = vec[inds[i]];
+  return sub;
+}
+
 template <class T1, class T2>
 vector<T1> MstUtils::keys(const map<T1, T2>& _map) {
   vector<T1> K(_map.size());
@@ -1184,6 +1195,16 @@ string MstUtils::vecToString(const vector<T>& vec, string del) {
   string str;
   for (int i = 0; i < vec.size(); i++) {
     str += MstUtils::toString(vec[i]);
+    if (i != vec.size() - 1) str += del;
+  }
+  return str;
+}
+
+template <class T>
+string MstUtils::vecPtrToString(const vector<T*>& vec, string del) {
+  string str;
+  for (int i = 0; i < vec.size(); i++) {
+    str += MstUtils::toString(*(vec[i]));
     if (i != vec.size() - 1) str += del;
   }
   return str;

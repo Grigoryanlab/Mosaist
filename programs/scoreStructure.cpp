@@ -7,13 +7,13 @@ int main(int argc, char** argv) {
   // Setup and get the input arguments
   MstOptions op;
   op.setTitle("Scores the input structure using TERMANAL and outputs three structures whose B-factors are annotated with the design, abundance, and structure scores");
-  op.addOption("pdb", "input PDB file to score.", true);
+  op.addOption("p", "input PDB file to score.", true);
   op.addOption("sel", "selection within the input PDB to score.");
-  op.addOption("out", "output prefix for the B-factor annotated output structures (prefix.{dsc,abd,ssc}.pdb).", true);
+  op.addOption("o", "output prefix for the B-factor annotated output structures (prefix.{dsc,abd,ssc}.pdb).", true);
   op.addOption("tab", "output file containing the three sets of scores in tabular format.");
-  op.addOption("fdb", "binary FASST database to search for matches in.", true);
-  op.addOption("rlib", "rotamer library to compute contact degree with.", true);
-  op.addOption("verb", "if true, prints scoring details as they are computed (default=false).");
+  op.addOption("db", "binary FASST database to search for matches in.", true);
+  op.addOption("rLib", "rotamer library to compute contact degree with.", true);
+  op.addOption("v", "if true, prints scoring details as they are computed (default=false).");
   op.addOption("cd", "contact degree cutoff when forming TERMs (default=0.1).");
   op.addOption("pad", "number of residues to pad contacting residues with when forming TERMs (default=2).");
   op.addOption("rmsd", "RMSD cutoff when searching for matches (default=2.0).");
@@ -22,15 +22,12 @@ int main(int argc, char** argv) {
   op.setOptions(argc, argv);
 
   // Read in the structure, FASST database, and rotamer library
-  Structure S(op.getString("pdb"));
+  Structure So(op.getString("p")), S;
+  RotamerLibrary::extractProtein(S, So);
   selector sele(S);
-  Structure selS = op.isGiven("sel") ? sele.selectRes(op.getString("sel")) : S;
-  vector<Residue*> selR = selS.getResidues();
-  vector<Residue*> bbR;
-  for (Residue* res : selR) if (RotamerLibrary::hasFullBackbone(res)) bbR.push_back(res);
-  Structure bbS(bbR);
-  FASST F; F.readDatabase(op.getString("fdb"));
-  TERMANAL T(&F); T.readRotamerLibrary(op.getString("rlib"));
+  vector<Residue*> selR = op.isGiven("sel") ? sele.selectRes(op.getString("sel")) : S.getResidues();
+  FASST F; F.readDatabase(op.getString("db"));
+  TERMANAL T(&F); T.readRotamerLibrary(op.getString("rLib"));
   if (op.isGiven("cd")) T.setCDCut(op.getReal("cd"));
   if (op.isGiven("pad")) T.setPad(op.getInt("pad"));
   if (op.isGiven("rmsd")) T.setRMSDCut(op.getReal("rmsd"));
@@ -39,21 +36,25 @@ int main(int argc, char** argv) {
 
   // Score each residue in the structure
   vector<pair<mstreal, mstreal>> scoreParts;
-  vector<mstreal> structScores = T.scoreStructure(bbS, &scoreParts, op.getBool("verb"));
+  vector<mstreal> structScores = T.scoreStructure(S, selR, &scoreParts, op.isGiven("v"));
+
+  // Zero out B-factors
+  vector<Atom*> allAtoms = S.getAtoms();
+  for (Atom* a : allAtoms) a->setB(0.0);
 
   // Create the B-factor annotated output PDBs using the computed scores
-  Structure dscS(bbS), abdS(bbS), sscS(bbS);
-  vector<Residue*> dscR = dscS.getResidues(), abdR = abdS.getResidues(), sscR = sscS.getResidues();
-  int numRes = sscR.size();
-  for (int i = 0; i < numRes; i++) {
-    int numAtoms = sscR[i]->atomSize();
-    for (int j = 0; j < numAtoms; j++) {
-      dscR[i]->getAtom(j).setB(scoreParts[i].first);
-      abdR[i]->getAtom(j).setB(scoreParts[i].second);
-      sscR[i]->getAtom(j).setB(structScores[i]);
-    }
+  Structure dscS(S), abdS(S), sscS(S);
+  for (int i = 0; i < selR.size(); i++) {
+    Residue* r = selR[i];
+    int ri = r->getResidueIndex();
+    Residue& dscR = dscS.getResidue(ri);
+    Residue& abdR = abdS.getResidue(ri);
+    Residue& sscR = sscS.getResidue(ri);
+    for (int j = 0; j < dscR.atomSize(); j++) dscR.getAtom(j).setB(-scoreParts[i].first);
+    for (int j = 0; j < abdR.atomSize(); j++) abdR.getAtom(j).setB(-scoreParts[i].second);
+    for (int j = 0; j < sscR.atomSize(); j++) sscR.getAtom(j).setB(-structScores[i]);
   }
-  string prefix = op.getString("out");
+  string prefix = op.getString("o");
   dscS.writePDB(prefix + ".dsc.pdb");
   abdS.writePDB(prefix + ".abd.pdb");
   sscS.writePDB(prefix + ".ssc.pdb");
@@ -62,8 +63,9 @@ int main(int argc, char** argv) {
   if (op.isGiven("tab")) {
     ofstream outputFS(op.getString("tab"));
     outputFS << "Position | design score | abundance score | structure score" << fixed << setprecision(6) << endl;
-    for (int i = 0; i < numRes; i++) {
-      outputFS << sscR[i]->getChainID() << "," << sscR[i]->getNum() << "\t" << scoreParts[i].first << "\t" << scoreParts[i].second << "\t" << structScores[i] << endl;
+    for (int i = 0; i < selR.size(); i++) {
+      Residue* r = selR[i];
+      outputFS << r->getChainID() << "," << r->getNum() << "\t" << -scoreParts[i].first << "\t" << -scoreParts[i].second << "\t" << -structScores[i] << endl;
     }
     outputFS.close();
   }

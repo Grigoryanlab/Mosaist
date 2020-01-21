@@ -55,7 +55,7 @@ class TERMANAL {
     mstreal calcSeqFreq(Residue* res, vector<Sequence>& matchSeqs);
     mstreal calcStructFreq(vector<fasstSolution*>& matches, vector<mstreal>& rmsds, bool verbose);
     vector<Structure> collectTERMs(ConFind& C, const vector<Residue*>& subregion, vector<Residue*>& centrals, vector<vector<int>>& resOverlaps);
-    pair<mstreal, mstreal> smoothScores(vector<pair<mstreal, mstreal>>& structScoreParts, vector<int>& overlapResInds);
+    pair<mstreal, mstreal> smoothScores(map<int, pair<mstreal, mstreal>>& structScoreParts, vector<int>& overlapResInds);
 
   private:
     FASST* F;
