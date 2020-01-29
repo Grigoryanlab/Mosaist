@@ -11,6 +11,7 @@ typedef short res_t;
 class Sequence {
   public:
     Sequence() {}
+    Sequence(Structure& S);
     Sequence(Chain& C);
     // allows one to mix 3- and 1-letter codes, with a delimiter
     Sequence(const string& _seq, const string& _name = "", const string& delim = "");
