@@ -150,6 +150,7 @@ int main(int argc, char** argv) {
   op.addOption("o", "output base name.", true);
   op.addOption("b", "binary FASST database to use.", true);
   op.addOption("r", "grow randomly rather than deterministically. At each step, rather than picking the centroid of the top cluster, pick centroids randomly by cluster size.");
+  op.addOption("m", "enforce a minimum of this many number of matches at each branch. By default, uses only an automatic RMSD cutoff, so some branches will terminate.");
   op.addOption("R", "radius of gyration factor. If specified, will preferrentially choose more compact solutions, with this exponential pre-factor (i.e., exp[-Rg/factor]).");
   op.addOption("P", "impose native-like persistence length of the protein chain. Probably best to use either --R or --P.");
   op.setOptions(argc, argv);
@@ -188,7 +189,6 @@ int main(int argc, char** argv) {
       // define TERM at the terminus
       cout << "selecting TERM..." << endl;
       vector<int> termResIndices;
-      vector<Residue*> cenResidues;
       Chain* cChain = &(nc ? S[0] : S.getChain(S.chainSize() - 1)); // default chain of residues to grow
       if (op.isGiven("cid")) {
         Chain* cChain = S.getChainByID(op.getString("cid"));
@@ -198,22 +198,15 @@ int main(int argc, char** argv) {
         MstUtils::assert(cChain != NULL, "did not find segment with ID " + op.getString("sid"));
       }
       Residue* cres = &(nc ? cChain->getResidue(0) : cChain->getResidue(cChain->residueSize() - 1));
-      cenResidues.push_back(cres);
-      Residue* next = cres;
-      for (int k = 1; k <= pm; k++) {
-        next = next->iPlusDelta(del);
-        if (next == NULL) break;
-        cenResidues.push_back(next);
-      }
-      Structure term = TERMUtils::selectTERM(cenResidues, C, pm, cdCut, &termResIndices);
-      int cresIdx = nc ? 0 : (term[0].residueSize() - 1); // where in the TERM the terminal residue is located
+      Structure term = TERMUtils::selectTERM({cres}, C, pm, cdCut, &termResIndices);
+      int cresIdx = MstUtils::indexMap(termResIndices).at(cres->getResidueIndex());
       cout << AtomPointerVector(term.getAtoms()) << endl;
 
       // find matches to it
       cout << "searching..." << endl;
       F.setQuery(term, false);
       F.setRMSDCutoff(RMSDCalculator::rmsdCutoff(term));
-      // F.setMinNumMatches(1);
+      if (op.isGiven("m")) F.setMinNumMatches(op.getInt("m"));
       F.setMaxNumMatches(1000);
       fasstSolutionSet matchList = F.search();
       cout << "\tfound " << matchList.size() << " matches" << endl;
@@ -245,15 +238,17 @@ int main(int argc, char** argv) {
         }
       }
 
-      // extend the match by one residue
-      int nextIdx = resIndices[cresIdx] + del;
-      vector<Residue*> newPos(1, &(match.getResidue(nextIdx)));
-      if (nc) {
-        resTopo.insert(resTopo.begin(), newPos);
-        isFixed.insert(isFixed.begin(), false);
-      } else {
-        resTopo.push_back(newPos);
-        isFixed.push_back(false);
+      // extend the match by dN residues
+      for (int ii = 1; ii <= dN; ii++) {
+        int nextIdx = resIndices[cresIdx] + ii*del;
+        vector<Residue*> newPos(1, &(match.getResidue(nextIdx)));
+        if (nc) {
+          resTopo.insert(resTopo.begin(), newPos);
+          isFixed.insert(isFixed.begin(), false);
+        } else {
+          resTopo.push_back(newPos);
+          isFixed.push_back(false);
+        }
       }
 
       vector<int> fixed;
