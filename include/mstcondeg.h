@@ -73,8 +73,8 @@ class contactList {
 
 class ConFind {
   public:
-    ConFind(string rotLibFile, const Structure& S);
-    ConFind(RotamerLibrary* _rotLib, const Structure& S);
+    ConFind(string rotLibFile, const Structure& S, bool strict = false);
+    ConFind(RotamerLibrary* _rotLib, const Structure& S, bool strict = false);
     ~ConFind();
     void setFreedomParams(mstreal _loCollProbCut, mstreal _hiCollProbCut, int type) { loCollProbCut = _loCollProbCut; hiCollProbCut = _hiCollProbCut; freedomType = type; }
 
@@ -152,6 +152,7 @@ class ConFind {
   private:
     RotamerLibrary* rotLib;
     bool isRotLibLocal;
+    bool strict; //if true, will only consider the amino acid present in the structure in calculations
     AtomPointerVector backbone, ca;
     ProximitySearch *bbNN, *caNN;
     fastmap<Residue*, set<int> > permanentContacts;

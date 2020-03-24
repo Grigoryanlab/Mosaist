@@ -76,6 +76,8 @@ class SeqTools {
     static void readFasta(const string& fastaFile, vector<Sequence>& seqs);
     static vector<Sequence> readSequences(const string& seqsFile);
     static void readSequences(const string& seqsFile, vector<Sequence>& seqs);
+    static vector<string> getAA1() {return aa3;}
+    static vector<string> getAA3() {return aa1;}
 
     /* For these two functions, seqA and seqB must be of the same length. This
      * is not checked, for efficiency. The comparison is smart, in that it stops
