@@ -78,6 +78,7 @@ vector<Structure*> getMatches(FASST& C, Structure& frag, const vector<int>& frag
         delete(matchStructures.back()); matchStructures.pop_back();
         continue;
       }
+      RotamerLibrary::standardizeBackboneNames(match);
       MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
       numberResidues(match, fragResIdx); // make residue numbers store indices into the original structure
     }
