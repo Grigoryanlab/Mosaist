@@ -127,6 +127,7 @@ EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const ve
   for (int i = 0; i < variable.size(); i++) {
     if (variable[i]->getStructure() != S) MstUtils::error("mutable positions belong to different Structure objects", "dTERMen::buildEnergyTable");
     string siteName = variable[i]->getChain()->getID() + "," + MstUtils::toString(variable[i]->getNum());
+    if (variable[i]->getIcode() != ' ') siteName += variable[i]->getIcode();
     siteNames[variable[i]] = siteName;
     E.addSite(siteName);
     if (allowed.empty()) {
