@@ -266,12 +266,26 @@ class EnergyTable {
   public:
     EnergyTable() {}
     EnergyTable(const string& tabFile);
+  
+    /* restrictSiteAlphabet() constructs a new energy table, copying only the residue types that are
+     specified for that position in the restricted_siteAlphabets variable. In the case that the new energy
+     table will be applied as a constraint to the current one, constraint_table should be set to true.
+     In this case, all residue types will be carried over, but the energy will correspond to the energy
+     of the residue type specified in restricted_siteAlphabets. Note that in this mode, no more than
+     one residue type can be specified per position. In the case that a position is to be designed,
+     it should be labeled "UNK" and all residue types will be copied over like normal.
+     */
+  
+    EnergyTable restrictSiteAlphabet(const vector<vector<string>>& restricted_siteAlphabets, bool constraint_table = false);
+    EnergyTable restrictSiteAlphabet(const Structure& S, bool constraint_table = false);
+  
     void clear(); // resets the table to empty
     void readFromFile(const string& tabFile);
     void writeToFile(const string& tabFile);
     void addSite(const string& siteName);
     void addSites(const vector<string>& siteNames);
     int numSites() const { return siteIndices.size(); }
+    vector<string> getSites() {return sites; }
     int siteIndex(const string& siteName) { return siteIndices[siteName]; }
     bool siteExists(const string& siteName) { return siteIndices.find(siteName) != siteIndices.end(); }
     void setSiteAlphabet(const string& siteName, const vector<string>& alpha) { setSiteAlphabet(siteIndex(siteName), alpha); }
