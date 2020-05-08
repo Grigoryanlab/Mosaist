@@ -1210,10 +1210,10 @@ EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& rest
   
   /* copy site addresses and set alphabets */
   for (int s = 0; s < sites.size(); s++) {
-    if ((constraint_table) && (restricted_siteAlphabets[s].size() != 1)) MstUtils::error("In constraint_table mode only a single residue (or 'UNK') may be specified per position");
+    if ((constraint_table) && (restricted_siteAlphabets[s].size() > 1)) MstUtils::error("In constraint_table mode only a single residue, or none at all, may be specified per position");
     restricted_etab.addSite(sites[s]);
-    if (((restricted_siteAlphabets[s].size() == 1) && (restricted_siteAlphabets[s][0] == "UNK")) || (constraint_table)) {
-      // If the only residue type at this position is "UNK", OR this is a constraint table, copy all residue types
+    if (restricted_siteAlphabets[s].empty() || ((constraint_table && restricted_siteAlphabets[s].size() == 1))) {
+      // If no residue is specified, copy all residue types
       vector<string> old_siteAlphabet = getSiteAlphabet(s);
       restricted_etab.setSiteAlphabet(s,old_siteAlphabet);
     } else {
@@ -1227,11 +1227,11 @@ EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& rest
       string aa = siteAlphabet[site_aa];
       if (!inSiteAlphabet(s,aa)) MstUtils::error("unexpected amino-acid name in restricted alphabet: " + aa);
       /*
-       In the case that this is a constraint table AND this position is not "UNK" (meaning it has a
-       specified sequence), the energy of the sequence provided in restricted_siteAlphabets[s][0] should
-       be copied to all of the other residue types.
+       In the case that this is a constraint table AND this position is specified, the energy of the
+       sequence provided in restricted_siteAlphabets[s][0] should be copied to all of the other
+       residue types.
        */
-      int old_aa_idx = ((constraint_table) && (restricted_siteAlphabets[s][0] != "UNK")) ? indexInSiteAlphabet(s,restricted_siteAlphabets[s][0]) : indexInSiteAlphabet(s,aa);
+      int old_aa_idx = ((constraint_table) && (restricted_siteAlphabets[s].size() == 1)) ? indexInSiteAlphabet(s,restricted_siteAlphabets[s][0]) : indexInSiteAlphabet(s,aa);
       int new_aa_idx = restricted_etab.indexInSiteAlphabet(s,aa);
       mstreal self_e = selfEnergy(s,old_aa_idx);
       restricted_etab.setSelfEnergy(s, new_aa_idx, self_e);
@@ -1248,15 +1248,16 @@ EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& rest
       for (int aai = 0; aai < si_siteAlphabet.size(); aai++) {
         for (int aaj = 0; aaj < sj_siteAlphabet.size(); aaj++) {
           /*
-           Similar to above, in the case that this is a constraint table AND both residues are not
-           "UNK", the energy found from the residue provided in restricted_siteAlphabets[s][0] should
-           be copied to all pairs of residue types. In the case that only one of the residues is not
-           "UNK", the energy of all allowed residues at the UNK position with the residue provided by
-           restricted_siteAlphabets[s][0] at the second position, will be copied to all other residues
-           at the second position.
+           If this is a constraint table:
+           In the case that both positions are specified, the pair energy of the residue types
+           specified by restricted_siteAlphabets[s][0] is copied to all pairs of residue types.
+           
+           In the case that one of the positions is specified and the other is not, there will be 20
+           unique pair energies (1 specified residue x 20 residues). Each of these pair energies will
+           be copied 19 times, for each of the other residue types at the specified position.
            */
-          int aai_old = ((constraint_table) && (restricted_siteAlphabets[si][0] != "UNK")) ? indexInSiteAlphabet(si,restricted_siteAlphabets[si][0]) : indexInSiteAlphabet(si,si_siteAlphabet[aai]);
-          int aaj_old = ((constraint_table) && (restricted_siteAlphabets[sj][0] != "UNK")) ? indexInSiteAlphabet(sj,restricted_siteAlphabets[sj][0]) : indexInSiteAlphabet(sj,sj_siteAlphabet[aaj]);
+          int aai_old = ((constraint_table) && (restricted_siteAlphabets[si].size() == 1)) ? indexInSiteAlphabet(si,restricted_siteAlphabets[si][0]) : indexInSiteAlphabet(si,si_siteAlphabet[aai]);
+          int aaj_old = ((constraint_table) && (restricted_siteAlphabets[sj].size() == 1)) ? indexInSiteAlphabet(sj,restricted_siteAlphabets[sj][0]) : indexInSiteAlphabet(sj,sj_siteAlphabet[aaj]);
           mstreal ener = pairE[si][k][aai_old][aaj_old];
           restricted_etab.setPairEnergy(si, sj, aai, aaj, ener);
         }
@@ -1269,7 +1270,6 @@ EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& rest
 EnergyTable EnergyTable::restrictSiteAlphabet(const Structure& S, bool constraint_table) {
   //Use the sequence of the provided structure to restrict the site alphabet at each position of the energy table
   //  Positions with a residue type are restricted to that type
-  //  Positions with an "UNK" type are not restricted, all types from the current energy table are carried over
   vector<Residue*> S_seq = S.getResidues();
   if (S_seq.size() != sites.size()) MstUtils::error("The protein size must be the same as the provided energy table");
   vector<vector<string>> all_siteNames; all_siteNames.resize(S_seq.size());

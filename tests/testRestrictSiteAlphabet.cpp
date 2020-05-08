@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
   op.addOption("etab", "the path to the energy table that will be modified",true);
   op.addOption("rsa", "a string with the site alphabet specified for each position. e.g., for an energy table with 3 positions, the input could be 'ALA,LEU ALA,GLY ALA,LEU,GLY'");
   op.addOption("p", "template PDB file. can be passed to the function to constrain allowed residues types at each position");
-  op.addOption("s", "selection of residues in the template to be set to UNK");
+  op.addOption("s", "selection of residues in the template to have an unconstrained residue type");
   op.addOption("c", "if provided, this energy table will be formatted to act as a constraint on the non-restricted version");
   op.addOption("o", "output base.", true);
   op.setOptions(argc, argv);
@@ -27,12 +27,14 @@ int main(int argc, char *argv[]) {
     Structure S(op.getString("p"));
     vector<Residue*> all_residues = S.getResidues();
     
+    set<Residue*> unconstrained_res_set;
     if (op.isGiven("s")) {
       selector sel(S);
-      vector<Residue*> unk_res = sel.selectRes(op.getString("s"));
-      cout << "selecting " << unk_res.size() << " residues to be set to 'UNK'" << endl;
-      for (Residue* R: unk_res) R->setName("UNK");
+      vector<Residue*> unconstrained_res = sel.selectRes(op.getString("s"));
+      unconstrained_res_set = set<Residue*>(unconstrained_res.begin(),unconstrained_res.end());
     }
+    
+    cout << unconstrained_res_set.size() << " residues selected to be unconstrained" << endl;
     
     vector<string> etab_sites = etab.getSites();
     
@@ -46,7 +48,8 @@ int main(int argc, char *argv[]) {
       for (Residue* R : all_residues) {
         if ((R->getChainID() == chain_ID) && (R->getNum() == res_num)) {
           cout << "found" << endl;
-          restrictedSiteAlphabets.push_back({R->getName()});
+          if (unconstrained_res_set.find(R) != unconstrained_res_set.end()) restrictedSiteAlphabets.push_back({});
+          else restrictedSiteAlphabets.push_back({R->getName()});
           break;
         }
       }
