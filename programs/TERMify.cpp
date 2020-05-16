@@ -69,14 +69,29 @@ vector<Structure*> getMatches(FASST& C, Structure& frag, const vector<int>& frag
 
   // limit iterations, because it is technically possible that a match meeting
   // the sequence constraints does not exist, at which point we will just give up
-  fasstSolutionSet matches = C.search();
-  for (auto it = matches.begin(); it != matches.end(); ++it) {
-    matchStructures.push_back(new Structure(C.getMatchStructure(*it, false, FASST::matchType::REGION)));
-    Structure& match = *(matchStructures.back());
-    MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
-    numberResidues(match, fragResIdx); // make residue numbers store indices into the original structure
+  while (true) {
+    fasstSolutionSet matches = C.search();
+    for (auto it = matches.begin(); (it != matches.end()) && (matchStructures.size() != need); ++it) {
+      matchStructures.push_back(new Structure(C.getMatchStructure(*it, false, FASST::matchType::REGION)));
+      Structure& match = *(matchStructures.back());
+      if (!RotamerLibrary::hasFullBackbone(match)) {
+        delete(matchStructures.back()); matchStructures.pop_back();
+        continue;
+      }
+      RotamerLibrary::standardizeBackboneNames(match);
+      MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
+      numberResidues(match, fragResIdx); // make residue numbers store indices into the original structure
+    }
+    if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
+    if (matchStructures.size() == need) break;
+
+    cout << "\t\tneed to search again..." << endl;
+    for (Structure* m : matchStructures) delete(m);
+    matchStructures.clear();
+    int newNeeded = (int) ceil(1.5 * C.options().getMaxNumMatches());
+    C.options().setMaxNumMatches(newNeeded);
+    C.options().setMinNumMatches(newNeeded);
   }
-  if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
 
   return matchStructures;
 }
