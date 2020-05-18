@@ -142,12 +142,14 @@ endif
 # variables to compile the boost.python shared object
 uname := $(shell uname -s)
 ifeq ($(uname),Linux)
-	PYLIB_PATH = $(shell python-config --exec-prefix)/lib64
+	PYLIB_PATH = $(shell python3-config --exec-prefix)/lib64
+	WHOLE_ARCHIVE = -Wl,-whole-archive -lmst -Wl,-no-whole-archive
 else
-	PYLIB_PATH = $(shell python-config --exec-prefix)/lib
+	PYLIB_PATH = $(shell python3-config --exec-prefix)/lib
+	WHOLE_ARCHIVE = 
 endif
-PYLIB = -L$(PYLIB_PATH) -L$(LIBD) $(shell python-config --libs) -lboost_python -Wl,-whole-archive -lmst -Wl,-no-whole-archive
-PYFLAGS = $(shell python-config --includes) -O2 -fPIC -std=c++11 $(INC) $(LIB)
+PYLIB = -L$(PYLIB_PATH) -L$(LIBD) $(shell python3-config --libs | grep -v CoreFoundation) -lboost_python37 $(WHOLE_ARCHIVE)
+PYFLAGS = $(shell python3-config --includes) -O2 -fPIC -std=c++11 $(INC) $(LIB)
 
 # phony targets (targets that aren't files should be specified as phony so that they aren't remade each time `make` is run)
 .PHONY: all clean libs python setup
