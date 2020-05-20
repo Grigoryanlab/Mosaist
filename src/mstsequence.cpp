@@ -383,6 +383,13 @@ Sequence::Sequence(Chain& C) {
   name = C.getID();
 }
 
+Sequence::Sequence(Structure& S) {
+  vector<Residue*> residues = S.getResidues();
+  seq.resize(residues.size());
+  for (int i = 0; i < residues.size(); i++) seq[i] = SeqTools::aaToIdx(residues[i]->getName());
+  name = S.getName();
+}
+
 Sequence::Sequence(const string& _seq, const string& _name, const string& delim) {
   vector<string> seqChar = MstUtils::split(_seq, delim);
   seq.resize(seqChar.size());

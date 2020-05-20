@@ -34,16 +34,18 @@ bool contactList::areInContact(Residue* A, Residue* B) {
   return true;
 }
 
-ConFind::ConFind(string rotLibFile, const Structure& S) {
+ConFind::ConFind(string rotLibFile, const Structure& S, bool _strict) {
   setParams();
   rotLib = new RotamerLibrary(rotLibFile);
   isRotLibLocal = true;
+  strict = _strict;
   init(S);
 }
-ConFind::ConFind(RotamerLibrary* _rotLib, const Structure& S) {
+ConFind::ConFind(RotamerLibrary* _rotLib, const Structure& S, bool _strict) {
   setParams();
   rotLib = _rotLib;
   isRotLibLocal = false;
+  strict = _strict;
   init(S);
 }
 
@@ -90,6 +92,7 @@ void ConFind::init(const Structure& S) {
 }
 
 void ConFind::cache(Residue* res) {
+  string res_name = res->getName();
   if (rotamerHeavySC.find(res) != rotamerHeavySC.end()) return;
   AtomPointerVector pointCloud;      // side-chain atoms of surviving rotames
   vector<rotamerID*> pointCloudTags; // corresponding tags (i.e.,  rotamer identity)
@@ -110,6 +113,7 @@ void ConFind::cache(Residue* res) {
     string aa = aaNames[j];
     if (aaProp.find(aa) == aaProp.end()) MstUtils::error("no propensity defined for amino acid " + aa);
     double aaP = aaProp[aa];
+    if (strict && res_name != aa && res_name != "UNK") continue;
     int nr = rotLib->numberOfRotamers(aa, phi, psi);
     Residue rot;
     for (int ri = 0; ri < nr; ri++) {

@@ -65,25 +65,7 @@ vector<mstreal> TERMANAL::scoreStructure(const Structure& S, const vector<Residu
   ConFind C(&RL, S);
   vector<Residue*> centrals;
   vector<vector<int>> resOverlaps;
-  // vector<Structure> terms = collectTERMs(C, subregion, centrals, resOverlaps);
   vector<Structure> terms = collectTERMs(C, S.getResidues(), centrals, resOverlaps);
-
-  // // Calculate the score parts for each TERM
-  // // vector<pair<mstreal, mstreal>> structScoreParts(numTerms);
-  // for (int i = 0; i < terms.size(); i++) {
-  //   if (verbose) cout << "Scoring " << *(subregion[i]) << " ..." << endl;
-  //   structScoreParts[i] = structureScoreParts(terms[i], {centrals[i]}, verbose);
-  // }
-
-  // // Calculate additional score parts for TERMs upon which the smoothed scores
-  // // of the above TERMs depend
-  // vector<int> subregionIndices(subregion.size());
-  // for (int i = 0; i < subregion.size(); i++) subregionIndices[i] = subregion[i]->getResidueIndex();
-  // vector<int> involvedIndices;
-  // for (int i = 0; i < resOverlaps.size(); i++) involvedIndices = MstUtils::setunion(involvedIndices, resOverlaps[i]);
-  // vector<int> additionalIndices = MstUtils::setdiff(involvedIndices, subregionIndices);
-  // vector<Residue*> addregion = MstUtils::subVector(S.getResidues(), additionalIndices);
-  // vector<Structure> addterms = collectTERMs(C, addregion, addcentrals, addresOverlaps);
 
   // Smooth and combine each pair of score parts by incorporating the scores from each TERM that a residue belongs to
   vector<mstreal> structScores(subregion.size());
