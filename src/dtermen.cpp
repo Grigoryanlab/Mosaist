@@ -19,6 +19,7 @@ void dTERMen::init() {
   selfResidualPC = selfCorrPC = 1.0;
   selfResidualMinN = 1000;
   selfResidualMaxN = 5000;
+  selfResidualMaxCliqueSize = -1;
   selfCorrMinN = 200;
   selfCorrMaxN = 5000;
   pairMinN = 1000;
@@ -57,6 +58,8 @@ void dTERMen::readConfigFile(const string& configFile) {
       rotLibFile = ents[1];
     } else if (ents[0].compare("efun") == 0) {
       setEnergyFunction(ents[1]);
+    } else if (ents[0].compare("selfResidualMaxCliqueSize") == 0) {
+      selfResidualMaxCliqueSize = MstUtils::toInt(ents[1]);
     } else {
       MstUtils::error("unknown parameter name '" + ents[0] + "'", "dTERMen::dTERMen(const string&)");
     }
@@ -928,70 +931,27 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
 
   // -- self correction
   if (verbose) cout << "\tdTERMen::selfEnergies -> self correction..." << endl;
-  class clique {
-    // represents a local interaction "clique" for self-correction calculations.
-    // NOTE: the word "clique" is used loosely here, "connected component" would
-    // probably be more accurate, because we don't actually look at contacts
-    // between the residues that contact the central residue. BUT, the final
-    // set of motifs we hope to end up with can still be thought of as cliques,
-    // because each motif occurs together frequently enough (so the residues
-    // involved in the motif "go together" frequently -- i.e., form a "clique").
-    public:
-      vector<Residue*> residues;
-      int centResIdx;
-      fasstSolutionSet matches;
-      string toString() {
-        stringstream ss;
-        ss << "clique with " << residues.size() << " residues, centered on " << centResIdx << ", " << matches.size() << " matches:";
-        for (int i = 0; i < residues.size(); i++) ss << " " << *(residues[i]);
-        return ss.str();
-      }
-  };
 
   // -- get contacts
   vector<pair<Residue*, Residue*>> conts = getContactsWith({R}, C, 0, verbose);
   vector<Residue*> contResidues(conts.size(), NULL);
   for (int i = 0; i < conts.size(); i++) contResidues[i] = conts[i].second;
 
-  // if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
-  // contactList cL = C.getContacts(R, cdCut);
-  // cL.sortByDegree();
-  // vector<Residue*> contResidues = cL.destResidues();
-  // if (verbose) {
-  //   cout << "\t\tdTERMen::selfEnergies -> found " << contResidues.size() << " contact-degree contacts:";
-  //   for (int ii = 0; ii < contResidues.size(); ii++) cout << " " << *(contResidues[ii]);
-  //   cout << endl;
-  // }
-  // if (intCut <= 1.0) {
-  //   vector<Residue*> bbscConts = (C.getInterfering({R}, intCut)).destResidues();
-  //   if (verbose) {
-  //     cout << "\t\tadding interfering residues:";
-  //     for (int ii = 0; ii < bbscConts.size(); ii++) cout << " " << *(bbscConts[ii]);
-  //     cout << endl;
-  //   }
-  //   contResidues = MstUtils::setunion(contResidues, bbscConts);
-  //   if (verbose) cout << "\t\tdTERMen::selfEnergies -> in total " << contResidues.size() << " contacts..." << endl;
-  // }
-
   // consider each contacting residue with the central one and see if there are
   // enough matches. If so, create a clique to be grown later. If not, still
   // create a clique (with number of matches), which will not be grown.
-  vector<clique> finalCliques;
-  map<Residue*, clique> cliquesToGrow;
+  vector<termData> finalCliques;
+  map<Residue*, termData> cliquesToGrow;
   for (int i = 0; i < contResidues.size(); i++) {
     if (verbose) cout << "\t\tdTERMen::selfEnergies -> seed clique with contact " << *(contResidues[i]) << "..." << endl;
-    clique c;
-    c.residues = {R, contResidues[i]};
-    vector<int> fragResIdx;
-    Structure term;
-    c.centResIdx = TERMUtils::selectTERM(c.residues, term, pmSelf, &fragResIdx)[0];
+    termData c({R, contResidues[i]}, pmSelf);
     F.setOptions(foptsBase);
-    F.setQuery(term);
-    F.setRMSDCutoff(rmsdCutSelfCor(fragResIdx, S));
+    F.setQuery(c.getTERM());
+    F.setRMSDCutoff(rmsdCutSelfCor(c.getResidueIndices(), S));
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
-    c.matches = F.search();
-    if (c.matches[selfCorrMinN - 1].getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
+    c.setMatches(F.search());
+    if (c.getMatch(selfCorrMinN - 1).getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
     else { cliquesToGrow[contResidues[i]] = c; }
   }
 
@@ -1000,39 +960,36 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     // sort remaining contacting residues by decreasing number of matches of the
     // clique comprising the residue and the central residue
     vector<Residue*> remConts = MstUtils::keys(cliquesToGrow);
-    sort(remConts.begin(), remConts.end(), [&cliquesToGrow](Residue* i, Residue* j) { return cliquesToGrow[i].matches.size() > cliquesToGrow[j].matches.size(); });
+    sort(remConts.begin(), remConts.end(), [&cliquesToGrow](Residue* i, Residue* j) { return cliquesToGrow[i].numMatches() > cliquesToGrow[j].numMatches(); });
 
     // pick the one with highest number of contacts, and try to grow the clique
-    clique parentClique = cliquesToGrow[remConts[0]];
+    termData parentClique = cliquesToGrow[remConts[0]];
     remConts.erase(remConts.begin());
-    clique grownClique;
+    termData grownClique = parentClique;
     if (verbose) cout << "\t\tdTERMen::selfEnergies -> will try to grow [" << parentClique.toString() << "]..." << endl;
-    if (remConts.empty()) grownClique = parentClique;
     while (!remConts.empty()) {
+      if ((selfResidualMaxCliqueSize >= 0) && (parentClique.numCentralResidues() >= selfResidualMaxCliqueSize)) break;
       // try to add every remaining contact
       for (int j = 0; j < remConts.size(); j++) {
         if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> trying to add " << *(remConts[j]) << "..." << endl;
-        clique newClique;
-        newClique.residues = parentClique.residues;
-        newClique.residues.push_back(remConts[j]);
-        Structure term; vector<int> fragResIdx;
-        newClique.centResIdx = TERMUtils::selectTERM(newClique.residues, term, pmSelf, &fragResIdx)[0];
+        termData newClique = parentClique;
+        newClique.addCentralResidue(remConts[j], pmSelf);
         F.setOptions(foptsBase);
-        F.setQuery(term);
-        F.setRMSDCutoff(rmsdCutSelfCor(fragResIdx, S));
+        F.setQuery(newClique.getTERM());
+        F.setRMSDCutoff(rmsdCutSelfCor(newClique.getResidueIndices(), S));
         F.setMaxNumMatches(selfCorrMaxN);
-        newClique.matches = F.search();
-        if ((j == 0) || (newClique.matches.size() > grownClique.matches.size())) {
+        newClique.setMatches(F.search());
+        if ((j == 0) || (newClique.numMatches() > grownClique.numMatches())) {
           if (verbose) cout << "\t\t\t\tdTERMen::selfEnergies -> new best" << endl;
           grownClique = newClique;
         }
       }
       // EITHER a sufficient number of matches OR not too many fewer than for the
       // parent clique is the logic we had implemented in original dTERMen
-      if ((grownClique.matches.size() >= selfCorrMinN) || (grownClique.matches.size() > 0.8*parentClique.matches.size())) {
-        remConts = MstUtils::setdiff(remConts, {grownClique.residues.back()});
+      if ((grownClique.numMatches() >= selfCorrMinN) || (grownClique.numMatches() > 0.8*parentClique.numMatches())) {
+        remConts = MstUtils::setdiff(remConts, {grownClique.getCentralResidues().back()});
         parentClique = grownClique;
-        if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> chose to add " << *(grownClique.residues.back()) << "..." << endl;
+        if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> chose to add " << *(grownClique.getCentralResidues().back()) << "..." << endl;
       } else {
         if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> nothing more worked, sticking with parent clique..." << endl;
         grownClique = parentClique;
@@ -1057,7 +1014,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   if (verbose) cout << "\tdTERMen::selfEnergies -> final cliques:" << endl;
   for (int i = 0; i < finalCliques.size(); i++) {
     if (verbose) cout << "\t\t" << finalCliques[i].toString() << endl;
-    CartesianPoint cliqueDelta = singleBodyStatEnergy(finalCliques[i].matches, finalCliques[i].centResIdx, selfCorrPC);
+    CartesianPoint cliqueDelta = singleBodyStatEnergy(finalCliques[i].getMatches(), finalCliques[i].getCentralResidueIndices()[0], selfCorrPC);
     if (verbose) printSelfComponent(cliqueDelta, "\t\t\t");
     selfE += cliqueDelta;
   }

@@ -28,6 +28,26 @@ class EnergyTable;
  *         present in too many of the matches, because we actually try to keep as large of a TERM as possible.
  */
 
+/* Plan for enabling data dumping for ML-based dTERMen:
+   1. DONE: Generalize the clique class (rename to TERM or termData or something), and have it store vector<int> centResIdices.
+ * 2. Add a dataCollector variable into dTERMen, which optionally will gather all
+      data as it goes through (essentially, it will be a vector<clique>).
+      a. if a clique is being added and the same set of residues was already in
+         a previous clique, then compare by max RMSD.
+      b. write a function that dumps all relevant data for a clique.
+ * 3. Change self energy and pair energy to work with clique: probably change the underlying calculators to take this
+      datatype instead of matches and central index separately.
+ * 4. If a flag is given, gather all clique data as they are found and dump at the end.
+
+   5. DONE: Allow the option to limit self-residue clique size to 2 or higher (for speed):
+     a. DONE: line 1010 goes from "if (remConts.empty()) grownClique = parentClique;" to "grownClique = parentClique;"
+     b. DONE: expose this option in program design
+
+   Interestingly, this whole ML idea is really the same as the PLoS One paper, but done via ML (and on a different
+   objective). This very nicely de-risks it. Create a DM channel with Amy, Alex, and Sebastian and communicate that
+   as I was editing code for this dumping capability, I saw notes to myself that captured this idea (recycled idea).
+ */
+
 class dTERMen {
   public:
     dTERMen();
@@ -35,6 +55,55 @@ class dTERMen {
     void init();
     void readConfigFile(const string& configFile);
     void setEnergyFunction(const string& ver); // sets the energy function version and alters any necessary parameters
+
+    /* Stores data about a single TERM searched in the process of the dTERMen
+     * energy-table calculation. */
+    class termData {
+      public:
+        termData() {}
+        termData(vector<Residue*> _centResidues, int pm) { define(_centResidues, pm); }
+        void define(vector<Residue*> _centResidues, int pm) {
+          centResidues = _centResidues;
+          term.reset();
+          fragResIdx.clear();
+          centResIndices = TERMUtils::selectTERM(centResidues, term, pm, &fragResIdx);
+        }
+        void addCentralResidue(Residue* res, int pm) {
+          centResidues.push_back(res);
+          define(centResidues, pm);
+        }
+
+        void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
+        fasstSolutionSet& getMatches() { return matches; }
+        fasstSolution& getMatch(int i) { return matches[i]; }
+        int numMatches() const { return matches.size(); }
+        const Structure& getTERM() const { return term; }
+        const vector<int>& getResidueIndices() const { return fragResIdx; }
+        const vector<Residue*>& getCentralResidues() const { return centResidues; }
+        const vector<int>& getCentralResidueIndices() const { return centResIndices; }
+        int numCentralResidues() const { return centResidues.size(); }
+
+        friend ostream & operator<<(ostream &_os, const termData& _td) {
+          _os << "TERM clique with " << _td.centResidues.size() << " central residues, created for inferring parameters at position(s) [" << MstUtils::vecToString(_td.centResIndices) << "], " << _td.matches.size() << " matches:";
+          for (int i = 0; i < _td.centResidues.size(); i++) _os << " " << *(_td.centResidues[i]);
+          return _os;
+        }
+        string toString() { stringstream ss; ss << *this; return ss.str(); }
+
+      private:
+        /* the central residues of each of the TERM's segments and their corres-
+         * ponding indices in the template. */
+        vector<Residue*> centResidues;
+        vector<int> centResIndices;
+
+        /* term is the TERM itself, whose residue correspond to template posi-
+         * tions at indices fragResIdx. */
+        Structure term;
+        vector<int> fragResIdx;
+
+        /* matches resulting from querying the TERM. */
+        fasstSolutionSet matches;
+    };
 
     /* Builds an energy table for design. Parameters:
      * - a list of mutable positions as vector<Residue*>. All residues must belong
@@ -228,7 +297,7 @@ class dTERMen {
     twoDimPotType ppPot;
     mstreal kT, cdCut, intCut, selfResidualPC, selfCorrPC;
     int pmSelf, pmPair;
-    int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN, pairMinN, pairMaxN;
+    int selfResidualMinN, selfResidualMaxN, selfResidualMaxCliqueSize, selfCorrMinN, selfCorrMaxN, pairMinN, pairMaxN;
 
     /* We may want to deal with different "universal" alphabets (separate from
      * the design alphabet). We may want to interpret SEC (selenocysteine), for
