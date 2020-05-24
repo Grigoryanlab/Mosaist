@@ -19,7 +19,7 @@ void dTERMen::init() {
   selfResidualPC = selfCorrPC = 1.0;
   selfResidualMinN = 1000;
   selfResidualMaxN = 5000;
-  selfResidualMaxCliqueSize = -1;
+  selfCorrMaxCliqueSize = -1;
   selfCorrMinN = 200;
   selfCorrMaxN = 5000;
   pairMinN = 1000;
@@ -58,8 +58,8 @@ void dTERMen::readConfigFile(const string& configFile) {
       rotLibFile = ents[1];
     } else if (ents[0].compare("efun") == 0) {
       setEnergyFunction(ents[1]);
-    } else if (ents[0].compare("selfResidualMaxCliqueSize") == 0) {
-      selfResidualMaxCliqueSize = MstUtils::toInt(ents[1]);
+    } else if (ents[0].compare("selfCorrMaxCliqueSize") == 0) {
+      selfCorrMaxCliqueSize = MstUtils::toInt(ents[1]);
     } else {
       MstUtils::error("unknown parameter name '" + ents[0] + "'", "dTERMen::dTERMen(const string&)");
     }
@@ -968,7 +968,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     termData grownClique = parentClique;
     if (verbose) cout << "\t\tdTERMen::selfEnergies -> will try to grow [" << parentClique.toString() << "]..." << endl;
     while (!remConts.empty()) {
-      if ((selfResidualMaxCliqueSize >= 0) && (parentClique.numCentralResidues() >= selfResidualMaxCliqueSize)) break;
+      if ((selfCorrMaxCliqueSize >= 0) && (parentClique.numCentralResidues() >= selfCorrMaxCliqueSize)) break;
       // try to add every remaining contact
       for (int j = 0; j < remConts.size(); j++) {
         if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> trying to add " << *(remConts[j]) << "..." << endl;

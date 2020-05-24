@@ -297,7 +297,7 @@ class dTERMen {
     twoDimPotType ppPot;
     mstreal kT, cdCut, intCut, selfResidualPC, selfCorrPC;
     int pmSelf, pmPair;
-    int selfResidualMinN, selfResidualMaxN, selfResidualMaxCliqueSize, selfCorrMinN, selfCorrMaxN, pairMinN, pairMaxN;
+    int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN, selfCorrMaxCliqueSize, pairMinN, pairMaxN;
 
     /* We may want to deal with different "universal" alphabets (separate from
      * the design alphabet). We may want to interpret SEC (selenocysteine), for
