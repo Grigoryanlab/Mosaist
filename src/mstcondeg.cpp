@@ -240,7 +240,10 @@ mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool c
       if (updateB) collProb[resB][rotB] += aaPropA * rotProbA;
     }
   }
-  cd /= weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB);
+  
+  // in case there are no available rotamer pairs, avoid division and just set to 0.0
+  if (weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB) == 0.0) cd = 0.0;
+  else cd /= weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB);
   degrees[resA][resB] = cd;
   degrees[resB][resA] = cd;
 

@@ -68,7 +68,7 @@ ifdef INCLUDE_ARMA
 endif
 
 # targets and MST libraries
-TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testParsing testRotlib testTERMUtils testTransforms testdTERMen testTermanal
+TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testParsing testRestrictSiteAlphabet testRotlib testTERMUtils testTransforms testdTERMen testTermanal
 PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments design search scoreStructure clusterStructs $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes msttermanal
@@ -85,6 +85,7 @@ testFASST_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes mstsy
 testFuser_DEPS			:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testGrads_DEPS			:= msttypes
 testParsing_DEPS		:= msttypes
+testRestrictSiteAlphabet_DEPS   := msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 testRotlib_DEPS			:= mstrotlib msttransforms msttypes
 testTERMUtils_DEPS		:= mstmagic msttypes mstcondeg mstrotlib msttransforms
 testTransforms_DEPS		:= mstlinalg msttransforms msttypes

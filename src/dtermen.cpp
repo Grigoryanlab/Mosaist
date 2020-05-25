@@ -1216,6 +1216,83 @@ EnergyTable::EnergyTable(const string& tabFile) {
   readFromFile(tabFile);
 }
 
+EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& restricted_siteAlphabets, bool constraint_table) {
+  EnergyTable restricted_etab;
+  
+  if (restricted_siteAlphabets.size() != sites.size()) MstUtils::error("The length of restricted_siteAlphabets and the number of positions in the energy table do not match ("+MstUtils::toString(restricted_siteAlphabets.size())+") and ("+MstUtils::toString(sites.size())+")");
+  
+  /* copy site addresses and set alphabets */
+  for (int s = 0; s < sites.size(); s++) {
+    if ((constraint_table) && (restricted_siteAlphabets[s].size() > 1)) MstUtils::error("In constraint_table mode only a single residue, or none at all, may be specified per position");
+    restricted_etab.addSite(sites[s]);
+    if (restricted_siteAlphabets[s].empty() || ((constraint_table && restricted_siteAlphabets[s].size() == 1))) {
+      // If no residue is specified, copy all residue types
+      vector<string> old_siteAlphabet = getSiteAlphabet(s);
+      restricted_etab.setSiteAlphabet(s,old_siteAlphabet);
+    } else {
+      restricted_etab.setSiteAlphabet(s,restricted_siteAlphabets[s]);
+    }
+  }
+  /* copy self energies */
+  for (int s = 0; s < sites.size(); s++) {
+    vector<string> siteAlphabet = restricted_etab.getSiteAlphabet(s);
+    for (int site_aa = 0; site_aa < siteAlphabet.size(); site_aa++) {
+      string aa = siteAlphabet[site_aa];
+      if (!inSiteAlphabet(s,aa)) MstUtils::error("unexpected amino-acid name in restricted alphabet: " + aa);
+      /*
+       In the case that this is a constraint table AND this position is specified, the energy of the
+       sequence provided in restricted_siteAlphabets[s][0] should be copied to all of the other
+       residue types.
+       */
+      int old_aa_idx = ((constraint_table) && (restricted_siteAlphabets[s].size() == 1)) ? indexInSiteAlphabet(s,restricted_siteAlphabets[s][0]) : indexInSiteAlphabet(s,aa);
+      int new_aa_idx = restricted_etab.indexInSiteAlphabet(s,aa);
+      mstreal self_e = selfEnergy(s,old_aa_idx);
+      restricted_etab.setSelfEnergy(s, new_aa_idx, self_e);
+    }
+  }
+  /* copy pair energies */
+  for (int si = 0; si < sites.size(); si++) {
+    for (auto it = pairMaps[si].begin(); it != pairMaps[si].end(); ++it) {
+      int sj = it->first;
+      if (sj < si) continue;
+      int k = it->second;
+      vector<string> si_siteAlphabet = restricted_etab.getSiteAlphabet(si);
+      vector<string> sj_siteAlphabet = restricted_etab.getSiteAlphabet(sj);
+      for (int aai = 0; aai < si_siteAlphabet.size(); aai++) {
+        for (int aaj = 0; aaj < sj_siteAlphabet.size(); aaj++) {
+          /*
+           If this is a constraint table:
+           In the case that both positions are specified, the pair energy of the residue types
+           specified by restricted_siteAlphabets[s][0] is copied to all pairs of residue types.
+           
+           In the case that one of the positions is specified and the other is not, there will be 20
+           unique pair energies (1 specified residue x 20 residues). Each of these pair energies will
+           be copied 19 times, for each of the other residue types at the specified position.
+           */
+          int aai_old = ((constraint_table) && (restricted_siteAlphabets[si].size() == 1)) ? indexInSiteAlphabet(si,restricted_siteAlphabets[si][0]) : indexInSiteAlphabet(si,si_siteAlphabet[aai]);
+          int aaj_old = ((constraint_table) && (restricted_siteAlphabets[sj].size() == 1)) ? indexInSiteAlphabet(sj,restricted_siteAlphabets[sj][0]) : indexInSiteAlphabet(sj,sj_siteAlphabet[aaj]);
+          mstreal ener = pairE[si][k][aai_old][aaj_old];
+          restricted_etab.setPairEnergy(si, sj, aai, aaj, ener);
+        }
+      }
+    }
+  }
+  return restricted_etab;
+};
+
+EnergyTable EnergyTable::restrictSiteAlphabet(const Structure& S, bool constraint_table) {
+  //Use the sequence of the provided structure to restrict the site alphabet at each position of the energy table
+  //  Positions with a residue type are restricted to that type
+  vector<Residue*> S_seq = S.getResidues();
+  if (S_seq.size() != sites.size()) MstUtils::error("The protein size must be the same as the provided energy table");
+  vector<vector<string>> all_siteNames; all_siteNames.resize(S_seq.size());
+  for (int R_idx = 0; R_idx < S_seq.size(); R_idx++) {
+    string R_name = S_seq[R_idx]->getName();
+    all_siteNames[R_idx].push_back(R_name);
+  }
+  return restrictSiteAlphabet(all_siteNames, constraint_table);
+};
+
 void EnergyTable::addSite(const string& siteName) {
   if (siteIndices.find(siteName) != siteIndices.end()) MstUtils::error("site '" + siteName + "' is already present!", "EnergyTable::addSite(const string&)");
   siteIndices[siteName] = sites.size();
@@ -1232,11 +1309,17 @@ void EnergyTable::addSites(const vector<string>& siteNames) {
 }
 
 void EnergyTable::setSiteAlphabet(int siteIdx, const vector<string>& alpha) {
-  if (!empty()) MstUtils::error("site alphabets must be set before populating energies", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
+//  if (!empty()) MstUtils::error("site alphabets must be set before populating energies", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
   if (aaAlpha.size() < siteIdx + 1) MstUtils::error("site index out of range", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
   aaAlpha[siteIdx] = alpha;
   for (int i = 0; i < alpha.size(); i++) aaIndices[siteIdx][alpha[i]] = i;
   selfE[siteIdx].clear(); selfE[siteIdx].resize(alpha.size(), 0.0);
+  for (auto it = pairMaps[siteIdx].begin(); it != pairMaps[siteIdx].end(); ++it) {
+    int sj = it->first;
+    int k = it->second;
+    pairE[siteIdx][k].clear();
+    pairE[siteIdx][k].resize(aaIndices[siteIdx].size(), vector<mstreal>(aaIndices[sj].size()));
+  }
 }
 
 int EnergyTable::addToSiteAlphabet(int siteIdx, const string& aa) {
@@ -1291,16 +1374,18 @@ void EnergyTable::writeToFile(const string& tabFile) {
   fstream of;
   MstUtils::openFile(of, tabFile, ios::out);
   for (int si = 0; si < sites.size(); si++) {
+    //if there is only one possible amino acid, this position cannot be optimized and should not be written
+    if (aaAlpha[si].size() == 1) continue;
     for (int aai = 0; aai < aaAlpha[si].size(); aai++) {
       of << sites[si] << " " << aaAlpha[si][aai] << " " << selfE[si][aai] << endl;
     }
   }
-
   for (int si = 0; si < sites.size(); si++) {
     for (auto it = pairMaps[si].begin(); it != pairMaps[si].end(); ++it) {
       int sj = it->first;
       if (sj < si) continue;
       int k = it->second;
+      if ((aaAlpha[si].size() == 1) && (aaAlpha[sj].size() == 1)) continue; //don't write if there is one possible pair combination
       for (int aai = 0; aai < aaAlpha[si].size(); aai++) {
         for (int aaj = 0; aaj < aaAlpha[sj].size(); aaj++) {
           mstreal ener = pairE[si][k][aai][aaj];
