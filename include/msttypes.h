@@ -590,7 +590,7 @@ ostream & operator<<(ostream &_os, const AtomPointerVector& _atoms); // this jus
 
 class expressionTree {
   public:
-    enum selProperty { RESID = 1, RESNAME, ICODE, CHAIN, SEGID, NAME };      // selectable properties
+    enum selProperty { RESID = 1, RESNAME, ICODE, CHAIN, SEGID, NAME, ALL };      // selectable properties
     enum logicalOp { AND = 1, OR, NOT, BYRES, BYCHAIN, IS, AROUND, RANGE };  // logical operators
 
     expressionTree(logicalOp _op = logicalOp::IS) { op = _op; }
@@ -602,6 +602,10 @@ class expressionTree {
     void setProperty(selProperty _type) { type = _type; }
     void setNum(int _num) { num = _num; }
     void setNums(const vector<int> _nums) { nums = _nums; }
+    void setNumSet(const set<int> _numset) { numset = _numset; }
+    void addToNumSet(const vector<int> _newnums) {
+      for (int newnum : _newnums) numset.insert(newnum);
+    }
     void setVal(mstreal _val) { val = _val; }
     void setString(string _str) { str = _str; }
     void addChild(expressionTree* subtree) { children.push_back(subtree); }
@@ -609,6 +613,8 @@ class expressionTree {
     selProperty getProperty() { return type; }
     int getNum() { return num; }
     bool hasNums() { return !nums.empty(); }
+    bool hasNumSet() { return !numset.empty(); }
+    bool inNumSet(int i) const { return (numset.find(i) != numset.end()); }
     vector<int> getNums() { return nums; }
     int getNumByIdx(int i) { return nums[i]; }
     mstreal getVal() { return val; }
@@ -619,7 +625,7 @@ class expressionTree {
   private:
     logicalOp op;
     selProperty type;
-    int num; vector<int> nums;
+    int num; vector<int> nums; set<int> numset;
     mstreal val;
     string str;
     vector<expressionTree*> children;

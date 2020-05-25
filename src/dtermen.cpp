@@ -24,6 +24,7 @@ void dTERMen::init() {
   selfCorrMaxN = 5000;
   pairMinN = 1000;
   pairMaxN = 5000;
+  recordData = false;
   setAminoAcidMap();
   setEnergyFunction("35");
 
@@ -207,6 +208,18 @@ EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const ve
       specContextSet = MstUtils::contents(MstUtils::setintersect(MstUtils::keys(fixedSet), MstUtils::keys(specContextSet)));
     }
     cout << "---> " << specContextSet.size() << " residues are considered as the fixed context" << endl;
+  }
+
+  // record target and design problem info
+  targetOrigSeq = Sequence(*S);
+  variableResidues.resize(variable.size());
+  for (int i = 0; i < variable.size(); i++) variableResidues[i] = variable[i]->getResidueIndex();
+  vector<Residue*> allResidues = S->getResidues();
+  for (Residue* R : allResidues) {
+    targetResidueProperties["phi"].push_back(R->getPhi());
+    targetResidueProperties["psi"].push_back(R->getPsi());
+    targetResidueProperties["omega"].push_back(R->getOmega());
+    targetResidueProperties["env"].push_back(C.getFreedom(R));
   }
 
   // compute self energies
@@ -889,6 +902,49 @@ void dTERMen::readBackgroundPotentials(const string& file) {
 
 }
 
+void dTERMen::writeRecordedData(const string& file) {
+  // find any duplicate TERMs
+  map<set<int>, int> byResidueSet;
+  for (int i = 0; i < data.size(); i++) {
+    set<int> resIdxSet = MstUtils::contents(data[i].getResidueIndices());
+    if (byResidueSet.find(resIdxSet) == byResidueSet.end()) {
+      byResidueSet[resIdxSet] = i;
+    } else {
+      // if a TERM with the same residues was seen before, keep the one with more matches
+      int pi = byResidueSet[resIdxSet];
+      if (data[i].numMatches() > data[pi].numMatches()) byResidueSet[resIdxSet] = i;
+    }
+  }
+  vector<int> unique = MstUtils::values(byResidueSet);
+  sort(unique.begin(), unique.end());
+
+  // write data about the target
+  fstream ofs; MstUtils::openFile(ofs, file, ios::out);
+  ofs << targetOrigSeq.toString() << endl;
+  ofs << MstUtils::vecToString(variableResidues) << endl;
+  for (int i = 0; i < targetOrigSeq.length(); i++) {
+    ofs << targetResidueProperties["phi"][i] << " ";
+    ofs << targetResidueProperties["psi"][i] << " ";
+    ofs << targetResidueProperties["omega"][i] << " ";
+    ofs << targetResidueProperties["env"][i] << endl;
+  }
+
+  // write data about unique TERMs
+  for (int i : unique) {
+    ofs << "* TERM " << i << endl;
+    ofs << MstUtils::vecToString(data[i].getResidueIndices()) << endl;
+    for (int j = 0; j < data[i].numMatches(); j++) {
+      const fasstSolution& m = data[i].getMatch(j);
+      ofs << F.getMatchSequence(m).toString() << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "phi")) << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "psi")) << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "omega")) << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "env")) << endl;
+    }
+  }
+  ofs.close();
+}
+
 mstreal dTERMen::selfEnergy(Residue* R, const string& aa) {
   return (selfEnergies(R))[dTERMen::aaToIndex(aa.empty() ? R->getName() : aa)];
 }
@@ -916,16 +972,15 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
 
   // -- self residual
   if (verbose) cout << "\tdTERMen::selfEnergies -> self residual..." << endl;
-  Structure selfTERM;
-  vector<int> fragResIdx;
-  int cInd = TERMUtils::selectTERM({R}, selfTERM, pmSelf, &fragResIdx)[0];
+  termData sT({R}, pmSelf);
   F.setOptions(foptsBase);
-  F.setQuery(selfTERM);
-  F.setRMSDCutoff(rmsdCutSelfRes(fragResIdx, S));
+  F.setQuery(sT.getTERM());
+  F.setRMSDCutoff(rmsdCutSelfRes(sT.getResidueIndices(), S));
   F.setMinNumMatches(selfResidualMinN);
   F.setMaxNumMatches(selfResidualMaxN);
-  fasstSolutionSet matches = F.search();
-  CartesianPoint selfResidual = singleBodyStatEnergy(matches, cInd, selfResidualPC);
+  sT.setMatches(F.search());
+  CartesianPoint selfResidual = singleBodyStatEnergy(sT.getMatches(), sT.getCentralResidueIndices()[0], selfResidualPC);
+  if (recordData) data.push_back(sT);
   if (verbose) printSelfComponent(selfResidual, "\t");
   selfE += selfResidual;
 
@@ -1014,6 +1069,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   if (verbose) cout << "\tdTERMen::selfEnergies -> final cliques:" << endl;
   for (int i = 0; i < finalCliques.size(); i++) {
     if (verbose) cout << "\t\t" << finalCliques[i].toString() << endl;
+    if (recordData) data.push_back(finalCliques[i]);
     CartesianPoint cliqueDelta = singleBodyStatEnergy(finalCliques[i].getMatches(), finalCliques[i].getCentralResidueIndices()[0], selfCorrPC);
     if (verbose) printSelfComponent(cliqueDelta, "\t\t\t");
     selfE += cliqueDelta;
@@ -1035,16 +1091,14 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
 
   // isolate TERM and get matches
   int naa = globalAlphabetSize();
-  Structure pairTERM;
-  vector<int> fragResIdx;
-  vector<int> cInd = TERMUtils::selectTERM({Ri, Rj}, pairTERM, pmPair, &fragResIdx);
-  int cIndI = cInd[0]; int cIndJ = cInd[1];
+  termData pT({Ri, Rj}, pmPair);
   F.setOptions(foptsBase);
-  F.setQuery(pairTERM);
-  F.setRMSDCutoff(rmsdCutPair(fragResIdx, S));
+  F.setQuery(pT.getTERM());
+  F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
   F.setMinNumMatches(pairMinN);
   F.setMaxNumMatches(pairMaxN);
-  fasstSolutionSet matches = F.search();
+  pT.setMatches(F.search());
+  if (recordData) data.push_back(pT);
 
   // for each of the two positions, compute expectation of every amino acid in
   // the context of every match, based on background "trivial" energies and
@@ -1052,15 +1106,16 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
   // the number observed
   vector<CartesianPoint> Pi, Pj;
   vector<vector<mstreal> > pairE(naa, vector<mstreal>(naa, 0.0));
-  CartesianPoint NoI = dTERMen::singleBodyObservations(matches, cIndI);
-  CartesianPoint NeI = dTERMen::singleBodyExpectations(matches, cIndI, &Pi);
-  CartesianPoint NoJ = dTERMen::singleBodyObservations(matches, cIndJ);
-  CartesianPoint NeJ = dTERMen::singleBodyExpectations(matches, cIndJ, &Pj);
-  CartesianPoint NoIJ = dTERMen::twoBodyObservations(matches, cIndI, cIndJ);
+  int cIndI = pT.getCentralResidueIndices()[0]; int cIndJ = pT.getCentralResidueIndices()[1];
+  CartesianPoint NoI = dTERMen::singleBodyObservations(pT.getMatches(), cIndI);
+  CartesianPoint NeI = dTERMen::singleBodyExpectations(pT.getMatches(), cIndI, &Pi);
+  CartesianPoint NoJ = dTERMen::singleBodyObservations(pT.getMatches(), cIndJ);
+  CartesianPoint NeJ = dTERMen::singleBodyExpectations(pT.getMatches(), cIndJ, &Pj);
+  CartesianPoint NoIJ = dTERMen::twoBodyObservations(pT.getMatches(), cIndI, cIndJ);
   for (int aai = 0; aai < naa; aai++) {
     for (int aaj = 0; aaj < naa; aaj++) {
       mstreal Ne = 0;
-      for (int k = 0; k < matches.size(); k++) {
+      for (int k = 0; k < pT.numMatches(); k++) {
         if (Pi[k].empty() || Pj[k].empty()) continue; // e.g., relevant positions in this match had unknown identities
         Ne += Pi[k][aai] * Pj[k][aaj];
       }
