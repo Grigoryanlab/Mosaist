@@ -612,10 +612,11 @@ class expressionTree {
     logicalOp getLogicalOperator() { return op; }
     selProperty getProperty() { return type; }
     int getNum() { return num; }
+    vector<int> getNums() { return nums; }
+    set<int> getNumSet() { return numset; }
     bool hasNums() { return !nums.empty(); }
     bool hasNumSet() { return !numset.empty(); }
     bool inNumSet(int i) const { return (numset.find(i) != numset.end()); }
-    vector<int> getNums() { return nums; }
     int getNumByIdx(int i) { return nums[i]; }
     mstreal getVal() { return val; }
     string getString() { return str; }

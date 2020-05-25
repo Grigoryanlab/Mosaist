@@ -1981,7 +1981,9 @@ AtomPointerVector selector::select(string selStr) {
 vector<Residue*> selector::selectRes(string selStr) {
   AtomPointerVector sel = select(selStr);
   set<Residue*> selRes;
-  for (int i = 0; i < sel.size(); i++) selRes.insert(sel[i]->getParent());
+  for (int i = 0; i < sel.size(); i++) {
+    selRes.insert(sel[i]->getParent());
+  }
   vector<Residue*> selResSorted;
   for (int i = 0; i < residues.size(); i++) {
     if (selRes.find(residues[i]) != selRes.end()) selResSorted.push_back(residues[i]);
@@ -1998,9 +2000,9 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
           sel.push_back(atoms[i]);
           break;
         case (expressionTree::selProperty::RESID):
-          if ((tree->hasNumSet() && tree->inNumSet(residues[i]->getNum())) ||
-              (!tree->hasNumSet() && tree->hasNums() && (residues[i]->getNum() >= tree->getNumByIdx(0)) && (residues[i]->getNum() <= tree->getNumByIdx(1))) ||
-              (!tree->hasNumSet() && !tree->hasNums() && (residues[i]->getNum() == tree->getNum()))) {
+          if ((tree->hasNumSet() && tree->inNumSet(atomResidues[i]->getNum())) ||
+              (!tree->hasNumSet() && tree->hasNums() && (atomResidues[i]->getNum() >= tree->getNumByIdx(0)) && (atomResidues[i]->getNum() <= tree->getNumByIdx(1))) ||
+              (!tree->hasNumSet() && !tree->hasNums() && (atomResidues[i]->getNum() == tree->getNum()))) {
             sel.push_back(atoms[i]);
           }
           break;

@@ -935,7 +935,7 @@ void dTERMen::writeRecordedData(const string& file) {
     ofs << MstUtils::vecToString(data[i].getResidueIndices()) << endl;
     for (int j = 0; j < data[i].numMatches(); j++) {
       const fasstSolution& m = data[i].getMatch(j);
-      ofs << F.getMatchSequence(m).toString() << " ";
+      ofs << F.getMatchSequence(m).toString() << " " << m.getRMSD() << " ";
       ofs << MstUtils::vecToString(F.getResidueProperties(m, "phi")) << " ";
       ofs << MstUtils::vecToString(F.getResidueProperties(m, "psi")) << " ";
       ofs << MstUtils::vecToString(F.getResidueProperties(m, "omega")) << " ";
