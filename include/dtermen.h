@@ -35,6 +35,56 @@ class dTERMen {
     void init();
     void readConfigFile(const string& configFile);
     void setEnergyFunction(const string& ver); // sets the energy function version and alters any necessary parameters
+    void setRecordFlag(bool record = true) { recordData = record; }
+
+    /* Stores data about a single TERM searched in the process of the dTERMen
+     * energy-table calculation. */
+    class termData {
+      public:
+        termData() {}
+        termData(vector<Residue*> _centResidues, int pm) { define(_centResidues, pm); }
+        void define(vector<Residue*> _centResidues, int pm) {
+          centResidues = _centResidues;
+          term.reset();
+          fragResIdx.clear();
+          centResIndices = TERMUtils::selectTERM(centResidues, term, pm, &fragResIdx);
+        }
+        void addCentralResidue(Residue* res, int pm) {
+          centResidues.push_back(res);
+          define(centResidues, pm);
+        }
+
+        void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
+        fasstSolutionSet& getMatches() { return matches; }
+        fasstSolution& getMatch(int i) { return matches[i]; }
+        int numMatches() const { return matches.size(); }
+        const Structure& getTERM() const { return term; }
+        const vector<int>& getResidueIndices() const { return fragResIdx; }
+        const vector<Residue*>& getCentralResidues() const { return centResidues; }
+        const vector<int>& getCentralResidueIndices() const { return centResIndices; }
+        int numCentralResidues() const { return centResidues.size(); }
+
+        friend ostream & operator<<(ostream &_os, const termData& _td) {
+          _os << "TERM clique with " << _td.centResidues.size() << " central residues, " << _td.matches.size() << " matches:";
+          for (int i = 0; i < _td.centResidues.size(); i++) _os << " " << *(_td.centResidues[i]);
+          return _os;
+        }
+        string toString() { stringstream ss; ss << *this; return ss.str(); }
+
+      private:
+        /* the central residues of each of the TERM's segments and their corres-
+         * ponding indices in the template. */
+        vector<Residue*> centResidues;
+        vector<int> centResIndices;
+
+        /* term is the TERM itself, whose residues correspond to template posi-
+         * tions at indices fragResIdx. */
+        Structure term;
+        vector<int> fragResIdx;
+
+        /* matches resulting from querying the TERM. */
+        fasstSolutionSet matches;
+    };
 
     /* Builds an energy table for design. Parameters:
      * - a list of mutable positions as vector<Residue*>. All residues must belong
@@ -142,6 +192,7 @@ class dTERMen {
 
     void readBackgroundPotentials(const string& file);  // TODO
     void writeBackgroundPotentials(const string& file); // TODO
+    void writeRecordedData(const string& file); // writes all recorded TERM data to a file
 
     mstreal backEner(const string& aa) { return lookupZeroDimPotential(bkPot, aaToIndex(aa)); }
     mstreal bbOmegaEner(mstreal omg, const string& aa) { return lookupOneDimPotential(omPot, omg, aaToIndex(aa)); }
@@ -228,7 +279,12 @@ class dTERMen {
     twoDimPotType ppPot;
     mstreal kT, cdCut, intCut, selfResidualPC, selfCorrPC;
     int pmSelf, pmPair;
-    int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN, pairMinN, pairMaxN;
+    int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN, selfCorrMaxCliqueSize, pairMinN, pairMaxN;
+    bool recordData;
+    vector<termData> data;
+    Sequence targetOrigSeq;
+    vector<int> variableResidues;
+    map<string, vector<mstreal>> targetResidueProperties;
 
     /* We may want to deal with different "universal" alphabets (separate from
      * the design alphabet). We may want to interpret SEC (selenocysteine), for
@@ -266,12 +322,26 @@ class EnergyTable {
   public:
     EnergyTable() {}
     EnergyTable(const string& tabFile);
+  
+    /* restrictSiteAlphabet() constructs a new energy table, copying only the residue types that are
+     specified each position in restricted_siteAlphabets. When the new energy table will be applied
+     as a constraint to the original one, constraint_table should be set to true. In this case, all
+     residue types will be carried over, but their energies will correspond to the energy of the
+     residue type specified in restricted_siteAlphabets. Note that in this mode, no more than one
+     residue type can be specified per position. If a position in restricted_siteAlphabets is empty,
+     all residue types will be copied.
+     */
+  
+    EnergyTable restrictSiteAlphabet(const vector<vector<string>>& restricted_siteAlphabets, bool constraint_table = false);
+    EnergyTable restrictSiteAlphabet(const Structure& S, bool constraint_table = false);
+  
     void clear(); // resets the table to empty
     void readFromFile(const string& tabFile);
     void writeToFile(const string& tabFile);
     void addSite(const string& siteName);
     void addSites(const vector<string>& siteNames);
     int numSites() const { return siteIndices.size(); }
+    vector<string> getSites() {return sites; }
     int siteIndex(const string& siteName) { return siteIndices[siteName]; }
     bool siteExists(const string& siteName) { return siteIndices.find(siteName) != siteIndices.end(); }
     void setSiteAlphabet(const string& siteName, const vector<string>& alpha) { setSiteAlphabet(siteIndex(siteName), alpha); }

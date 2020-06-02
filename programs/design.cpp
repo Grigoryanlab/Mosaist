@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
   op.addOption("seq", "skip design and simply put on this sequence, dumping the resulting PDB file.");
   op.addOption("aa3", "accept 3 letter amino acid codes (not 1 letter) for input to --seq");
   op.addOption("o", "output base.", true);
+  op.addOption("w", "if specified, will write to a file with extension .dat all TERM data that are used for energy-table calculation.");
   op.setOptions(argc, argv);
 
   Structure So(op.getString("p")), S;
@@ -82,6 +83,7 @@ int main(int argc, char *argv[]) {
   } else {
     if (!MstSys::fileExists(etabFile)) {
       dTERMen D(op.getString("c"));
+      if (op.isGiven("w")) D.setRecordFlag(true);
       if (specContext.empty()) {
         E = D.buildEnergyTable(variable, vector<vector<string>>(), images);
         E.writeToFile(etabFile);
@@ -90,6 +92,7 @@ int main(int argc, char *argv[]) {
         E.writeToFile(etabFile);
         specE.writeToFile(specEtabFile);
       }
+      if (op.isGiven("w")) D.writeRecordedData(op.getString("o") + ".dat");
     } else {
       cout << "reading previous energy table from " << etabFile << endl;
       E.readFromFile(etabFile);

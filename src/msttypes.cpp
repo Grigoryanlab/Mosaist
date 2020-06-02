@@ -1981,7 +1981,9 @@ AtomPointerVector selector::select(string selStr) {
 vector<Residue*> selector::selectRes(string selStr) {
   AtomPointerVector sel = select(selStr);
   set<Residue*> selRes;
-  for (int i = 0; i < sel.size(); i++) selRes.insert(sel[i]->getParent());
+  for (int i = 0; i < sel.size(); i++) {
+    selRes.insert(sel[i]->getParent());
+  }
   vector<Residue*> selResSorted;
   for (int i = 0; i < residues.size(); i++) {
     if (selRes.find(residues[i]) != selRes.end()) selResSorted.push_back(residues[i]);
@@ -1994,9 +1996,13 @@ void selector::select(expressionTree* tree, AtomPointerVector& sel) {
     // this is a terminal node, so just do the selection
     for (int i = 0; i < atoms.size(); i++) {
       switch(tree->getProperty()) {
+        case (expressionTree::selProperty::ALL):
+          sel.push_back(atoms[i]);
+          break;
         case (expressionTree::selProperty::RESID):
-          if ((tree->hasNums() && (atomResidues[i]->getNum() >= tree->getNumByIdx(0)) && (atomResidues[i]->getNum() <= tree->getNumByIdx(1))) ||
-              (!tree->hasNums() && (atomResidues[i]->getNum() == tree->getNum()))) {
+          if ((tree->hasNumSet() && tree->inNumSet(atomResidues[i]->getNum())) ||
+              (!tree->hasNumSet() && tree->hasNums() && (atomResidues[i]->getNum() >= tree->getNumByIdx(0)) && (atomResidues[i]->getNum() <= tree->getNumByIdx(1))) ||
+              (!tree->hasNumSet() && !tree->hasNums() && (atomResidues[i]->getNum() == tree->getNum()))) {
             sel.push_back(atoms[i]);
           }
           break;
@@ -2094,10 +2100,16 @@ expressionTree* selector::buildExpressionTree(string selStr) {
     if (MstUtils::isInt(str)) {
       tree->setNum(MstUtils::toInt(str));
     } else {
-      vector<string> range = MstUtils::split(str, "-");
-      if ((range.size() != 2) || (!MstUtils::isInt(range[0])) || (!MstUtils::isInt(range[1]))) MstUtils::error("bad selection, expected number or range when saw " + str, "selector::buildExpressionTree(string)");
-      tree->setNums({MstUtils::toInt(range[0]), MstUtils::toInt(range[1])});
+      vector<string> parts = MstUtils::split(str, "+");
+      for (const string& part : parts) {
+        vector<string> range = MstUtils::split(part, "-");
+        if ((range.size() != 2) || (!MstUtils::isInt(range[0])) || (!MstUtils::isInt(range[1]))) MstUtils::error("bad selection, expected number or range when saw " + str, "selector::buildExpressionTree(string)");
+        tree->addToNumSet(MstUtils::range(MstUtils::toInt(range[0]), MstUtils::toInt(range[1]) + 1));
+      }
     }
+  } else if (MstUtils::stringsEqual(token, "all")) {
+    tree->setLogicalOperator(expressionTree::logicalOp::IS);
+    tree->setProperty(expressionTree::selProperty::ALL);
   } else if (MstUtils::stringsEqual(token, "resname")) {
     string str = getNextSelectionToken(selStr);
     tree->setLogicalOperator(expressionTree::logicalOp::IS);

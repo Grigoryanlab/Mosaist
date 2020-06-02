@@ -19,10 +19,12 @@ void dTERMen::init() {
   selfResidualPC = selfCorrPC = 1.0;
   selfResidualMinN = 1000;
   selfResidualMaxN = 5000;
+  selfCorrMaxCliqueSize = -1;
   selfCorrMinN = 200;
   selfCorrMaxN = 5000;
   pairMinN = 1000;
   pairMaxN = 5000;
+  recordData = false;
   setAminoAcidMap();
   setEnergyFunction("35");
 
@@ -57,6 +59,8 @@ void dTERMen::readConfigFile(const string& configFile) {
       rotLibFile = ents[1];
     } else if (ents[0].compare("efun") == 0) {
       setEnergyFunction(ents[1]);
+    } else if (ents[0].compare("selfCorrMaxCliqueSize") == 0) {
+      selfCorrMaxCliqueSize = MstUtils::toInt(ents[1]);
     } else {
       MstUtils::error("unknown parameter name '" + ents[0] + "'", "dTERMen::dTERMen(const string&)");
     }
@@ -204,6 +208,18 @@ EnergyTable dTERMen::buildEnergyTable(const vector<Residue*>& variable, const ve
       specContextSet = MstUtils::contents(MstUtils::setintersect(MstUtils::keys(fixedSet), MstUtils::keys(specContextSet)));
     }
     cout << "---> " << specContextSet.size() << " residues are considered as the fixed context" << endl;
+  }
+
+  // record target and design problem info
+  targetOrigSeq = Sequence(*S);
+  variableResidues.resize(variable.size());
+  for (int i = 0; i < variable.size(); i++) variableResidues[i] = variable[i]->getResidueIndex();
+  vector<Residue*> allResidues = S->getResidues();
+  for (Residue* R : allResidues) {
+    targetResidueProperties["phi"].push_back(R->getPhi());
+    targetResidueProperties["psi"].push_back(R->getPsi());
+    targetResidueProperties["omega"].push_back(R->getOmega());
+    targetResidueProperties["env"].push_back(C.getFreedom(R));
   }
 
   // compute self energies
@@ -886,6 +902,49 @@ void dTERMen::readBackgroundPotentials(const string& file) {
 
 }
 
+void dTERMen::writeRecordedData(const string& file) {
+  // find any duplicate TERMs
+  map<set<int>, int> byResidueSet;
+  for (int i = 0; i < data.size(); i++) {
+    set<int> resIdxSet = MstUtils::contents(data[i].getResidueIndices());
+    if (byResidueSet.find(resIdxSet) == byResidueSet.end()) {
+      byResidueSet[resIdxSet] = i;
+    } else {
+      // if a TERM with the same residues was seen before, keep the one with more matches
+      int pi = byResidueSet[resIdxSet];
+      if (data[i].numMatches() > data[pi].numMatches()) byResidueSet[resIdxSet] = i;
+    }
+  }
+  vector<int> unique = MstUtils::values(byResidueSet);
+  sort(unique.begin(), unique.end());
+
+  // write data about the target
+  fstream ofs; MstUtils::openFile(ofs, file, ios::out);
+  ofs << targetOrigSeq.toString() << endl;
+  ofs << MstUtils::vecToString(variableResidues) << endl;
+  for (int i = 0; i < targetOrigSeq.length(); i++) {
+    ofs << targetResidueProperties["phi"][i] << " ";
+    ofs << targetResidueProperties["psi"][i] << " ";
+    ofs << targetResidueProperties["omega"][i] << " ";
+    ofs << targetResidueProperties["env"][i] << endl;
+  }
+
+  // write data about unique TERMs
+  for (int i : unique) {
+    ofs << "* TERM " << i << endl;
+    ofs << MstUtils::vecToString(data[i].getResidueIndices()) << endl;
+    for (int j = 0; j < data[i].numMatches(); j++) {
+      const fasstSolution& m = data[i].getMatch(j);
+      ofs << F.getMatchSequence(m).toString() << " " << m.getRMSD() << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "phi")) << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "psi")) << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "omega")) << " ";
+      ofs << MstUtils::vecToString(F.getResidueProperties(m, "env")) << endl;
+    }
+  }
+  ofs.close();
+}
+
 mstreal dTERMen::selfEnergy(Residue* R, const string& aa) {
   return (selfEnergies(R))[dTERMen::aaToIndex(aa.empty() ? R->getName() : aa)];
 }
@@ -913,85 +972,41 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
 
   // -- self residual
   if (verbose) cout << "\tdTERMen::selfEnergies -> self residual..." << endl;
-  Structure selfTERM;
-  vector<int> fragResIdx;
-  int cInd = TERMUtils::selectTERM({R}, selfTERM, pmSelf, &fragResIdx)[0];
+  termData sT({R}, pmSelf);
   F.setOptions(foptsBase);
-  F.setQuery(selfTERM);
-  F.setRMSDCutoff(rmsdCutSelfRes(fragResIdx, S));
+  F.setQuery(sT.getTERM());
+  F.setRMSDCutoff(rmsdCutSelfRes(sT.getResidueIndices(), S));
   F.setMinNumMatches(selfResidualMinN);
   F.setMaxNumMatches(selfResidualMaxN);
-  fasstSolutionSet matches = F.search();
-  CartesianPoint selfResidual = singleBodyStatEnergy(matches, cInd, selfResidualPC);
+  sT.setMatches(F.search());
+  CartesianPoint selfResidual = singleBodyStatEnergy(sT.getMatches(), sT.getCentralResidueIndices()[0], selfResidualPC);
+  if (recordData) data.push_back(sT);
   if (verbose) printSelfComponent(selfResidual, "\t");
   selfE += selfResidual;
 
   // -- self correction
   if (verbose) cout << "\tdTERMen::selfEnergies -> self correction..." << endl;
-  class clique {
-    // represents a local interaction "clique" for self-correction calculations.
-    // NOTE: the word "clique" is used loosely here, "connected component" would
-    // probably be more accurate, because we don't actually look at contacts
-    // between the residues that contact the central residue. BUT, the final
-    // set of motifs we hope to end up with can still be thought of as cliques,
-    // because each motif occurs together frequently enough (so the residues
-    // involved in the motif "go together" frequently -- i.e., form a "clique").
-    public:
-      vector<Residue*> residues;
-      int centResIdx;
-      fasstSolutionSet matches;
-      string toString() {
-        stringstream ss;
-        ss << "clique with " << residues.size() << " residues, centered on " << centResIdx << ", " << matches.size() << " matches:";
-        for (int i = 0; i < residues.size(); i++) ss << " " << *(residues[i]);
-        return ss.str();
-      }
-  };
 
   // -- get contacts
   vector<pair<Residue*, Residue*>> conts = getContactsWith({R}, C, 0, verbose);
   vector<Residue*> contResidues(conts.size(), NULL);
   for (int i = 0; i < conts.size(); i++) contResidues[i] = conts[i].second;
 
-  // if (verbose) cout << "\tdTERMen::selfEnergies -> getting contacts for " << *R << "..." << endl;
-  // contactList cL = C.getContacts(R, cdCut);
-  // cL.sortByDegree();
-  // vector<Residue*> contResidues = cL.destResidues();
-  // if (verbose) {
-  //   cout << "\t\tdTERMen::selfEnergies -> found " << contResidues.size() << " contact-degree contacts:";
-  //   for (int ii = 0; ii < contResidues.size(); ii++) cout << " " << *(contResidues[ii]);
-  //   cout << endl;
-  // }
-  // if (intCut <= 1.0) {
-  //   vector<Residue*> bbscConts = (C.getInterfering({R}, intCut)).destResidues();
-  //   if (verbose) {
-  //     cout << "\t\tadding interfering residues:";
-  //     for (int ii = 0; ii < bbscConts.size(); ii++) cout << " " << *(bbscConts[ii]);
-  //     cout << endl;
-  //   }
-  //   contResidues = MstUtils::setunion(contResidues, bbscConts);
-  //   if (verbose) cout << "\t\tdTERMen::selfEnergies -> in total " << contResidues.size() << " contacts..." << endl;
-  // }
-
   // consider each contacting residue with the central one and see if there are
   // enough matches. If so, create a clique to be grown later. If not, still
   // create a clique (with number of matches), which will not be grown.
-  vector<clique> finalCliques;
-  map<Residue*, clique> cliquesToGrow;
+  vector<termData> finalCliques;
+  map<Residue*, termData> cliquesToGrow;
   for (int i = 0; i < contResidues.size(); i++) {
     if (verbose) cout << "\t\tdTERMen::selfEnergies -> seed clique with contact " << *(contResidues[i]) << "..." << endl;
-    clique c;
-    c.residues = {R, contResidues[i]};
-    vector<int> fragResIdx;
-    Structure term;
-    c.centResIdx = TERMUtils::selectTERM(c.residues, term, pmSelf, &fragResIdx)[0];
+    termData c({R, contResidues[i]}, pmSelf);
     F.setOptions(foptsBase);
-    F.setQuery(term);
-    F.setRMSDCutoff(rmsdCutSelfCor(fragResIdx, S));
+    F.setQuery(c.getTERM());
+    F.setRMSDCutoff(rmsdCutSelfCor(c.getResidueIndices(), S));
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
-    c.matches = F.search();
-    if (c.matches[selfCorrMinN - 1].getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
+    c.setMatches(F.search());
+    if (c.getMatch(selfCorrMinN - 1).getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
     else { cliquesToGrow[contResidues[i]] = c; }
   }
 
@@ -1000,39 +1015,36 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     // sort remaining contacting residues by decreasing number of matches of the
     // clique comprising the residue and the central residue
     vector<Residue*> remConts = MstUtils::keys(cliquesToGrow);
-    sort(remConts.begin(), remConts.end(), [&cliquesToGrow](Residue* i, Residue* j) { return cliquesToGrow[i].matches.size() > cliquesToGrow[j].matches.size(); });
+    sort(remConts.begin(), remConts.end(), [&cliquesToGrow](Residue* i, Residue* j) { return cliquesToGrow[i].numMatches() > cliquesToGrow[j].numMatches(); });
 
     // pick the one with highest number of contacts, and try to grow the clique
-    clique parentClique = cliquesToGrow[remConts[0]];
+    termData parentClique = cliquesToGrow[remConts[0]];
     remConts.erase(remConts.begin());
-    clique grownClique;
+    termData grownClique = parentClique;
     if (verbose) cout << "\t\tdTERMen::selfEnergies -> will try to grow [" << parentClique.toString() << "]..." << endl;
-    if (remConts.empty()) grownClique = parentClique;
     while (!remConts.empty()) {
+      if ((selfCorrMaxCliqueSize >= 0) && (parentClique.numCentralResidues() >= selfCorrMaxCliqueSize)) break;
       // try to add every remaining contact
       for (int j = 0; j < remConts.size(); j++) {
         if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> trying to add " << *(remConts[j]) << "..." << endl;
-        clique newClique;
-        newClique.residues = parentClique.residues;
-        newClique.residues.push_back(remConts[j]);
-        Structure term; vector<int> fragResIdx;
-        newClique.centResIdx = TERMUtils::selectTERM(newClique.residues, term, pmSelf, &fragResIdx)[0];
+        termData newClique = parentClique;
+        newClique.addCentralResidue(remConts[j], pmSelf);
         F.setOptions(foptsBase);
-        F.setQuery(term);
-        F.setRMSDCutoff(rmsdCutSelfCor(fragResIdx, S));
+        F.setQuery(newClique.getTERM());
+        F.setRMSDCutoff(rmsdCutSelfCor(newClique.getResidueIndices(), S));
         F.setMaxNumMatches(selfCorrMaxN);
-        newClique.matches = F.search();
-        if ((j == 0) || (newClique.matches.size() > grownClique.matches.size())) {
+        newClique.setMatches(F.search());
+        if ((j == 0) || (newClique.numMatches() > grownClique.numMatches())) {
           if (verbose) cout << "\t\t\t\tdTERMen::selfEnergies -> new best" << endl;
           grownClique = newClique;
         }
       }
       // EITHER a sufficient number of matches OR not too many fewer than for the
       // parent clique is the logic we had implemented in original dTERMen
-      if ((grownClique.matches.size() >= selfCorrMinN) || (grownClique.matches.size() > 0.8*parentClique.matches.size())) {
-        remConts = MstUtils::setdiff(remConts, {grownClique.residues.back()});
+      if ((grownClique.numMatches() >= selfCorrMinN) || (grownClique.numMatches() > 0.8*parentClique.numMatches())) {
+        remConts = MstUtils::setdiff(remConts, {grownClique.getCentralResidues().back()});
         parentClique = grownClique;
-        if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> chose to add " << *(grownClique.residues.back()) << "..." << endl;
+        if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> chose to add " << *(grownClique.getCentralResidues().back()) << "..." << endl;
       } else {
         if (verbose) cout << "\t\t\tdTERMen::selfEnergies -> nothing more worked, sticking with parent clique..." << endl;
         grownClique = parentClique;
@@ -1057,7 +1069,8 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   if (verbose) cout << "\tdTERMen::selfEnergies -> final cliques:" << endl;
   for (int i = 0; i < finalCliques.size(); i++) {
     if (verbose) cout << "\t\t" << finalCliques[i].toString() << endl;
-    CartesianPoint cliqueDelta = singleBodyStatEnergy(finalCliques[i].matches, finalCliques[i].centResIdx, selfCorrPC);
+    if (recordData) data.push_back(finalCliques[i]);
+    CartesianPoint cliqueDelta = singleBodyStatEnergy(finalCliques[i].getMatches(), finalCliques[i].getCentralResidueIndices()[0], selfCorrPC);
     if (verbose) printSelfComponent(cliqueDelta, "\t\t\t");
     selfE += cliqueDelta;
   }
@@ -1078,16 +1091,14 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
 
   // isolate TERM and get matches
   int naa = globalAlphabetSize();
-  Structure pairTERM;
-  vector<int> fragResIdx;
-  vector<int> cInd = TERMUtils::selectTERM({Ri, Rj}, pairTERM, pmPair, &fragResIdx);
-  int cIndI = cInd[0]; int cIndJ = cInd[1];
+  termData pT({Ri, Rj}, pmPair);
   F.setOptions(foptsBase);
-  F.setQuery(pairTERM);
-  F.setRMSDCutoff(rmsdCutPair(fragResIdx, S));
+  F.setQuery(pT.getTERM());
+  F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
   F.setMinNumMatches(pairMinN);
   F.setMaxNumMatches(pairMaxN);
-  fasstSolutionSet matches = F.search();
+  pT.setMatches(F.search());
+  if (recordData) data.push_back(pT);
 
   // for each of the two positions, compute expectation of every amino acid in
   // the context of every match, based on background "trivial" energies and
@@ -1095,15 +1106,16 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
   // the number observed
   vector<CartesianPoint> Pi, Pj;
   vector<vector<mstreal> > pairE(naa, vector<mstreal>(naa, 0.0));
-  CartesianPoint NoI = dTERMen::singleBodyObservations(matches, cIndI);
-  CartesianPoint NeI = dTERMen::singleBodyExpectations(matches, cIndI, &Pi);
-  CartesianPoint NoJ = dTERMen::singleBodyObservations(matches, cIndJ);
-  CartesianPoint NeJ = dTERMen::singleBodyExpectations(matches, cIndJ, &Pj);
-  CartesianPoint NoIJ = dTERMen::twoBodyObservations(matches, cIndI, cIndJ);
+  int cIndI = pT.getCentralResidueIndices()[0]; int cIndJ = pT.getCentralResidueIndices()[1];
+  CartesianPoint NoI = dTERMen::singleBodyObservations(pT.getMatches(), cIndI);
+  CartesianPoint NeI = dTERMen::singleBodyExpectations(pT.getMatches(), cIndI, &Pi);
+  CartesianPoint NoJ = dTERMen::singleBodyObservations(pT.getMatches(), cIndJ);
+  CartesianPoint NeJ = dTERMen::singleBodyExpectations(pT.getMatches(), cIndJ, &Pj);
+  CartesianPoint NoIJ = dTERMen::twoBodyObservations(pT.getMatches(), cIndI, cIndJ);
   for (int aai = 0; aai < naa; aai++) {
     for (int aaj = 0; aaj < naa; aaj++) {
       mstreal Ne = 0;
-      for (int k = 0; k < matches.size(); k++) {
+      for (int k = 0; k < pT.numMatches(); k++) {
         if (Pi[k].empty() || Pj[k].empty()) continue; // e.g., relevant positions in this match had unknown identities
         Ne += Pi[k][aai] * Pj[k][aaj];
       }
@@ -1204,6 +1216,83 @@ EnergyTable::EnergyTable(const string& tabFile) {
   readFromFile(tabFile);
 }
 
+EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& restricted_siteAlphabets, bool constraint_table) {
+  EnergyTable restricted_etab;
+  
+  if (restricted_siteAlphabets.size() != sites.size()) MstUtils::error("The length of restricted_siteAlphabets and the number of positions in the energy table do not match ("+MstUtils::toString(restricted_siteAlphabets.size())+") and ("+MstUtils::toString(sites.size())+")");
+  
+  /* copy site addresses and set alphabets */
+  for (int s = 0; s < sites.size(); s++) {
+    if ((constraint_table) && (restricted_siteAlphabets[s].size() > 1)) MstUtils::error("In constraint_table mode only a single residue, or none at all, may be specified per position");
+    restricted_etab.addSite(sites[s]);
+    if (restricted_siteAlphabets[s].empty() || ((constraint_table && restricted_siteAlphabets[s].size() == 1))) {
+      // If no residue is specified, copy all residue types
+      vector<string> old_siteAlphabet = getSiteAlphabet(s);
+      restricted_etab.setSiteAlphabet(s,old_siteAlphabet);
+    } else {
+      restricted_etab.setSiteAlphabet(s,restricted_siteAlphabets[s]);
+    }
+  }
+  /* copy self energies */
+  for (int s = 0; s < sites.size(); s++) {
+    vector<string> siteAlphabet = restricted_etab.getSiteAlphabet(s);
+    for (int site_aa = 0; site_aa < siteAlphabet.size(); site_aa++) {
+      string aa = siteAlphabet[site_aa];
+      if (!inSiteAlphabet(s,aa)) MstUtils::error("unexpected amino-acid name in restricted alphabet: " + aa);
+      /*
+       In the case that this is a constraint table AND this position is specified, the energy of the
+       sequence provided in restricted_siteAlphabets[s][0] should be copied to all of the other
+       residue types.
+       */
+      int old_aa_idx = ((constraint_table) && (restricted_siteAlphabets[s].size() == 1)) ? indexInSiteAlphabet(s,restricted_siteAlphabets[s][0]) : indexInSiteAlphabet(s,aa);
+      int new_aa_idx = restricted_etab.indexInSiteAlphabet(s,aa);
+      mstreal self_e = selfEnergy(s,old_aa_idx);
+      restricted_etab.setSelfEnergy(s, new_aa_idx, self_e);
+    }
+  }
+  /* copy pair energies */
+  for (int si = 0; si < sites.size(); si++) {
+    for (auto it = pairMaps[si].begin(); it != pairMaps[si].end(); ++it) {
+      int sj = it->first;
+      if (sj < si) continue;
+      int k = it->second;
+      vector<string> si_siteAlphabet = restricted_etab.getSiteAlphabet(si);
+      vector<string> sj_siteAlphabet = restricted_etab.getSiteAlphabet(sj);
+      for (int aai = 0; aai < si_siteAlphabet.size(); aai++) {
+        for (int aaj = 0; aaj < sj_siteAlphabet.size(); aaj++) {
+          /*
+           If this is a constraint table:
+           In the case that both positions are specified, the pair energy of the residue types
+           specified by restricted_siteAlphabets[s][0] is copied to all pairs of residue types.
+           
+           In the case that one of the positions is specified and the other is not, there will be 20
+           unique pair energies (1 specified residue x 20 residues). Each of these pair energies will
+           be copied 19 times, for each of the other residue types at the specified position.
+           */
+          int aai_old = ((constraint_table) && (restricted_siteAlphabets[si].size() == 1)) ? indexInSiteAlphabet(si,restricted_siteAlphabets[si][0]) : indexInSiteAlphabet(si,si_siteAlphabet[aai]);
+          int aaj_old = ((constraint_table) && (restricted_siteAlphabets[sj].size() == 1)) ? indexInSiteAlphabet(sj,restricted_siteAlphabets[sj][0]) : indexInSiteAlphabet(sj,sj_siteAlphabet[aaj]);
+          mstreal ener = pairE[si][k][aai_old][aaj_old];
+          restricted_etab.setPairEnergy(si, sj, aai, aaj, ener);
+        }
+      }
+    }
+  }
+  return restricted_etab;
+};
+
+EnergyTable EnergyTable::restrictSiteAlphabet(const Structure& S, bool constraint_table) {
+  //Use the sequence of the provided structure to restrict the site alphabet at each position of the energy table
+  //  Positions with a residue type are restricted to that type
+  vector<Residue*> S_seq = S.getResidues();
+  if (S_seq.size() != sites.size()) MstUtils::error("The protein size must be the same as the provided energy table");
+  vector<vector<string>> all_siteNames; all_siteNames.resize(S_seq.size());
+  for (int R_idx = 0; R_idx < S_seq.size(); R_idx++) {
+    string R_name = S_seq[R_idx]->getName();
+    all_siteNames[R_idx].push_back(R_name);
+  }
+  return restrictSiteAlphabet(all_siteNames, constraint_table);
+};
+
 void EnergyTable::addSite(const string& siteName) {
   if (siteIndices.find(siteName) != siteIndices.end()) MstUtils::error("site '" + siteName + "' is already present!", "EnergyTable::addSite(const string&)");
   siteIndices[siteName] = sites.size();
@@ -1220,11 +1309,17 @@ void EnergyTable::addSites(const vector<string>& siteNames) {
 }
 
 void EnergyTable::setSiteAlphabet(int siteIdx, const vector<string>& alpha) {
-  if (!empty()) MstUtils::error("site alphabets must be set before populating energies", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
+//  if (!empty()) MstUtils::error("site alphabets must be set before populating energies", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
   if (aaAlpha.size() < siteIdx + 1) MstUtils::error("site index out of range", "EnergyTable::setSiteAlphabet(int, const vector<string>&)");
   aaAlpha[siteIdx] = alpha;
   for (int i = 0; i < alpha.size(); i++) aaIndices[siteIdx][alpha[i]] = i;
   selfE[siteIdx].clear(); selfE[siteIdx].resize(alpha.size(), 0.0);
+  for (auto it = pairMaps[siteIdx].begin(); it != pairMaps[siteIdx].end(); ++it) {
+    int sj = it->first;
+    int k = it->second;
+    pairE[siteIdx][k].clear();
+    pairE[siteIdx][k].resize(aaIndices[siteIdx].size(), vector<mstreal>(aaIndices[sj].size()));
+  }
 }
 
 int EnergyTable::addToSiteAlphabet(int siteIdx, const string& aa) {
@@ -1279,16 +1374,18 @@ void EnergyTable::writeToFile(const string& tabFile) {
   fstream of;
   MstUtils::openFile(of, tabFile, ios::out);
   for (int si = 0; si < sites.size(); si++) {
+    //if there is only one possible amino acid, this position cannot be optimized and should not be written
+    if (aaAlpha[si].size() == 1) continue;
     for (int aai = 0; aai < aaAlpha[si].size(); aai++) {
       of << sites[si] << " " << aaAlpha[si][aai] << " " << selfE[si][aai] << endl;
     }
   }
-
   for (int si = 0; si < sites.size(); si++) {
     for (auto it = pairMaps[si].begin(); it != pairMaps[si].end(); ++it) {
       int sj = it->first;
       if (sj < si) continue;
       int k = it->second;
+      if ((aaAlpha[si].size() == 1) && (aaAlpha[sj].size() == 1)) continue; //don't write if there is one possible pair combination
       for (int aai = 0; aai < aaAlpha[si].size(); aai++) {
         for (int aaj = 0; aaj < aaAlpha[sj].size(); aaj++) {
           mstreal ener = pairE[si][k][aai][aaj];
