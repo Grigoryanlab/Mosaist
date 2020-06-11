@@ -3073,7 +3073,7 @@ ProximitySearch& ProximitySearch::operator=(const ProximitySearch& ps) {
   xhi = ps.xhi; yhi = ps.yhi; zhi = ps.zhi;
   xbw = ps.xbw; ybw = ps.ybw; zbw = ps.zbw;
   buckets = ps.buckets;
-  pointTags = pointTags;
+  pointTags = ps.pointTags;
   for (int i = 0; i < pointList.size(); i++) delete(pointList[i]);
   pointList.resize(ps.pointList.size());
   for (int i = 0; i < ps.pointList.size(); i++) {
