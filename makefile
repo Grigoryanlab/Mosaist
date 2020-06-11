@@ -144,14 +144,17 @@ endif
 # variables to compile the boost.python shared object
 uname := $(shell uname -s)
 ifeq ($(uname),Linux)
-	PYLIB_PATH = $(shell python3-config --exec-prefix)/lib64
-	WHOLE_ARCHIVE = -Wl,-whole-archive -lmst -Wl,-no-whole-archive
+	pythonExec := python
+	PYLIB_PATH = $(shell $(pythonExec)-config --exec-prefix)/lib64
 else
-	PYLIB_PATH = $(shell python3-config --exec-prefix)/lib
-	WHOLE_ARCHIVE = 
+	pythonExec := python3.8
+	PYTHON_SUFFIX = $(shell $(pythonExec) -c "import sys; print(''.join(map(str,sys.version_info[0:2])));")
+	PYLIB_PATH = $(shell $(pythonExec) -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'));")
+	PYLIB = -L$(PYLIB_PATH) -L$(LIBD) -ldl -framework CoreFoundation -undefined dynamic_lookup -lboost_python$(PYTHON_SUFFIX) -lboost_numpy$(PYTHON_SUFFIX) -ldtermen -lmst -lmstfasst -lmstcondeg -lmstoptim -lmstmagic $(LDLIBS)
 endif
-PYLIB = -L$(PYLIB_PATH) -L$(LIBD) $(shell python3-config --libs | grep -v CoreFoundation) -lboost_python37 $(WHOLE_ARCHIVE)
-PYFLAGS = $(shell python3-config --includes) -O2 -fPIC -std=c++11 $(INC) $(LIB)
+PY_INCLUDES = $(shell $(pythonExec)-config --includes)
+PY_SITE_INCLUDE_PARENT = $(shell $(pythonExec)-config --exec-prefix)
+PYFLAGS = $(PY_INCLUDES) -I$(PY_SITE_INCLUDE_PARENT)/include -O3 -fPIC -std=c++11 $(INC) $(LIB) $(CONDA_INC)
 
 # phony targets (targets that aren't files should be specified as phony so that they aren't remade each time `make` is run)
 .PHONY: all clean libs python setup
