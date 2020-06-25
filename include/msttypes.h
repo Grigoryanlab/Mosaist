@@ -52,6 +52,10 @@ class Structure {
     Structure(const vector<Residue*>& residues);
     ~Structure();
 
+    /* Produces a hybrid structure by coopying atoms from first input structure
+     * into residues of the second one, preserving the chain topology of the latter. */
+    static Structure combine(const Structure& atomsStruct, const Structure& topoStruct, bool renameResidues = true);
+
     void readPDB(const string& pdbFile, string options = "");
     void readPDB(istream& is, string options = "");
     void writePDB(const string& pdbFile, string options = "") const;

@@ -507,9 +507,9 @@ int main(int argc, char** argv) {
     if (shellOut.is_open()) shellOut.close();
 
     out << "MODEL " << c+1 << endl;
-    S.writePDB(out);
+    Structure::combine(S, I).writePDB(out);
     out << "ENDMDL" << endl;
   }
   out.close();
-  S.writePDB(op.getString("o") + ".fin.pdb");
+  Structure::combine(S, I).writePDB(op.getString("o") + ".fin.pdb");
 }

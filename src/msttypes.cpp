@@ -64,6 +64,19 @@ Structure::~Structure() {
   deletePointers();
 }
 
+Structure Structure::combine(const Structure& atomsStruct, const Structure& topoStruct, bool renameResidues) {
+  Structure combo = topoStruct;
+  vector<Residue*> atomResidues = atomsStruct.getResidues();
+  vector<Residue*> comboResidues = combo.getResidues();
+  if (atomResidues.size() != comboResidues.size()) MstUtils::error("numbers of residues in structures disagrees", "Structure::combine");
+  for (int i = 0; i < comboResidues.size(); i++) {
+    comboResidues[i]->copyAtoms(*(atomResidues[i]));
+    if (renameResidues) comboResidues[i]->setName(atomResidues[i]->getName());
+  }
+
+  return combo;
+}
+
 void Structure::deletePointers() {
   for (int i = 0; i < chains.size(); i++) delete(chains[i]);
 }
