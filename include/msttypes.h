@@ -57,9 +57,9 @@ class Structure {
     void writePDB(const string& pdbFile, string options = "") const;
     void writePDB(ostream& ofs, string options = "") const;
     void writeData(const string& dataFile) const;
-    void writeData(fstream& ofs) const;
+    void writeData(ostream& ofs) const;
     void readData(const string& dataFile);
-    void readData(fstream& ifs);
+    void readData(istream& ifs);
     void reset();
     Structure& operator=(const Structure& A);
 
@@ -1026,7 +1026,8 @@ class MstTimer {
  */
 class MstUtils {
   public:
-    static void openFile(fstream& fs, string filename, ios_base::openmode mode = ios_base::in, string from = "");
+    template <class F>
+    static void openFile(F& fs, string filename, ios_base::openmode mode = ios_base::in, string from = "");
     static void fileToArray(const string& _filename, vector<string>& lines); // reads lines from the file and appends them to the given vector
     static vector<string> fileToArray(const string& _filename) { vector<string> lines; fileToArray(_filename, lines); return lines; }
     static FILE* openFileC (const char* filename, const char* mode, string from = "");
@@ -1132,14 +1133,38 @@ class MstUtils {
     template <class T>
     static void writeBin(ostream& ofs, const T& val); // binary output for primitive types
     static void writeBin(ostream& ofs, const string& str) { ofs << str << '\0'; } // special overload for strings
+    template <class T, class U>
+    static void writeBin(ostream& ofs, const pair<T, U>& p) { writeBin(ofs, p.first); writeBin(ofs, p.second); }
     template <class T>
     static void writeBin(ostream& ofs, const vector<T>& vec);
     template <class T>
+    static void writeBin(ostream& ofs, const set<T>& s) { writeBin(ofs, vector<T>(s.begin(), s.end())); }
+    template <class K, class V>
+    static void writeBin(ostream& ofs, const map<K, V>& m);
+    static void writeBin(ostream& ofs, const MST::Structure& S) { S.writeData(ofs); }
+    template <class T>
     static void readBin(istream& ifs, T& val);
     static void readBin(istream& ifs, string& str) { getline(ifs, str, '\0'); };
+    template <class T, class U>
+    static void readBin(istream& ifs, pair<T, U>& p) { readBin(ifs, p.first); readBin(ifs, p.second); }
     template <class T>
     static void readBin(istream& ifs, vector<T>& vec);
+    template <class T>
+    static void readBin(istream& ifs, set<T>& s);
+    template <class K, class V>
+    static void readBin(istream& ifs, map<K, V>& m);
+    static void readBin(istream& ifs, MST::Structure& S) { S.readData(ifs); }
 };
+
+template <class F>
+void MstUtils::openFile(F& fs, string filename, ios_base::openmode mode, string from) {
+  fs.open(filename.c_str(), mode);
+  if (!fs.is_open()) {
+    if (!from.empty()) from += " -> ";
+    MstUtils::error("could not open file '" + filename + "'", from + "MstUtils::openFile");
+  }
+}
+
 
 template <class T>
 string MstUtils::toString(const T* obj) {
@@ -1307,6 +1332,15 @@ void MstUtils::writeBin(ostream& ofs, const vector<T>& vec) {
   for (int i = 0; i < vec.size(); i++) MstUtils::writeBin(ofs, vec[i]);
 }
 
+template <class K, class V>
+void MstUtils::writeBin(ostream& ofs, const map<K, V>& m) {
+  MstUtils::writeBin(ofs, (int) m.size());
+  for (auto i = m.begin(); i != m.end(); ++i) {
+    MstUtils::writeBin(ofs, i->first);
+    MstUtils::writeBin(ofs, i->second);
+  }
+}
+
 template <class T>
 void MstUtils::readBin(istream& ifs, T& val) {
   ifs.read((char*) (&val), sizeof(T));
@@ -1317,6 +1351,24 @@ void MstUtils::readBin(istream& ifs, vector<T>& vec) {
   int len; MstUtils::readBin(ifs, len);
   vec.resize(len);
   for (int i = 0; i < vec.size(); i++) MstUtils::readBin(ifs, vec[i]);
+}
+
+template <class T>
+void MstUtils::readBin(istream& ifs, set<T>& s) {
+  vector<T> vec; MstUtils::readBin(ifs, vec);
+  s.clear();
+  s.insert(vec.begin(), vec.end());
+}
+
+template <class K, class V>
+void MstUtils::readBin(istream& ifs, map<K, V>& m) {
+  int len; MstUtils::readBin(ifs, len);
+  m.clear();
+  for (int i = 0; i < len; i++) {
+    K key; MstUtils::readBin(ifs, key);
+    V val; MstUtils::readBin(ifs, val);
+    m[key] = val;
+  }
 }
 
 template <class T>
