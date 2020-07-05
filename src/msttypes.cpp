@@ -325,12 +325,12 @@ void Structure::writePDB(ostream& ofs, string options) const {
 }
 
 void Structure::writeData(const string& dataFile) const {
-  fstream ofs; MstUtils::openFile(ofs, dataFile, fstream::out | fstream::binary, "Structure::writeData(const string&)");
+  ofstream ofs; MstUtils::openFile(ofs, dataFile, fstream::out | fstream::binary, "Structure::writeData(const string&)");
   writeData(ofs);
   ofs.close();
 }
 
-void Structure::writeData(fstream& ofs) const {
+void Structure::writeData(ostream& ofs) const {
   char ter = '\0';
   ofs << getName() << ter;
   MstUtils::writeBin(ofs, chainSize());
@@ -369,12 +369,12 @@ void Structure::writeData(fstream& ofs) const {
 }
 
 void Structure::readData(const string& dataFile) {
-  fstream ifs; MstUtils::openFile(ifs, dataFile, fstream::in | fstream::binary, "Structure::readData(const string&)");
+  ifstream ifs; MstUtils::openFile(ifs, dataFile, fstream::in | fstream::binary, "Structure::readData(const string&)");
   readData(ifs);
   ifs.close();
 }
 
-void Structure::readData(fstream& ifs) {
+void Structure::readData(istream& ifs) {
   char ter = '\0';
   getline(ifs, name, '\0');
   string resname, atomname;
@@ -3463,15 +3463,6 @@ vector<vector<int> > Clusterer::kmeans(const vector<CartesianPoint>& points, int
     }
   }
   return bestClusts;
-}
-
-/* --------- MstUtils --------- */
-void MstUtils::openFile (fstream& fs, string filename, ios_base::openmode mode, string from) {
-  fs.open(filename.c_str(), mode);
-  if (!fs.is_open()) {
-    if (!from.empty()) from += " -> ";
-    MstUtils::error("could not open file '" + filename + "'", from + "MstUtils::openFile");
-  }
 }
 
 void MstUtils::fileToArray(const string& _filename, vector<string>& lines) {
