@@ -150,7 +150,7 @@ else
 	pythonExec := python3.8
 	PYTHON_SUFFIX = $(shell $(pythonExec) -c "import sys; print(''.join(map(str,sys.version_info[0:2])));")
 	PYLIB_PATH = $(shell $(pythonExec) -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'));")
-	PYLIB = -L$(PYLIB_PATH) -L$(LIBD) -ldl -framework CoreFoundation -undefined dynamic_lookup -lboost_python$(PYTHON_SUFFIX) -lboost_numpy$(PYTHON_SUFFIX) -ldtermen -lmst -lmstfasst -lmstcondeg -lmstoptim -lmstmagic $(LDLIBS)
+	PYLIB = -L$(PYLIB_PATH) -L$(LIBD) -ldl -framework CoreFoundation -undefined dynamic_lookup -lboost_python$(PYTHON_SUFFIX) -lboost_numpy$(PYTHON_SUFFIX) -ldtermen -lmst -lmstfasst -lmstcondeg -lmstoptim -lmstmagic -lmstfuser $(LDLIBS)
 endif
 PY_INCLUDES = $(shell $(pythonExec)-config --includes)
 PY_SITE_INCLUDE_PARENT = $(shell $(pythonExec)-config --exec-prefix)
