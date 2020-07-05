@@ -377,13 +377,13 @@ bool SeqTools::areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, 
 
 /* ------------ Sequence ------------ */
 
-Sequence::Sequence(Chain& C) {
+Sequence::Sequence(const Chain& C) {
   seq.resize(C.residueSize());
   for (int i = 0; i < C.residueSize(); i++) seq[i] = SeqTools::aaToIdx(C[i].getName());
   name = C.getID();
 }
 
-Sequence::Sequence(Structure& S) {
+Sequence::Sequence(const Structure& S) {
   vector<Residue*> residues = S.getResidues();
   seq.resize(residues.size());
   for (int i = 0; i < residues.size(); i++) seq[i] = SeqTools::aaToIdx(residues[i]->getName());

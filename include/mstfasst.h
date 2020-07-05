@@ -72,6 +72,8 @@ class fasstSolution {
     int operator[](int i) const { return alignment[i]; }
     Transform getTransform() const { return tr; }
     bool seqContextDefined() const { return ((context != NULL) && (!context->segSeq.empty())); }
+    void addSequenceContext(const Sequence& targSeq, int contLen, const vector<int>& targChainBeg, const vector<int>& targChainEnd);
+    void addSequenceContext(const Structure& target, int contLen);
     void setSeqContext(const vector<Sequence>& _segSeq, const vector<Sequence>& _nSeq, const vector<Sequence>& _cSeq);
     void setStructContext(const vector<AtomPointerVector>& _segStr, const vector<AtomPointerVector>& _nStr, const vector<AtomPointerVector>& _cStr);
     void setRMSD(mstreal r) { rmsd = r; }

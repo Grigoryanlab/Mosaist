@@ -54,7 +54,8 @@ class dTERMen {
           define(centResidues, pm);
         }
 
-        void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
+        // void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
+        int setMatches(const fasstSolutionSet& _matches, dTERMen* D = NULL);
         fasstSolutionSet& getMatches() { return matches; }
         fasstSolution& getMatch(int i) { return matches[i]; }
         int numMatches() const { return matches.size(); }
@@ -120,6 +121,7 @@ class dTERMen {
     void setAminoAcidMap();
     void printAminoAcidMap();
     int globalAlphabetSize() const { return globAlph.size(); }
+    mstreal getHomologyCutoff() const { return homCut; }
 
     bool isInGlobalAlphabet(const string& aa) const;
     bool isInGlobalAlphabet(res_t aa) const;
@@ -277,7 +279,7 @@ class dTERMen {
     zeroDimPotType bkPot;
     oneDimPotType omPot, envPot;
     twoDimPotType ppPot;
-    mstreal kT, cdCut, intCut, selfResidualPC, selfCorrPC;
+    mstreal kT, cdCut, intCut, selfResidualPC, selfCorrPC, homCut;
     int pmSelf, pmPair;
     int selfResidualMinN, selfResidualMaxN, selfCorrMinN, selfCorrMaxN, selfCorrMaxCliqueSize, pairMinN, pairMaxN;
     bool recordData;
@@ -322,7 +324,7 @@ class EnergyTable {
   public:
     EnergyTable() {}
     EnergyTable(const string& tabFile);
-  
+
     /* restrictSiteAlphabet() constructs a new energy table, copying only the residue types that are
      specified each position in restricted_siteAlphabets. When the new energy table will be applied
      as a constraint to the original one, constraint_table should be set to true. In this case, all
@@ -331,10 +333,10 @@ class EnergyTable {
      residue type can be specified per position. If a position in restricted_siteAlphabets is empty,
      all residue types will be copied.
      */
-  
+
     EnergyTable restrictSiteAlphabet(const vector<vector<string>>& restricted_siteAlphabets, bool constraint_table = false);
     EnergyTable restrictSiteAlphabet(const Structure& S, bool constraint_table = false);
-  
+
     void clear(); // resets the table to empty
     void readFromFile(const string& tabFile);
     void writeToFile(const string& tabFile);

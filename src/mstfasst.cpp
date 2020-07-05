@@ -1223,30 +1223,8 @@ string FASST::toString(const fasstSolution& sol) {
 void FASST::addSequenceContext(fasstSolution& sol) {
   int currentTarget = sol.getTargetIndex();
   Sequence& targSeq = targSeqs[currentTarget];
-  vector<int> alignment = sol.getAlignment();
-  vector<Sequence> segs(sol.numSegments()), ntPad(sol.numSegments()), ctPad(sol.numSegments());
   if (targChainEnd.empty()) FASST::fillTargetChainInfo(currentTarget);
-  for (int i = 0; i < sol.numSegments(); i++) {
-    int Li = sol.segLength(i);
-    segs[i].resize(Li);
-    for (int ri = sol[i]; ri < sol[i] + Li; ri++) {
-      segs[i][ri - alignment[i]] = targSeq[ri];
-    }
-    if (opts.getContextLength() > segs[i].size()) {
-      // pad on both ends, to accommodate different scenarios
-      int pad = opts.getContextLength() - segs[i].size();
-      ntPad[i].resize(pad, SeqTools::gapIdx()); ctPad[i].resize(pad, SeqTools::gapIdx());
-      for (int ri = 0; ri < pad; ri++) {
-        if (sol[i] + Li + ri > targChainEnd[sol[i]]) break; // stop if reach chain C-terminus
-        ctPad[i][ri] = targSeq[sol[i] + Li + ri];
-      }
-      for (int ri = 0; ri < pad; ri++) {
-        if (sol[i] - ri - 1 < targChainBeg[sol[i]]) break; // stop if reach chain N-terminus
-        ntPad[i][ntPad[i].size() - ri - 1] = targSeq[sol[i] - ri - 1];
-      }
-    }
-  }
-  sol.setSeqContext(segs, ntPad, ctPad);
+  sol.addSequenceContext(targSeqs[currentTarget], opts.getContextLength(), targChainBeg, targChainEnd);
 }
 
 void FASST::addSequenceContext(fasstSolutionSet& sols) {
@@ -1328,6 +1306,44 @@ void fasstSolution::read(istream& _is) {
     context = new solContext();
     context->read(_is);
   }
+}
+
+void fasstSolution::addSequenceContext(const Sequence& targSeq, int contLen, const vector<int>& targChainBeg, const vector<int>& targChainEnd) {
+  vector<Sequence> segs(alignment.size()), ntPad(alignment.size()), ctPad(alignment.size());
+  for (int i = 0; i < alignment.size(); i++) {
+    int Li = segLength(i);
+    segs[i].resize(Li);
+    for (int ri = alignment[i]; ri < alignment[i] + Li; ri++) {
+      segs[i][ri - alignment[i]] = targSeq[ri];
+    }
+    if (contLen > segs[i].size()) {
+      // pad on both ends, to accommodate different scenarios
+      int pad = contLen - segs[i].size();
+      ntPad[i].resize(pad, SeqTools::gapIdx()); ctPad[i].resize(pad, SeqTools::gapIdx());
+      for (int ri = 0; ri < pad; ri++) {
+        if (alignment[i] + Li + ri > targChainEnd[alignment[i]]) break; // stop if reach chain C-terminus
+        ctPad[i][ri] = targSeq[alignment[i] + Li + ri];
+      }
+      for (int ri = 0; ri < pad; ri++) {
+        if (alignment[i] - ri - 1 < targChainBeg[alignment[i]]) break; // stop if reach chain N-terminus
+        ntPad[i][ntPad[i].size() - ri - 1] = targSeq[alignment[i] - ri - 1];
+      }
+    }
+  }
+  setSeqContext(segs, ntPad, ctPad);
+}
+
+void fasstSolution::addSequenceContext(const Structure& target, int contLen) {
+  vector<int> targChainBeg(target.residueSize()), targChainEnd(target.residueSize());
+  int off = 0;
+  for (int ci = 0; ci < target.chainSize(); ci++) {
+    for (int i = 0; i < target[ci].residueSize(); i++) {
+      targChainBeg[off + i] = off;
+      targChainEnd[off + i] = off + target[ci].residueSize() - 1;
+    }
+    off += target[ci].residueSize();
+  }
+  addSequenceContext(Sequence(target), contLen, targChainBeg, targChainEnd);
 }
 
 
@@ -1514,9 +1530,11 @@ bool fasstSolutionSet::insert(const fasstSolution& sol, simpleMap<resAddress, ti
 
 void fasstSolutionSet::erase(fasstSolution& sol) {
   int ti = sol.getTargetIndex();
-  for (int i = 0; i < sol.numSegments(); i++) {
-    solsByCenRes[i][sol.segCentralResidue(i)].erase(&sol);
-    if (solsByCenRes[i][sol.segCentralResidue(i)].empty()) solsByCenRes[i].erase(sol.segCentralResidue(i));
+  if (!solsByCenRes.empty()) {
+    for (int i = 0; i < sol.numSegments(); i++) {
+      solsByCenRes[i][sol.segCentralResidue(i)].erase(&sol);
+      if (solsByCenRes[i][sol.segCentralResidue(i)].empty()) solsByCenRes[i].erase(sol.segCentralResidue(i));
+    }
   }
   solsSet.erase(sol);
   updated = true;

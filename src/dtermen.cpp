@@ -25,6 +25,7 @@ void dTERMen::init() {
   pairMinN = 1000;
   pairMaxN = 5000;
   recordData = false;
+  homCut = 0.6;
   setAminoAcidMap();
   setEnergyFunction("35");
 
@@ -61,6 +62,8 @@ void dTERMen::readConfigFile(const string& configFile) {
       setEnergyFunction(ents[1]);
     } else if (ents[0].compare("selfCorrMaxCliqueSize") == 0) {
       selfCorrMaxCliqueSize = MstUtils::toInt(ents[1]);
+    } else if (ents[0].compare("homCut") == 0) {
+      homCut = MstUtils::toReal(ents[1]);
     } else {
       MstUtils::error("unknown parameter name '" + ents[0] + "'", "dTERMen::dTERMen(const string&)");
     }
@@ -978,7 +981,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   F.setRMSDCutoff(rmsdCutSelfRes(sT.getResidueIndices(), S));
   F.setMinNumMatches(selfResidualMinN);
   F.setMaxNumMatches(selfResidualMaxN);
-  sT.setMatches(F.search());
+  sT.setMatches(F.search(), this);
   CartesianPoint selfResidual = singleBodyStatEnergy(sT.getMatches(), sT.getCentralResidueIndices()[0], selfResidualPC);
   if (recordData) data.push_back(sT);
   if (verbose) printSelfComponent(selfResidual, "\t");
@@ -1005,7 +1008,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     F.setRMSDCutoff(rmsdCutSelfCor(c.getResidueIndices(), S));
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
-    c.setMatches(F.search());
+    c.setMatches(F.search(), this);
     if (c.getMatch(selfCorrMinN - 1).getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
     else { cliquesToGrow[contResidues[i]] = c; }
   }
@@ -1033,7 +1036,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
         F.setQuery(newClique.getTERM());
         F.setRMSDCutoff(rmsdCutSelfCor(newClique.getResidueIndices(), S));
         F.setMaxNumMatches(selfCorrMaxN);
-        newClique.setMatches(F.search());
+        newClique.setMatches(F.search(), this);
         if ((j == 0) || (newClique.numMatches() > grownClique.numMatches())) {
           if (verbose) cout << "\t\t\t\tdTERMen::selfEnergies -> new best" << endl;
           grownClique = newClique;
@@ -1097,7 +1100,7 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
   F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
   F.setMinNumMatches(pairMinN);
   F.setMaxNumMatches(pairMaxN);
-  pT.setMatches(F.search());
+  pT.setMatches(F.search(), this);
   if (recordData) data.push_back(pT);
 
   // for each of the two positions, compute expectation of every amino acid in
@@ -1212,15 +1215,62 @@ pair<int, int> dTERMen::idxToPair(int idx) const {
 }
 
 /* ----------- EnergyTable --------------- */
+int dTERMen::termData::setMatches(const fasstSolutionSet& _matches, dTERMen* D) {
+  if (D == NULL) { matches = _matches; return matches.size(); }
+
+  // need at least one match (to structure the dummy match around) and at least
+  // one central residue for the underlying TERM (to infer the parent Structure)
+  if (_matches.size() == 0) return 0;
+  if (centResidues.empty()) return 0;
+  Structure* querySource = centResidues[0]->getStructure();
+  if (querySource == NULL) return 0;
+
+  // Create a dummy solution corresponding to the query, and fill its sequence
+  // context based on the template it came from. Use an example match to figure
+  // out segment boundaries, so that this decision is made only once (in FASST)
+  const fasstSolution& ex = *(_matches.begin());
+  vector<int> algn(ex.numSegments()), segLen(ex.numSegments());
+  int off = 0;
+  for (int i = 0; i < ex.numSegments(); i++) {
+    algn[i] = fragResIdx[off];
+    segLen[i] = ex.segLength(i);
+    off += ex.segLength(i);
+  }
+  fasstSolution orig(fasstSolutionAddress(0, algn), segLen);
+  orig.addSequenceContext(*querySource, D->getFASST()->options().getContextLength());
+
+  // fill the sequence context of all solutions
+  fasstSolutionSet matchesWithContext = _matches;
+  D->getFASST()->addSequenceContext(matchesWithContext);
+
+  // create a solution set with just the dummy solution and add each of the real
+  // solutions into it, one by one, with redundancy turned on. If they are not
+  // inserted, then they are redundant with the query and should be removed
+  orig.setRMSD(-1.0); // make sure the dummy solution always stays on top!
+  fasstSolutionSet origSet(orig);
+  matches.clear();
+  for (int i = 0; i < matchesWithContext.size(); i++) {
+    if (origSet.insert(matchesWithContext[i], D->getHomologyCutoff())) {
+      matches.insert(matchesWithContext[i]);
+      origSet.erase(matchesWithContext[i]);
+      if (origSet.size() != 1) MstUtils::error("it appears the original dummy solution has been lost (this should not happen)", "dTERMen::termData::setMatches"); // sanity check
+    }
+  }
+  cout << ">>>>>>>>>> originally had " << _matches.size() << " matches, after homology removal " << matches.size() << " survived" << endl;
+
+  return matches.size();
+}
+
+/* ----------- EnergyTable --------------- */
 EnergyTable::EnergyTable(const string& tabFile) {
   readFromFile(tabFile);
 }
 
 EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& restricted_siteAlphabets, bool constraint_table) {
   EnergyTable restricted_etab;
-  
+
   if (restricted_siteAlphabets.size() != sites.size()) MstUtils::error("The length of restricted_siteAlphabets and the number of positions in the energy table do not match ("+MstUtils::toString(restricted_siteAlphabets.size())+") and ("+MstUtils::toString(sites.size())+")");
-  
+
   /* copy site addresses and set alphabets */
   for (int s = 0; s < sites.size(); s++) {
     if ((constraint_table) && (restricted_siteAlphabets[s].size() > 1)) MstUtils::error("In constraint_table mode only a single residue, or none at all, may be specified per position");
@@ -1264,7 +1314,7 @@ EnergyTable EnergyTable::restrictSiteAlphabet(const vector<vector<string>>& rest
            If this is a constraint table:
            In the case that both positions are specified, the pair energy of the residue types
            specified by restricted_siteAlphabets[s][0] is copied to all pairs of residue types.
-           
+
            In the case that one of the positions is specified and the other is not, there will be 20
            unique pair energies (1 specified residue x 20 residues). Each of these pair energies will
            be copied 19 times, for each of the other residue types at the specified position.
