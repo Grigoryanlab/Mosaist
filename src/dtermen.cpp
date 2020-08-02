@@ -62,6 +62,21 @@ void dTERMen::readConfigFile(const string& configFile) {
       setEnergyFunction(ents[1]);
     } else if (ents[0].compare("selfCorrMaxCliqueSize") == 0) {
       selfCorrMaxCliqueSize = MstUtils::toInt(ents[1]);
+    } else if (ents[0].compare("selfResidualLims") == 0) {
+      vector<int> lims = MstUtils::splitToInt(ents[1]);
+      if (lims.size() != 2) MstUtils::error("expected two integers in selfResidualLims field", "dTERMen::readConfigFile");
+      selfResidualMinN = lims[0];
+      selfResidualMaxN = lims[1];
+    } else if (ents[0].compare("pairLims") == 0) {
+      vector<int> lims = MstUtils::splitToInt(ents[1]);
+      if (lims.size() != 2) MstUtils::error("expected two integers in pairLims field", "dTERMen::readConfigFile");
+      pairMinN = lims[0];
+      pairMaxN = lims[1];
+    } else if (ents[0].compare("selfCorrLims") == 0) {
+      vector<int> lims = MstUtils::splitToInt(ents[1]);
+      if (lims.size() != 2) MstUtils::error("expected two integers in selfCorrLims field", "dTERMen::readConfigFile");
+      selfCorrMinN = lims[0];
+      selfCorrMaxN = lims[1];
     } else if (ents[0].compare("homCut") == 0) {
       homCut = MstUtils::toReal(ents[1]);
     } else {
@@ -988,6 +1003,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   selfE += selfResidual;
 
   // -- self correction
+  if ((selfCorrMaxCliqueSize >= 0) && (selfCorrMaxCliqueSize < 2)) return selfE; // if max clique size is less than 2, then there is effectively no self residual
   if (verbose) cout << "\tdTERMen::selfEnergies -> self correction..." << endl;
 
   // -- get contacts
@@ -1256,7 +1272,6 @@ int dTERMen::termData::setMatches(const fasstSolutionSet& _matches, dTERMen* D) 
       if (origSet.size() != 1) MstUtils::error("it appears the original dummy solution has been lost (this should not happen)", "dTERMen::termData::setMatches"); // sanity check
     }
   }
-  cout << ">>>>>>>>>> originally had " << _matches.size() << " matches, after homology removal " << matches.size() << " survived" << endl;
 
   return matches.size();
 }

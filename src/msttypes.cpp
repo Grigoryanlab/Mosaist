@@ -3683,7 +3683,8 @@ void MstUtils::error(const string& message, string from, int code) {
   size_t size = backtrace(array, 100);
   backtrace_symbols_fd(array, size, STDERR_FILENO);
 
-  exit(code);
+  throw(code);
+  // exit(code);
 }
 
 MST::mstreal MstUtils::randNormal(MST::mstreal mu, MST::mstreal sig) {
