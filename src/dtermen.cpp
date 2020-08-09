@@ -1102,7 +1102,7 @@ mstreal dTERMen::pairEnergy(Residue* Ri, Residue* Rj, const string& aai, const s
                                [dTERMen::aaToIndex(aaj.empty() ? Rj->getName() : aaj)];
 }
 
-vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool verbose) {
+vector<vector<mstreal>> dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool verbose) {
   auto rmsdCutPair = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20); };
   if ((Ri->getStructure() == NULL) || (Rj->getStructure() == NULL)) MstUtils::error("cannot operate on a disembodied residues!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
   if (Ri->getStructure() != Rj->getStructure()) MstUtils::error("specified residues belong to different structures!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
@@ -1139,6 +1139,127 @@ vector<vector<mstreal> > dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ve
         Ne += Pi[k][aai] * Pj[k][aaj];
       }
       Ne *= (NoI[aai]/NeI[aai])*(NoJ[aaj]/NeJ[aaj]); // normalize to preserve marginals
+      mstreal No = NoIJ[dTERMen::pairToIdx(aai, aaj)];
+      mstreal pc = naa/MstUtils::max((vector<mstreal>) {No, Ne, 1.0});
+      pairE[aai][aaj] = -kT*log((No + pc)/(Ne + pc));
+    }
+  }
+
+  return pairE;
+}
+
+vector<vector<mstreal>> dTERMen::pairEnergiesNew(Residue* Ri, Residue* Rj, bool verbose) {
+  auto rmsdCutPair = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20); };
+  if ((Ri->getStructure() == NULL) || (Rj->getStructure() == NULL)) MstUtils::error("cannot operate on a disembodied residues!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
+  if (Ri->getStructure() != Rj->getStructure()) MstUtils::error("specified residues belong to different structures!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
+  Structure& S = *(Ri->getStructure());
+
+  // isolate TERM and get matches
+  int naa = globalAlphabetSize();
+  termData pT({Ri, Rj}, pmPair);
+  F.setOptions(foptsBase);
+  F.setQuery(pT.getTERM());
+  F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
+  F.setMinNumMatches(pairMinN);
+  F.setMaxNumMatches(pairMaxN);
+  pT.setMatches(F.search(), this);
+  if (recordData) data.push_back(pT);
+
+  // figure out which matches are from "homo-dimers"
+  vector<bool> isHomoDimer(pT.getMatches().size(), false);
+  for (int i = 0; i < pT.getMatches().size(); i++) {
+    // in order to count as a homo-dimer match, the central residues of the two
+    // segments must be the same, their sequence context must match closely
+    const fasstSolution& match = pT.getMatches()[i];
+    Sequence seq = F.getMatchSequence(match);
+    if (seq[pT.getCentralResidueIndices()[0]] != seq[pT.getCentralResidueIndices()[1]]) continue;
+    fasstSolution invertedMatch(match.getAlignment(), match.getRMSD(), match.getTargetIndex(), match.getTransform(), match.getSegLengths(), {1, 0});
+    fasstSolutionSet setOrig(match);
+    fasstSolutionSet setInverted(invertedMatch);
+    getFASST()->addSequenceContext(setOrig);
+    getFASST()->addSequenceContext(setInverted);
+    isHomoDimer[i] = !(setOrig.insert(setInverted[0], 0.9));
+  }
+
+  // for each of the two positions, compute expectation of every amino acid in
+  // the context of every match, based on background "trivial" energies and
+  // normalizing the totals of each amino acid across all matches to be equal to
+  // the number observed
+  vector<vector<mstreal> > pairE(naa, vector<mstreal>(naa, 0.0));
+  int cIndI = pT.getCentralResidueIndices()[0]; int cIndJ = pT.getCentralResidueIndices()[1];
+  vector<CartesianPoint> Pi = dTERMen::singleBodyExpectationsMatchedMarginals(pT.getMatches(), cIndI);
+  vector<CartesianPoint> Pj = dTERMen::singleBodyExpectationsMatchedMarginals(pT.getMatches(), cIndJ);
+  CartesianPoint NoIJ = dTERMen::twoBodyObservations(pT.getMatches(), cIndI, cIndJ);
+  for (int aai = 0; aai < naa; aai++) {
+    for (int aaj = 0; aaj < naa; aaj++) {
+      mstreal Ne = 0;
+      for (int k = 0; k < pT.numMatches(); k++) {
+        if (Pi[k].empty() || Pj[k].empty()) continue; // e.g., relevant positions in this match had unknown identities
+        if (isHomoDimer[k]) Ne += (Pi[k][aai] + Pj[k][aaj])/2;
+        else Ne += Pi[k][aai] * Pj[k][aaj];
+      }
+      mstreal No = NoIJ[dTERMen::pairToIdx(aai, aaj)];
+      mstreal pc = naa/MstUtils::max((vector<mstreal>) {No, Ne, 1.0});
+      pairE[aai][aaj] = -kT*log((No + pc)/(Ne + pc));
+    }
+  }
+
+  return pairE;
+}
+
+vector<vector<mstreal>> dTERMen::pairEnergiesNew2(Residue* Ri, Residue* Rj, bool verbose) {
+  auto rmsdCutPair = [](const vector<int>& fragResIdx, const Structure& S) { return RMSDCalculator::rmsdCutoff(fragResIdx, S, 1.0, 20); };
+  if ((Ri->getStructure() == NULL) || (Rj->getStructure() == NULL)) MstUtils::error("cannot operate on a disembodied residues!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
+  if (Ri->getStructure() != Rj->getStructure()) MstUtils::error("specified residues belong to different structures!", "dTERMen::pairEnergies(Residue*, Residue*, bool)");
+  Structure& S = *(Ri->getStructure());
+
+  // isolate TERM and get matches
+  int naa = globalAlphabetSize();
+  termData pT({Ri, Rj}, pmPair);
+  F.setOptions(foptsBase);
+  F.setQuery(pT.getTERM());
+  F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
+  F.setMinNumMatches(pairMinN);
+  F.setMaxNumMatches(pairMaxN);
+  pT.setMatches(F.search(), this);
+  if (recordData) data.push_back(pT);
+
+  // figure out which matches are from "homo-dimers"
+  vector<bool> isHomoDimer(pT.getMatches().size(), false);
+  for (int i = 0; i < pT.getMatches().size(); i++) {
+    // in order to count as a homo-dimer match, the central residues of the two
+    // segments must be the same, their sequence context must match closely
+    const fasstSolution& match = pT.getMatches()[i];
+    Sequence seq = F.getMatchSequence(match);
+    if (seq[pT.getCentralResidueIndices()[0]] != seq[pT.getCentralResidueIndices()[1]]) continue;
+    fasstSolution invertedMatch(match.getAlignment(), match.getRMSD(), match.getTargetIndex(), match.getTransform(), match.getSegLengths(), {1, 0});
+    fasstSolutionSet setOrig(match);
+    fasstSolutionSet setInverted(invertedMatch);
+    getFASST()->addSequenceContext(setOrig);
+    getFASST()->addSequenceContext(setInverted);
+    isHomoDimer[i] = !(setOrig.insert(setInverted[0], 0.9));
+  }
+
+  // for each of the two positions, compute expectation of every amino acid in
+  // the context of every match, based on background "trivial" energies and
+  // normalizing the totals of each amino acid across all matches to be equal to
+  // the number observed
+  vector<CartesianPoint> Pi, Pj;
+  vector<vector<mstreal> > pairE(naa, vector<mstreal>(naa, 0.0));
+  int cIndI = pT.getCentralResidueIndices()[0]; int cIndJ = pT.getCentralResidueIndices()[1];
+  CartesianPoint NoI = dTERMen::singleBodyObservations(pT.getMatches(), cIndI);
+  CartesianPoint NeI = dTERMen::singleBodyExpectations(pT.getMatches(), cIndI, &Pi);
+  CartesianPoint NoJ = dTERMen::singleBodyObservations(pT.getMatches(), cIndJ);
+  CartesianPoint NeJ = dTERMen::singleBodyExpectations(pT.getMatches(), cIndJ, &Pj);
+  CartesianPoint NoIJ = dTERMen::twoBodyObservations(pT.getMatches(), cIndI, cIndJ);
+  for (int aai = 0; aai < naa; aai++) {
+    for (int aaj = 0; aaj < naa; aaj++) {
+      mstreal Ne = 0;
+      for (int k = 0; k < pT.numMatches(); k++) {
+        if (Pi[k].empty() || Pj[k].empty()) continue; // e.g., relevant positions in this match had unknown identities
+        if (isHomoDimer[k]) Ne += ((Pi[k][aai] * (NoI[aai]/NeI[aai])) + (Pj[k][aaj] * (NoJ[aaj]/NeJ[aaj])))/2;
+        else Ne += (Pi[k][aai] * (NoI[aai]/NeI[aai])) * (Pj[k][aaj] * (NoJ[aaj]/NeJ[aaj]));
+      }
       mstreal No = NoIJ[dTERMen::pairToIdx(aai, aaj)];
       mstreal pc = naa/MstUtils::max((vector<mstreal>) {No, Ne, 1.0});
       pairE[aai][aaj] = -kT*log((No + pc)/(Ne + pc));
@@ -1199,6 +1320,42 @@ CartesianPoint dTERMen::singleBodyExpectations(fasstSolutionSet& matches, int cI
     Ne += inMatchExp;
   }
   return Ne;
+}
+
+vector<CartesianPoint> dTERMen::singleBodyExpectationsMatchedMarginals(fasstSolutionSet& matches, int cInd) {
+  // compute initial expected amino-acid distributions in each match
+  vector<CartesianPoint> mlogP;
+  CartesianPoint Ne(globalAlphabetSize(), 0.0);
+  vector<int> validMatches;
+  for (int i = 0; i < matches.size(); i++) {
+    int aaIdx = dTERMen::aaToIndex(F.getMatchSequence(matches[i])[cInd]);
+    if (!aaIndexKnown(aaIdx)) continue; // this match has some amino acid that is not known in the current alphabet
+    validMatches.push_back(i);
+    CartesianPoint inMatchExp = backExpectation(matches[i], cInd);
+    Ne += inMatchExp;
+    mlogP.push_back(inMatchExp);
+    for (int j = 0; j < mlogP.back().size(); j++) mlogP.back()[j] = -log(mlogP.back()[j]);
+  }
+  CartesianPoint No = dTERMen::singleBodyObservations(matches, cInd);
+
+  // next, iterate to find optimal amino-acid bias energies to get marginals to agree
+  CartesianPoint delE(globalAlphabetSize(), 0.0);
+  vector<CartesianPoint> breakDown(matches.size());
+  int Ncyc = 10;
+  for (int c = 0; c < Ncyc; c++) {
+    for (int aai = 0; aai < delE.size(); aai++) delE[aai] = delE[aai] + log(Ne[aai]/No[aai]);
+    Ne.clear(); Ne.resize(globalAlphabetSize(), 0.0);
+    for (int i = 0; i < mlogP.size(); i++) {
+      CartesianPoint inMatchExp = mlogP[i] + delE;
+      dTERMen::enerToProb(inMatchExp);
+      Ne += inMatchExp;
+      if (c == Ncyc - 1) {
+        breakDown[validMatches[i]] = inMatchExp;
+      }
+    }
+  }
+
+  return breakDown;
 }
 
 CartesianPoint dTERMen::backExpectation(const fasstSolution& m, int cInd) {

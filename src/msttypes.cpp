@@ -1524,6 +1524,13 @@ CartesianPoint& CartesianPoint::operator*=(const mstreal& s) {
   return *this;
 }
 
+CartesianPoint& CartesianPoint::operator+=(const mstreal& d) {
+  for (int i = 0; i < size(); i++) {
+    (*this)[i] += d;
+  }
+  return *this;
+}
+
 CartesianPoint& CartesianPoint::operator/=(const mstreal& s) {
   for (int i = 0; i < size(); i++) {
     (*this)[i] /= s;
@@ -1550,6 +1557,12 @@ const CartesianPoint CartesianPoint::operator-() const {
 const CartesianPoint CartesianPoint::operator*(const mstreal& s) const {
   CartesianPoint result = *this;
   result *= s;
+  return result;
+}
+
+const CartesianPoint CartesianPoint::operator+(const mstreal& d) const {
+  CartesianPoint result = *this;
+  result += d;
   return result;
 }
 

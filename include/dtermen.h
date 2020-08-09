@@ -117,7 +117,7 @@ class dTERMen {
     mstreal getkT() const { return kT; }
     FASST* getFASST() { return &F; }
     RotamerLibrary* getRotamerLibrary() { return &RL; }
-    vector<res_t> getGlobalAlph() {return globAlph;}
+    vector<res_t> getGlobalAlphabet() { return globAlph; }
     void setAminoAcidMap();
     void printAminoAcidMap();
     int globalAlphabetSize() const { return globAlph.size(); }
@@ -214,7 +214,9 @@ class dTERMen {
     vector<mstreal> selfEnergies(Residue* R, ConFind& C, bool verbose = false);
 
     mstreal pairEnergy(Residue* Ri, Residue* Rj, const string& aai = "", const string& aaj = "");
-    vector<vector<mstreal> > pairEnergies(Residue* Ri, Residue* Rj, bool verbose = false);
+    vector<vector<mstreal>> pairEnergies(Residue* Ri, Residue* Rj, bool verbose = false);
+    vector<vector<mstreal>> pairEnergiesNew(Residue* Ri, Residue* Rj, bool verbose = false);
+    vector<vector<mstreal>> pairEnergiesNew2(Residue* Ri, Residue* Rj, bool verbose = false);
 
   protected:
     int findBin(const vector<mstreal>& binEdges, mstreal x); // do a binary search to find the bin into which the value falls
@@ -248,7 +250,17 @@ class dTERMen {
      * can be specified to collect the expectation in each match. */
     CartesianPoint singleBodyExpectations(fasstSolutionSet& matches, int cInd, vector<CartesianPoint>* breakDown = NULL);
 
+    /* Computes the number of times each amino acid is expected to be found at
+     * the given position in each match. Identifies an underlying amino-acid bias
+     * energy vector to make sure that the marginals (i.e., the total number of
+     * times each amino acid is expected across all matches) approximately equal
+     * to the expectations. In practice, the agreement should be essentially
+     * perfect, limited only by the number of iterations of the underlying itera-
+     * tive procedure. */
+    vector<CartesianPoint> singleBodyExpectationsMatchedMarginals(fasstSolutionSet& matches, int cInd);
+
     mstreal enerToProb(vector<mstreal>& ener);
+    mstreal enerToProb(const vector<mstreal>& _ener) { vector<mstreal> ener = _ener; return enerToProb(ener); }
 
     /* Amino-acid indices provide a convenient way to index into a array, while
      * also encoding the amino-acid type. For amino-acid pairs, this is tricky,
