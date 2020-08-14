@@ -101,9 +101,13 @@ int main(int argc, char *argv[]) {
 
     vector<int> bestSol = E.mc(100, 1000000, 1.0, 0.01);
     mstreal lowE = E.scoreSolution(bestSol);
-    cout << "lowest energy found is " << lowE << endl;
     bestSeq = E.solutionToSequence(bestSol);
-    cout << "lowest-energy sequence: " << bestSeq.toString() << endl;
+    Sequence origSeq(variable);
+    cout << bestSeq.toString() << " | " << lowE << " | lowest-energy sequence" << endl;
+    cout << origSeq.toString() << " | " << E.scoreSequence(origSeq) << " | original sequence" << endl;
+    int numID = 0;
+    for (int i = 0; i < bestSeq.length(); i++) numID += (bestSeq[i] == origSeq[i]);
+    cout << (numID*100.0)/bestSeq.length() << "% | " << numID << " | " << bestSeq.length() << " | recovery" << endl;
     cout << "mean energy is " << E.meanEnergy() << endl;
     cout << "estimated energy standard deviation is " << E.energyStdEst() << endl;
   }
