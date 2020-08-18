@@ -1822,13 +1822,17 @@ Sequence EnergyTable::solutionToSequence(const vector<int>& sol) {
   return seq;
 }
 
-vector<int> EnergyTable::sequenceToSolution(const Sequence& seq) {
+vector<int> EnergyTable::sequenceToSolution(const Sequence& seq, bool strict) {
   if (seq.size() != selfE.size()) MstUtils::error("sequence of wrong length for table", "EnergyTable::sequenceToSolution(const Sequence&)");
   vector<int> seqInts(seq.size());
   for (int i = 0; i < seq.size(); i++) {
     string aa3 = seq.getResidue(i, true);
-    if (aaIndices[i].find(aa3) == aaIndices[i].end()) MstUtils::error("sequence is not from table alphabet", "EnergyTable::sequenceToSolution(const Sequence&)");
-    seqInts[i] = aaIndices[i][aa3];
+    if (aaIndices[i].find(aa3) == aaIndices[i].end()) {
+      if (strict) MstUtils::error("sequence is not from table alphabet", "EnergyTable::sequenceToSolution(const Sequence&)");
+      seqInts[i] = -1;
+    } else {
+      seqInts[i] = aaIndices[i][aa3];
+    }
   }
   return seqInts;
 }

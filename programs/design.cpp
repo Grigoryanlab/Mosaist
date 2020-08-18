@@ -103,11 +103,18 @@ int main(int argc, char *argv[]) {
     mstreal lowE = E.scoreSolution(bestSol);
     bestSeq = E.solutionToSequence(bestSol);
     Sequence origSeq(variable);
+    vector<int> origSol = E.sequenceToSolution(origSeq, false);
+    bool okSequence = (MstUtils::min(origSol) >= 0);
     cout << bestSeq.toString() << " | " << lowE << " | lowest-energy sequence" << endl;
-    cout << origSeq.toString() << " | " << E.scoreSequence(origSeq) << " | original sequence" << endl;
-    int numID = 0;
-    for (int i = 0; i < bestSeq.length(); i++) numID += (bestSeq[i] == origSeq[i]);
-    cout << (numID*100.0)/bestSeq.length() << "% | " << numID << " | " << bestSeq.length() << " | recovery" << endl;
+    cout << origSeq.toString() << " | " << (okSequence ? MstUtils::toString(E.scoreSequence(origSeq)) : "N/A") << " | original sequence" << endl;
+    int numID = 0, numTot = 0;
+    for (int i = 0; i < bestSeq.length(); i++) {
+      if (origSol[i] >= 0) {
+        numID += (bestSol[i] == origSol[i]);
+        numTot++;
+      }
+    }
+    cout << ((numTot > 0) ? (numID*100.0)/numTot : 0.0) << "% | " << numID << " | " << bestSeq.length() << " | recovery" << endl;
     cout << "mean energy is " << E.meanEnergy() << endl;
     cout << "estimated energy standard deviation is " << E.energyStdEst() << endl;
   }

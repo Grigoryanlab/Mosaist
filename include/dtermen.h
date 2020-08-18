@@ -413,7 +413,7 @@ class EnergyTable {
     vector<int> mc(int Nc, int Ni, mstreal kTi, mstreal kTf = -1, int annealType = 1, void* rec = NULL, void (*add)(void*, const vector<int>&, mstreal) = NULL, int Ne = -1);
 
     Sequence solutionToSequence(const vector<int>& sol);
-    vector<int> sequenceToSolution(const Sequence& seq);
+    vector<int> sequenceToSolution(const Sequence& seq, bool strict = false);
     string getResidueString(int si, int ri); // TODO
     int getResidueIndex(int si, const string& aa) { return aaIndices[si][aa]; }
 
