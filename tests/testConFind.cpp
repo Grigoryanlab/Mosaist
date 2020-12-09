@@ -204,6 +204,18 @@ int main(int argc, char *argv[]) {
         for (int ai = 0; ai < res->atomSize(); ai++) { (*res)[ai].setB(100*freedoms[k]); }
       }
     }
+    
+    // print interference
+    contactList intL;
+    C.getInterference(allRes, 0, &intL);
+    vector<pair<Residue*, Residue*> > intList = intL.getOrderedContacts();
+    for (int k = 0; k < intList.size(); k++) {
+      Residue* resA = intList[k].first;
+      Residue* resB = intList[k].second;
+      out << "interference\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
+      out << "\t" << std::setprecision(6) << std::fixed << L.degree(resA, resB);
+      out << "\t" << resA->getName() << "\t" << resB->getName() << endl;
+    }
 
     // print sequence
     out << "SEQUENCE: ";
