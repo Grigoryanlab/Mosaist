@@ -84,6 +84,8 @@ int main(int argc, char *argv[]) {
   op.addOption("ren", "if flag specified, will renumber the structure before output. Useful for keeping track of residues in the output list of contacts if the input PDB file is strangely numbered.");
 
   op.setOptions(argc, argv);
+  
+  MstTimer timer; timer.start();
 
   MstUtils::assert(op.isGiven("p") || op.isGiven("pL"), "either --p or --pL must be specified!");
   if (op.isGiven("p")) iopts.pdbfs.push_back(op.getString("p"));
@@ -213,7 +215,7 @@ int main(int argc, char *argv[]) {
       Residue* resA = intList[k].first;
       Residue* resB = intList[k].second;
       out << "interference\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
-      out << "\t" << std::setprecision(6) << std::fixed << L.degree(resA, resB);
+      out << "\t" << std::setprecision(6) << std::fixed << intL.degree(resA, resB);
       out << "\t" << resA->getName() << "\t" << resB->getName() << endl;
     }
 
@@ -232,6 +234,8 @@ int main(int argc, char *argv[]) {
 
     if (!iopts.rotOutFile.empty()) C.closeLogFile();
   }
+  
+  cout << "In total, took " << timer.getDuration() << " to complete" << endl;
 }
 
 
