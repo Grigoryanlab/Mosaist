@@ -801,11 +801,13 @@ class DecoratedProximitySearch : public ProximitySearch {
     DecoratedProximitySearch(AtomPointerVector& _atoms, int _N, vector<T>& _tags, mstreal pad = 0) :
       ProximitySearch(_atoms, _N, true, NULL, pad) {
       tags = _tags;
+      checkSizes();
     }
     DecoratedProximitySearch(AtomPointerVector& _atoms, int _N, mstreal pad = 0) : ProximitySearch(_atoms, _N, false, NULL, pad) {}
     DecoratedProximitySearch(AtomPointerVector& _atoms, mstreal _characteristicDistance, vector<T>& _tags, mstreal pad = 0) :
       ProximitySearch(_atoms, _characteristicDistance, true, NULL, pad) {
       tags = _tags;
+      checkSizes();
     }
     DecoratedProximitySearch(AtomPointerVector& _atoms, mstreal _characteristicDistance, mstreal pad = 0) :
       ProximitySearch(_atoms, _characteristicDistance, false, NULL, pad) { }
@@ -834,6 +836,9 @@ class DecoratedProximitySearch : public ProximitySearch {
     vector<int> getPointsWithinIndices(const CartesianPoint& c, mstreal dmin, mstreal dmax) {
       return this->ProximitySearch::getPointsWithin(c, dmin, dmax, true);
     }
+
+  protected:
+    bool checkSizes();
 
   private:
     vector<T> tags;
@@ -1612,6 +1617,13 @@ tightvector<T>::operator vector<T>() const {
   vector<T> ret(size());
   for (int i = 0; i < size(); i++) ret[i] = (*this)[i];
   return ret;
+}
+
+/* --------- DecoratedProximitySearch --------- */
+template<class T>
+bool DecoratedProximitySearch<T>::checkSizes() {
+  if (tags.size() != pointSize())
+    MstUtils::error("number of points and custom tags does not agree", "DecoratedProximitySearch<T>::checkSizes()");
 }
 
 #endif
