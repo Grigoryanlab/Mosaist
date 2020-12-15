@@ -1,6 +1,8 @@
 #include "mstcondeg.h"
 
-void contactList::sortByDegree() {
+/* interactionList (virtual class) */
+
+void interactionList::sortByDegree() {
   vector<int> sortedIndices = MstUtils::sortIndices(degrees, true);
   vector<Residue*> resiOld = resi, resjOld = resj;
   vector<mstreal> degreesOld = degrees;
@@ -10,6 +12,22 @@ void contactList::sortByDegree() {
     resj[i] = resjOld[sortedIndices[i]];
     degrees[i] = degreesOld[sortedIndices[i]];
     infos[i] = infosOld[sortedIndices[i]];
+  }
+}
+
+/* contactList */
+
+void contactList::addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info, bool directional) {
+  resi.push_back(_resi);
+  resj.push_back(_resj);
+  degrees.push_back(_degree);
+  infos.push_back(_info);
+  inContact[_resi][_resj] = resi.size() - 1;
+  if (!directional) inContact[_resj][_resi] = resi.size() - 1;
+  if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
+    orderedContacts.insert(pair<Residue*, Residue*>(_resj, _resi));
+  } else {
+    orderedContacts.insert(pair<Residue*, Residue*>(_resi, _resj));
   }
 }
 
@@ -28,11 +46,14 @@ mstreal contactList::degree(Residue* _resi, Residue* _resj) {
   return degrees[inContact[_resi][_resj]];
 }
 
-bool contactList::areInContact(Residue* A, Residue* B) {
-  if (inContact.find(A) == inContact.end()) return false;
-  if (inContact[A].find(B) == inContact[A].end()) return false;
+bool contactList::areInContact(Residue* _resi, Residue* _resj) {
+  if (inContact.find(_resi) == inContact.end()) return false;
+  if (inContact[_resi].find(_resj) == inContact[_resi].end()) return false;
   return true;
 }
+
+/* ConFind */
+
 
 ConFind::ConFind(string rotLibFile, const Structure& S, bool _strict) {
   setParams();
@@ -73,8 +94,10 @@ ConFind::~ConFind() {
     vector<rotamerID*>& rots = it->second;
     for (int i = 0; i < rots.size(); i++) delete(rots[i]);
   }
-  for (auto it = rotamerHeavySC.begin(); it != rotamerHeavySC.end(); ++it) {
-    if (it->second != NULL) delete(it->second);
+  for (auto res_it = rotamerHeavySC.begin(); res_it != rotamerHeavySC.end(); ++res_it) {
+    for (auto aa_it = rotamerHeavySC[res_it->first].begin(); aa_it != rotamerHeavySC[res_it->first].end(); ++aa_it) {
+      if (aa_it->second != NULL) delete(aa_it->second);
+    }
   }
 }
 
@@ -97,7 +120,6 @@ void ConFind::cache(Residue* res) {
   AtomPointerVector pointCloud;      // side-chain atoms of surviving rotames
   vector<rotamerID*> pointCloudTags; // corresponding tags (i.e.,  rotamer identity)
   survivingRotamers[res].resize(0);
-  rotamerHeavySC[res] = NULL;
   bool writeLog = rotOut.is_open();
 
   // make sure this residue has a proper backbone, otherwise adding rotamers will fail
@@ -109,9 +131,9 @@ void ConFind::cache(Residue* res) {
 
   // load rotamers of each amino acid
   int numRemRotsInPosition = 0; int totNumRotsInPosition = 0;
-  for (int j = 0; j < aaNames.size(); j++) {
-    string aa = aaNames[j];
+  for (string aa : aaNames) {
     if (aaProp.find(aa) == aaProp.end()) MstUtils::error("no propensity defined for amino acid " + aa);
+    rotamerHeavySC[res][aa] = NULL;
     double aaP = aaProp[aa];
     if (strict && res_name != aa && res_name != "UNK") continue;
     int nr = rotLib->numberOfRotamers(aa, phi, psi);
@@ -127,7 +149,7 @@ void ConFind::cache(Residue* res) {
         Atom& a = rot[k];
         if (!countsAsSidechain(a)) continue;
 
-        // shuld the rotamer be pruned based on this atom's clash(es)?
+        // should the rotamer be pruned based on this atom's clash(es)?
         closeOnes.clear();
         bbNN->pointsWithin(a.getCoor(), 0.0, clashDist, &closeOnes);
         for (int ci = 0; ci < closeOnes.size(); ci++) {
@@ -149,7 +171,8 @@ void ConFind::cache(Residue* res) {
           if (interfering.find(resB) != interfering.end()) continue;
           if (resB != res) {
             interfering.insert(resB);
-            interference[res][resB] += aaP * rotP/100.0;
+            if (interference[res][resB].count(aa) == 0) interference[res][resB][aa] = 0.0;
+            interference[res][resB][aa] += aaP * rotP/100.0;
           }
         }
 
@@ -171,14 +194,16 @@ void ConFind::cache(Residue* res) {
       }
       numRemRotsInPosition++;
     }
+    
+    // cash all the rotamer heavy atoms from rotamers of this amino acid for faster distance-based searches
+    if (pointCloud.size() != 0) rotamerHeavySC[res][aa] = new DecoratedProximitySearch<rotamerID*>(pointCloud, contDist/2, pointCloudTags);
+    pointCloud.deletePointers();
+    pointCloudTags.clear();
+    
     totNumRotsInPosition += nr;
   }
   fractionPruned[res] = (totNumRotsInPosition - numRemRotsInPosition)*1.0/totNumRotsInPosition;
   numLibraryRotamers[res] = totNumRotsInPosition;
-
-  // cash all atoms for faster distance-based searches
-  if (pointCloud.size() != 0) rotamerHeavySC[res] = new DecoratedProximitySearch<rotamerID*>(pointCloud, contDist/2, pointCloudTags);
-  pointCloud.deletePointers();
 }
 
 bool ConFind::countsAsSidechain(Atom& a) {
@@ -196,37 +221,56 @@ void ConFind::cache(const Structure& S) {
   cache(residues);
 }
 
-mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cacheB, bool checkNeighbors) {
-  bool updateA = (updateCollProb.find(resA) != updateCollProb.end()) && updateCollProb[resA];
-  bool updateB = (updateCollProb.find(resB) != updateCollProb.end()) && updateCollProb[resB];
+mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool cacheB, bool checkNeighbors, set<string> aaAllowedA, set<string> aaAllowedB) {
+  // only cache CD value/collision probabities if amino acids are not restricted at either position
+  bool no_aa_restriction = (aaAllowedA.empty() && aaAllowedA.empty());
+  if (aaAllowedA.empty()) aaAllowedA = aaNames;
+  if (aaAllowedB.empty()) aaAllowedB = aaNames;
+  bool updateA = (no_aa_restriction && updateCollProb.find(resA) != updateCollProb.end()) && updateCollProb[resA];
+  bool updateB = (no_aa_restriction && updateCollProb.find(resB) != updateCollProb.end()) && updateCollProb[resB];
   // if collision probabilities need to be updated, then go into CD calculation even if value already available
-  if ((degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end()) && !updateA && !updateB) {
+  if (no_aa_restriction && (degrees.find(resA) != degrees.end()) && (degrees[resA].find(resB) != degrees[resA].end()) && !updateA && !updateB) {
     return degrees[resA][resB];
   }
   if (cacheA) cache(resA);
   if (cacheB) cache(resB);
   if (checkNeighbors && !areNeighbors(resA, resB)) return 0;
-  DecoratedProximitySearch<rotamerID*>* cloudA = rotamerHeavySC[resA];
-  DecoratedProximitySearch<rotamerID*>* cloudB = rotamerHeavySC[resB];
-  if ((cloudA == NULL) || (cloudB == NULL)) return 0.0;
-
-  // check if the point clouds representing to two rotamer trees even overlap
-  if (!cloudA->overlaps(*cloudB)) return 0;
-
-  // if so, find rotamer pairs that clash
-  // NOTE: this is the slow part of contact finding; could perhaps speed up by
-  // storing smaller ProximitySearch object (not decorated) for each rotamer
+  
+  // get point clouds for each amino acid from the A/B sets and find interacting rotamer pairs
   fastmap<rotamerID*, fastmap<rotamerID*, bool> > clashing;
-  vector<rotamerID*> p;
-  for (int ai = 0; ai < cloudA->pointSize(); ai++) {
-    cloudB->getPointsWithin(cloudA->getPoint(ai), 0, contDist, &p);
-    if (p.size() == 0) continue;
-    rotamerID* rID = cloudA->getPointTag(ai);
-    for (int i = 0; i < p.size(); i++) clashing[rID][p[i]] = true;
-  }
+  DecoratedProximitySearch<rotamerID*>* cloudA;
+  DecoratedProximitySearch<rotamerID*>* cloudB;
+  for (string resA_aa : aaAllowedA) {
+    if (aaNames.find(resA_aa) == aaNames.end()) MstUtils::error("amino acid with the name: "+resA_aa+" not in list of allowable amino acids");
+    if (rotamerHeavySC[resA].count(resA_aa) != 0) cloudA = rotamerHeavySC[resA][resA_aa];
+    else continue;
+    if (cloudA == NULL) continue;
+    
+    for (string resB_aa : aaAllowedB) {
+      if (aaNames.find(resB_aa) == aaNames.end()) MstUtils::error("amino acid with the name: "+resB_aa+" not in list of allowable amino acids");
+      if (rotamerHeavySC[resB].count(resB_aa) != 0) cloudB = rotamerHeavySC[resB][resB_aa];
+      else continue;
+      
+      if (cloudB == NULL) continue;
 
+      // check if the point clouds representing the two rotamer trees even overlap
+      if (!cloudA->overlaps(*cloudB,contDist)) continue;
+      
+      // if so, find rotamer pairs that clash
+      // NOTE: this is the slow part of contact finding; could perhaps speed up by
+      // storing smaller ProximitySearch object (not decorated) for each rotamer
+      vector<rotamerID*> p;
+      for (int ai = 0; ai < cloudA->pointSize(); ai++) {
+        cloudB->getPointsWithin(cloudA->getPoint(ai), 0, contDist, &p);
+        if (p.size() == 0) continue;
+        rotamerID* rID = cloudA->getPointTag(ai);
+        for (int i = 0; i < p.size(); i++) clashing[rID][p[i]] = true;
+      }
+    }
+  }
+  
   // compute contact degree
-  mstreal cd = 0;
+  mstreal cd = 0.0;
   for (fastmap<rotamerID*, fastmap<rotamerID*, bool> >::iterator itA = clashing.begin(); itA != clashing.end(); ++itA) {
     rotamerID* rotA = itA->first;
     mstreal rotProbA = rotLib->rotamerProbability(rotA);
@@ -242,10 +286,13 @@ mstreal ConFind::contactDegree(Residue* resA, Residue* resB, bool cacheA, bool c
   }
   
   // in case there are no available rotamer pairs, avoid division and just set to 0.0
-  if (weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB) == 0.0) cd = 0.0;
-  else cd /= weightOfAvailableRotamers(resA) * weightOfAvailableRotamers(resB);
-  degrees[resA][resB] = cd;
-  degrees[resB][resA] = cd;
+  mstreal denom = weightOfAvailableRotamers(resA,aaAllowedA) * weightOfAvailableRotamers(resB,aaAllowedB);
+  if (denom == 0.0) cd = 0.0;
+  else cd /= denom;
+  if (no_aa_restriction) {
+    degrees[resA][resB] = cd;
+    degrees[resB][resA] = cd;
+  }
 
   return cd;
 }
@@ -262,6 +309,15 @@ vector<Residue*> ConFind::getContactingResidues(Residue* res, mstreal cdcut) {
   collProbUpdateOn(res);
   for (int i = 0; i < list.size(); i++) partners[i] = list.residueB(i);
   return partners;
+}
+
+contactList ConFind::getContacts(Structure& S, mstreal cdcut, contactList* list) {
+  contactList L;
+  if (list == NULL) list = &L;
+  vector<Residue*> allRes = S.getResidues();
+  getContacts(allRes, cdcut, list);
+  
+  return *list;
 }
 
 contactList ConFind::getContacts(const vector<Residue*>& residues, mstreal cdcut, contactList* list) {
@@ -302,6 +358,31 @@ contactList ConFind::getContacts(const vector<Residue*>& residues, mstreal cdcut
   return *list;
 }
 
+aaConstrainedContactList ConFind::getConstrainedContacts(const vector<Residue *> &residues, mstreal cdcut, aaConstrainedContactList* list) {
+  aaConstrainedContactList L;
+  if (list == NULL) list = &L;
+  
+  cache(residues);
+  
+  for (int i = 0; i < residues.size(); i++) {
+    Residue* resi = residues[i];
+    vector<Residue*> neighborhood = getNeighbors(resi);
+    for (int j = 0; j < neighborhood.size(); j++) {
+      Residue* resj = neighborhood[j];
+      if (resi != resj) {
+        mstreal cd;
+        for (string aa: aaNames) {
+          cd = contactDegree(resi, resj, false, true, false, {aa}, aaNames);
+          if (cd > cdcut) {
+            list->addContact(resi, resj, cd, {aa}, aaNames);
+          }
+        }
+      }
+    }
+  }
+  return L;
+}
+
 contactList ConFind::getInterference(const vector<Residue*>& residues, mstreal incut, contactList* list) {
   cache(residues);
   contactList L;
@@ -312,11 +393,11 @@ contactList ConFind::getInterference(const vector<Residue*>& residues, mstreal i
   // because interference is directional, need to check if the desired residues
   // are involved in either direction
   for (auto itA = interference.begin(); itA != interference.end(); ++itA) {
-    fastmap<Residue*, mstreal>& interB = itA->second;
+    fastmap<Residue*, fastmap<string,mstreal>>& interB = itA->second;
     bool wantA = (wanted.find(itA->first) != wanted.end());
     for (auto itB = interB.begin(); itB != interB.end(); ++itB) {
-      mstreal in = itB->second;
       if (wantA || (wanted.find(itB->first) != wanted.end())) {
+        mstreal in = interferenceValue(itA->first, itB->first);
         if (in >= incut) {
           list->addContact(itA->first, itB->first, in, "", true);
         }
@@ -346,9 +427,9 @@ contactList ConFind::getInterfering(const vector<Residue*>& residues, mstreal in
   for (int i = 0; i < residues.size(); i++) {
     Residue* resA = residues[i];
     if (interference.find(resA) == interference.end()) continue;
-    fastmap<Residue*, mstreal>& interB = interference[resA];
+    fastmap<Residue*, fastmap<string, mstreal>>& interB = interference[resA];
     for (auto itB = interB.begin(); itB != interB.end(); ++itB) {
-      mstreal in = itB->second;
+      mstreal in = interferenceValue(resA, itB->first);
       if (in >= incut) {
         list->addContact(resA, itB->first, in, "", true);
       }
@@ -366,13 +447,21 @@ contactList ConFind::getInterfering(const Structure& S, mstreal incut, contactLi
   return *list;
 }
 
-contactList ConFind::getContacts(Structure& S, mstreal cdcut, contactList* list) {
-  contactList L;
-  if (list == NULL) list = &L;
-  vector<Residue*> allRes = S.getResidues();
-  getContacts(allRes, cdcut, list);
-
-  return *list;
+mstreal ConFind::interferenceValue(Residue* resA, Residue* resB, set<string> aaAllowed) {
+  mstreal in = 0.0;
+  if (interference[resA].count(resB) == 0) return in;
+  if (aaAllowed.empty()) aaAllowed = aaNames;
+  
+  // sum up interference of resB backbone on resA sidechain (considering only allowed amino acids)
+  for (string aa : aaAllowed) {
+    if (aaNames.find(aa) == aaNames.end()) MstUtils::error("amino acid with the name: "+aa+" not in list of allowable amino acids");
+    in += interference[resA][resB][aa];
+  }
+  
+  // normalize the interference by the weight of available rotamers at resA
+  if (weightOfAvailableAminoAcids(aaAllowed) == 0.0) in = 0.0;
+  else in /= weightOfAvailableAminoAcids(aaAllowed);
+  return in;
 }
 
 mstreal ConFind::bbInteraction(Residue *resA, Residue *resB) {
@@ -444,15 +533,24 @@ vector<mstreal> ConFind::getCrowdedness(vector<Residue*>& residues) {
   return crowdedness;
 }
 
-mstreal ConFind::weightOfAvailableRotamers(Residue* res) {
+mstreal ConFind::weightOfAvailableRotamers(Residue* res, set<string> available_aa) {
   mstreal weight = 0;
   if (survivingRotamers.find(res) == survivingRotamers.end()) MstUtils::error("residue not cached: " + MstUtils::toString(res), "ConFind::weightOfAvailableRotamers");
   vector<rotamerID*>& rots = survivingRotamers[res];
   for (int i = 0; i < rots.size(); i++) {
     rotamerID& rot = *(rots[i]);
+    if (available_aa.find(rot.aminoAcid()) == available_aa.end()) continue;
     weight += aaProp[rot.aminoAcid()] * rotLib->rotamerProbability(rot);
   }
   return weight;
+}
+
+mstreal ConFind::weightOfAvailableAminoAcids(set<string> available_aa) {
+  mstreal weight = 0;
+  for (string aa : available_aa) {
+    weight += aaProp[aa];
+  }
+  return weight/100.0;
 }
 
 mstreal ConFind::getFreedom(Residue* res) {

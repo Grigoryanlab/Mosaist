@@ -25,14 +25,14 @@ class options {
     options() {
       dcut = 25.0;
       clashDist = 2.0; contDist = 3.0; rotLibFile = ""; beblFile = ""; rotOutFile = ""; rotLevel = "";
-      verbose = renumPDB = phi_psi = omega = printFileNames = false;
+      verbose = renumPDB = phi_psi = omega = printFileNames = seq_const = false;
       aaProp["ALA"] = 7.73; aaProp["CYS"] = 1.84; aaProp["ASP"] = 5.82; aaProp["GLU"] = 6.61; aaProp["PHE"] = 4.05;
       aaProp["GLY"] = 7.11; aaProp["HIS"] = 2.35; aaProp["HSD"] = 2.35; aaProp["ILE"] = 5.66; aaProp["LYS"] = 6.27;
       aaProp["LEU"] = 8.83; aaProp["MET"] = 2.08; aaProp["ASN"] = 4.50; aaProp["PRO"] = 4.52; aaProp["GLN"] = 3.94;
       aaProp["ARG"] = 5.03; aaProp["SER"] = 6.13; aaProp["THR"] = 5.53; aaProp["VAL"] = 6.91; aaProp["TRP"] = 1.51; aaProp["TYR"] = 3.54;
     }
     vector<string> pdbfs, omapfs, opdbfs;
-    bool verbose, renumPDB, phi_psi, printFileNames, omega, freeB;
+    bool verbose, renumPDB, phi_psi, printFileNames, omega, freeB, seq_const;
     string focus, rotLibFile, beblFile, rotOutFile, rotLevel;
     double dcut, clashDist, contDist;
     map<string, double> aaProp; // amino-acid propensities (in percent)
@@ -79,6 +79,7 @@ int main(int argc, char *argv[]) {
   op.addOption("sel", "optional: a selection string for limiting the residues for which properties will be computed.");
   op.addOption("pp", "optional: print phi/psi angles for each residue (will print next to all positional scores score).");
   op.addOption("omg", "optional: print omega angles for each residue (will print next to all positional scores score). Omega for the current position is defined as the -CA, C, N, CA dihedral angle.");
+  op.addOption("seq_const","optional: recompute the CD and INT using sequence constraints.");
   op.addOption("verb", "optional: generate lots of detailed output (i.e., print the details of which rotamer pairs are in contact).");
   op.addOption("pf", "if flag specified, will print the name of the PDB file being analyzed next to all positional scores. This is especially convenient when a list of PDB file is specified as input and the output goes to a single file.");
   op.addOption("ren", "if flag specified, will renumber the structure before output. Useful for keeping track of residues in the output list of contacts if the input PDB file is strangely numbered.");
@@ -103,6 +104,7 @@ int main(int argc, char *argv[]) {
   iopts.renumPDB = op.isGiven("ren");
   iopts.printFileNames = op.isGiven("pf");
   iopts.freeB = op.isGiven("freeB");
+  iopts.seq_const = op.isGiven("seq_const");
 
   // error checking
   // make sure lists are of the proper size
@@ -176,7 +178,9 @@ int main(int argc, char *argv[]) {
       Residue* resB = list[k].second;
       out << "contact\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
       out << "\t" << std::setprecision(6) << std::fixed << L.degree(resA, resB);
-      out << "\t" << resA->getName() << "\t" << resB->getName() << endl;
+      out << "\t" << resA->getName() << "\t" << resB->getName();
+      if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
+      out << endl;
     }
 
     // print crowdedness
@@ -216,7 +220,24 @@ int main(int argc, char *argv[]) {
       Residue* resB = intList[k].second;
       out << "interference\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
       out << "\t" << std::setprecision(6) << std::fixed << intL.degree(resA, resB);
-      out << "\t" << resA->getName() << "\t" << resB->getName() << endl;
+      out << "\t" << resA->getName() << "\t" << resB->getName();
+      if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
+      out << endl;
+    }
+    
+    if (iopts.seq_const) {
+      // print contact degrees with sequence constraints
+      aaConstrainedContactList cL;
+      C.getConstrainedContacts(allRes, 0, &cL);
+      for (int k = 0; k < cL.size(); k++) {
+        Residue* resA = cL.residueA(k);
+        Residue* resB = cL.residueB(k);
+        out << "seq_const_contact\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
+        out << "\t" << std::setprecision(6) << std::fixed << cL.degree(k);
+        out << "\t" << *cL.residueA_aa(k).begin() << "\t" << "XXX";
+        if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
+        out << endl;
+      }
     }
 
     // print sequence

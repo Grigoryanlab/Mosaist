@@ -108,28 +108,30 @@ int main(int argc, char *argv[]) {
             for (int i = 0; i < list.size(); i++) {
               int rA = list.residueA(i)->getResidueIndex();
               int rB = list.residueB(i)->getResidueIndex();
-              conts[rA][rB] = list.degree(i);
-              conts[rB][rA] = list.degree(i);
+              conts[rA][rB] = list.interactionList::degree(i);
+              conts[rB][rA] = list.interactionList::degree(i);
             }
             S.addResiduePairProperties(ti, "cont", conts);
           }
             // interference
-            /* To account for the directionality of interference, the property is stored in two maps:
-             interfer_ing_ and interfer_ed_. These are named based on the first key, so calling
-             interfering[rA] returns a map with residues whose sidechains interfere with the backbone
-             of rA and interfered[rA] returns a map with residues whose backbones are interfered by the
-             sidechain of rA. Note that while these store the exact same info, they simplify access.
-             */
+          /* To account for the directionality of interference, the property is stored in two maps:
+           interfer_ing_ and interfer_ed_. These are named based on the map that is returned when the
+           outer map is called with some residue, so calling interfering[resIdx] returns a map with
+           residues whose backbones interfere with the sidechain of res and interfered[resIdx] returns a
+           map with residues whose sidechains are interfered by the backbone of res. Note that while
+           these store the exact same info, they simplify access.
+           */
             if (op.isGiven("int")) {
                 mstreal incut = op.getReal("int");
                 contactList list = C.getInterference(P, incut);
                 map<int, map<int, mstreal> > interfering;
                 map<int, map<int, mstreal> > interfered;
                 for (int i = 0; i < list.size(); i++) {
+                    // rB backbone interferes with rA sidechain
                     int rA = list.residueA(i)->getResidueIndex();
                     int rB = list.residueB(i)->getResidueIndex();
-                    interfering[rB][rA] = list.degree(i);
-                    interfered[rA][rB] = list.degree(i);
+                    interfering[rA][rB] = list.interactionList::degree(i);
+                    interfered[rB][rA] = list.interactionList::degree(i);
                 }
                 S.addResiduePairProperties(ti, "interfering", interfering);
                 S.addResiduePairProperties(ti, "interfered", interfered);
@@ -142,8 +144,8 @@ int main(int argc, char *argv[]) {
               for (int i = 0; i < list.size(); i++) {
                   int rA = list.residueA(i)->getResidueIndex();
                   int rB = list.residueB(i)->getResidueIndex();
-                  bbInteraction[rA][rB] = list.degree(i);
-                  bbInteraction[rB][rA] = list.degree(i);
+                  bbInteraction[rA][rB] = list.interactionList::degree(i);
+                  bbInteraction[rB][rA] = list.interactionList::degree(i);
               }
               S.addResiduePairProperties(ti, "bb", bbInteraction);
           }
