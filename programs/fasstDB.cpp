@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
   op.addOption("pp", "store phi/psi/omega properties in the database.");
   op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
   op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
+  op.addOption("contSeq", "store a specific version of inter-residue contact information which is calculated with amino acid constraints. If this is given, --rLib must also be given.");
   op.addOption("int", "store residue to backbone contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
   op.addOption("bb", "store the minimum distance between backbone atoms of two residues (for all residue pairs below the specified cutoff).");
   op.addOption("sim", "percent sequence identity cutoff. If specified, will store local-window sequence similarity between all pairs of positions in the database, using this cutoff.");
@@ -34,6 +35,7 @@ int main(int argc, char *argv[]) {
   if (!op.isGiven("pL") && !op.isGiven("dL") && !op.isGiven("db")) MstUtils::error("either --pL, --dL, or --db must be given!");
   if (op.isGiven("rLib")) MstUtils::assert(MstSys::fileExists(op.getString("rLib")), "--rLib is not a valid file path");
   if (op.isGiven("cont") && (!op.isReal("cont") || (op.getReal("cont") < 0) || (op.getReal("cont") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
+  if (op.isGiven("contSeq") && (!op.isReal("contSeq") || (op.getReal("contSeq") < 0) || (op.getReal("contSeq") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
   if (op.isGiven("int") && (!op.isReal("int") || (op.getReal("int") < 0) || (op.getReal("int") > 1))) MstUtils::error("--int must be a real in range [0; 1]");
   if (op.isGiven("bb") && (!op.isReal("bb") || (op.getReal("bb") < 0))) MstUtils::error("--bb must be a real greater than 0.");
   if ((op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb"))) {
@@ -108,11 +110,20 @@ int main(int argc, char *argv[]) {
             for (int i = 0; i < list.size(); i++) {
               int rA = list.residueA(i)->getResidueIndex();
               int rB = list.residueB(i)->getResidueIndex();
-              conts[rA][rB] = list.interactionList::degree(i);
-              conts[rB][rA] = list.interactionList::degree(i);
+              conts[rA][rB] = list.degree(i);
+              conts[rB][rA] = list.degree(i);
             }
             S.addResiduePairProperties(ti, "cont", conts);
           }
+          
+          // contact degree, with amino acid constraints
+          /* Contact degree is calculated between residues i and j, with the rotamers at position i
+           restricted to those of a specific amino acid. Note that this form of contact degree is no
+           longer directional. To simplify access, the values for each potential amino acid at residue
+           i are stored as separate pair properties
+           */
+          
+          
             // interference
           /* To account for the directionality of interference, the property is stored in two maps:
            interfer_ing_ and interfer_ed_. These are named based on the map that is returned when the
@@ -130,8 +141,8 @@ int main(int argc, char *argv[]) {
                     // rB backbone interferes with rA sidechain
                     int rA = list.residueA(i)->getResidueIndex();
                     int rB = list.residueB(i)->getResidueIndex();
-                    interfering[rA][rB] = list.interactionList::degree(i);
-                    interfered[rB][rA] = list.interactionList::degree(i);
+                    interfering[rA][rB] = list.degree(i);
+                    interfered[rB][rA] = list.degree(i);
                 }
                 S.addResiduePairProperties(ti, "interfering", interfering);
                 S.addResiduePairProperties(ti, "interfered", interfered);
@@ -144,8 +155,8 @@ int main(int argc, char *argv[]) {
               for (int i = 0; i < list.size(); i++) {
                   int rA = list.residueA(i)->getResidueIndex();
                   int rB = list.residueB(i)->getResidueIndex();
-                  bbInteraction[rA][rB] = list.interactionList::degree(i);
-                  bbInteraction[rB][rA] = list.interactionList::degree(i);
+                  bbInteraction[rA][rB] = list.degree(i);
+                  bbInteraction[rB][rA] = list.degree(i);
               }
               S.addResiduePairProperties(ti, "bb", bbInteraction);
           }

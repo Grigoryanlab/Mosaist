@@ -127,7 +127,7 @@ vector<pair<Residue*, Residue*>> dTERMen::getContactsWith(const vector<Residue*>
       if (!isInA) c = pair<Residue*, Residue*>(contList.residueB(i), contList.residueA(i));
       else c = pair<Residue*, Residue*>(contList.residueA(i), contList.residueB(i));
 
-      if (verbose) cout << "\t" << (cType ? "interference " : "contact-degree ") << "contact with " << *(c.second) << " (from " << *(c.first) << "); " << contList.interactionList::degree(i) << endl;
+      if (verbose) cout << "\t" << (cType ? "interference " : "contact-degree ") << "contact with " << *(c.second) << " (from " << *(c.first) << "); " << contList.degree(i) << endl;
       if (contsSet.find(c) == contsSet.end()) {
         contsSet.insert(c);
         conts.push_back(c);

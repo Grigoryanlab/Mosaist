@@ -1,8 +1,8 @@
 #include "mstcondeg.h"
 
-/* interactionList (virtual class) */
+/* contactList */
 
-void interactionList::sortByDegree() {
+void contactList::sortByDegree() {
   vector<int> sortedIndices = MstUtils::sortIndices(degrees, true);
   vector<Residue*> resiOld = resi, resjOld = resj;
   vector<mstreal> degreesOld = degrees;
@@ -12,22 +12,6 @@ void interactionList::sortByDegree() {
     resj[i] = resjOld[sortedIndices[i]];
     degrees[i] = degreesOld[sortedIndices[i]];
     infos[i] = infosOld[sortedIndices[i]];
-  }
-}
-
-/* contactList */
-
-void contactList::addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info, bool directional) {
-  resi.push_back(_resi);
-  resj.push_back(_resj);
-  degrees.push_back(_degree);
-  infos.push_back(_info);
-  inContact[_resi][_resj] = resi.size() - 1;
-  if (!directional) inContact[_resj][_resi] = resi.size() - 1;
-  if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
-    orderedContacts.insert(pair<Residue*, Residue*>(_resj, _resi));
-  } else {
-    orderedContacts.insert(pair<Residue*, Residue*>(_resi, _resj));
   }
 }
 
@@ -43,7 +27,15 @@ vector<pair<Residue*, Residue*> > contactList::getOrderedContacts() {
 mstreal contactList::degree(Residue* _resi, Residue* _resj) {
   if (inContact.find(_resi) == inContact.end()) return 0;
   if (inContact[_resi].find(_resj) == inContact[_resi].end()) return 0;
-  return degrees[inContact[_resi][_resj]];
+  return degrees[*inContact[_resi][_resj].begin()];
+}
+
+set<mstreal> contactList::getDegrees(Residue* _resi, Residue* _resj) {
+  if (inContact.find(_resi) == inContact.end()) return {};
+  if (inContact[_resi].find(_resj) == inContact[_resi].end()) return {};
+  set<mstreal> degreesAtContact;
+  for (int id : inContact[_resi][_resj]) degreesAtContact.insert(degrees[id]);
+  return degreesAtContact;
 }
 
 bool contactList::areInContact(Residue* _resi, Residue* _resj) {
@@ -53,7 +45,6 @@ bool contactList::areInContact(Residue* _resi, Residue* _resj) {
 }
 
 /* ConFind */
-
 
 ConFind::ConFind(string rotLibFile, const Structure& S, bool _strict) {
   setParams();
@@ -358,8 +349,8 @@ contactList ConFind::getContacts(const vector<Residue*>& residues, mstreal cdcut
   return *list;
 }
 
-aaConstrainedContactList ConFind::getConstrainedContacts(const vector<Residue *> &residues, mstreal cdcut, aaConstrainedContactList* list) {
-  aaConstrainedContactList L;
+contactList ConFind::getConstrainedContacts(const vector<Residue *> &residues, mstreal cdcut, contactList* list) {
+  contactList L;
   if (list == NULL) list = &L;
   
   cache(residues);
@@ -374,7 +365,7 @@ aaConstrainedContactList ConFind::getConstrainedContacts(const vector<Residue *>
         for (string aa: aaNames) {
           cd = contactDegree(resi, resj, false, true, false, {aa}, aaNames);
           if (cd > cdcut) {
-            list->addContact(resi, resj, cd, {aa}, aaNames);
+            list->addContact(resi, resj, cd, "", true, {aa}, aaNames);
           }
         }
       }

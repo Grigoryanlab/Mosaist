@@ -227,14 +227,15 @@ int main(int argc, char *argv[]) {
     
     if (iopts.seq_const) {
       // print contact degrees with sequence constraints
-      aaConstrainedContactList cL;
+      contactList cL;
       C.getConstrainedContacts(allRes, 0, &cL);
       for (int k = 0; k < cL.size(); k++) {
         Residue* resA = cL.residueA(k);
         Residue* resB = cL.residueB(k);
         out << "seq_const_contact\t" << resA->getChainID() << "," << resA->getNum() << "\t" << resB->getChainID() << "," << resB->getNum();
         out << "\t" << std::setprecision(6) << std::fixed << cL.degree(k);
-        out << "\t" << *cL.residueA_aa(k).begin() << "\t" << "XXX";
+        out << "\t" << resA->getName() << "\t" << resB->getName();
+        out << "\t" << *cL.alphabetA(k).begin() << "\t" << "XXX";
         if (iopts.printFileNames) out << "\t" << iopts.pdbfs[si];
         out << endl;
       }

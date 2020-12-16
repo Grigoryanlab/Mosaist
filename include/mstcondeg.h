@@ -11,66 +11,65 @@ using namespace MST;
 template<typename key, typename T>
 using fastmap = map<key, T>;
 
-class interactionList {
-  public:
-    int size() { return resi.size(); }
-    Residue* residueA(int i) { return resi[i]; }
-    Residue* residueB(int i) { return resj[i]; }
-    Residue* srcResidue(int i) { return resi[i]; }
-    Residue* dstResidue(int i) { return resj[i]; }
-    vector<Residue*> srcResidues() { return resi; }
-    vector<Residue*> destResidues() { return resj; }
-    mstreal degree(int i) { return degrees[i]; }
-    string info(int i) { return infos[i]; }
-    void sortByDegree(); // sorts the contact list by contact degree, highest to lowest
-  
-  protected:
-    vector<Residue*> resi;
-    vector<Residue*> resj;
-    vector<mstreal> degrees;
-    vector<string> infos;
-};
-
-class contactList: public interactionList {
-  public:
-    void addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info = "", bool directional = false);
-  
-    mstreal degree(Residue* _resi, Residue* _resj);
-    vector<pair<Residue*, Residue*>> getOrderedContacts();
-    bool areInContact(Residue* _resi, Residue* _resj);
-
-  protected:
-    struct contComp {
-      bool operator() (const pair<Residue*, Residue*>& lhs, const pair<Residue*, Residue*>& rhs) const {
-        int lhsI = lhs.first->getResidueIndex();
-        int rhsI = rhs.first->getResidueIndex();
-        if (lhsI == rhsI) {
-          lhsI = lhs.second->getResidueIndex();
-          rhsI = rhs.second->getResidueIndex();
-        }
-        return lhsI < rhsI;
-      }
-    };
-    fastmap<Residue*, fastmap<Residue*, int> > inContact;
-    set<pair<Residue*, Residue*>, contComp> orderedContacts;
-};
-
-class aaConstrainedContactList: public interactionList {
-  public:
-    void addContact(Residue* _resi, Residue* _resj, mstreal _degree, set<string> _resi_aa = {}, set<string> _resj_aa = {}, string _info = "", bool directional = false) {
-      resi.push_back(_resi);
-      resj.push_back(_resj);
-      degrees.push_back(_degree);
-      infos.push_back(_info);
-      resi_aa.push_back(_resi_aa);
-      resj_aa.push_back(_resj_aa);
+class contactList {
+public:
+  void addContact(Residue* _resi, Residue* _resj, mstreal _degree, string _info = "", bool directional = false, set<string> _resi_aa = {}, set<string> _resj_aa = {}) {
+    resi.push_back(_resi);
+    resj.push_back(_resj);
+    degrees.push_back(_degree);
+    infos.push_back(_info);
+    resi_aa.push_back(_resi_aa);
+    resj_aa.push_back(_resj_aa);
+    
+    inContact[_resi][_resj].insert(resi.size() - 1);
+    if (!directional) inContact[_resj][_resi].insert(resi.size() - 1);
+    if ((!directional) && (_resi->getResidueIndex() > _resj->getResidueIndex())) {
+      orderedContacts.insert(pair<Residue*, Residue*>(_resj, _resi));
+    } else {
+      orderedContacts.insert(pair<Residue*, Residue*>(_resi, _resj));
     }
+  }
   
-    set<string> residueA_aa(int i) {return resi_aa[i];}
-    set<string> residueB_aa(int i) {return resj_aa[i];}
-  protected:
-    vector<set<string>> resi_aa;
-    vector<set<string>> resj_aa;
+  int size() { return resi.size(); }
+  Residue* residueA(int i) { return resi[i]; }
+  Residue* residueB(int i) { return resj[i]; }
+  Residue* srcResidue(int i) { return resi[i]; }
+  Residue* dstResidue(int i) { return resj[i]; }
+  vector<Residue*> srcResidues() { return resi; }
+  vector<Residue*> destResidues() { return resj; }
+  mstreal degree(int i) { return degrees[i]; }
+  mstreal degree(Residue* _resi, Residue* _resj); //if multiple are defined for this residue, only gets one
+  string info(int i) { return infos[i]; }
+  void sortByDegree(); // sorts the contact list by contact degree, highest to lowest
+  vector<pair<Residue*, Residue*>> getOrderedContacts();
+  bool areInContact(Residue* A, Residue* B);
+  
+  set<mstreal> getDegrees(Residue* _resi, Residue* _resj);
+  set<int> getContacts(Residue* _resi, Residue* _resj);
+  set<string> alphabetA(int i) { return resi_aa[i]; }
+  set<string> alphabetB(int i) { return resj_aa[i]; }
+  
+private:
+  struct contComp {
+    bool operator() (const pair<Residue*, Residue*>& lhs, const pair<Residue*, Residue*>& rhs) const {
+      int lhsI = lhs.first->getResidueIndex();
+      int rhsI = rhs.first->getResidueIndex();
+      if (lhsI == rhsI) {
+        lhsI = lhs.second->getResidueIndex();
+        rhsI = rhs.second->getResidueIndex();
+      }
+      return lhsI < rhsI;
+    }
+  };
+  
+  vector<Residue*> resi;
+  vector<Residue*> resj;
+  vector<mstreal> degrees;
+  vector<string> infos;
+  fastmap<Residue*, fastmap<Residue*, set<int>>> inContact;
+  set<pair<Residue*, Residue*>, contComp> orderedContacts;
+  vector<set<string>> resi_aa;
+  vector<set<string>> resj_aa;
 };
 
 class ConFind {
@@ -115,7 +114,7 @@ class ConFind {
      over all of the available amino acids (18 since Gly/Pro are excluded) at i, and calculate the CD.
      We also reverse the direction so that all are allowed at i, and a single amino acid is allowed
      at j. This results in up to 18x18 = 324 values per contact. */
-    aaConstrainedContactList getConstrainedContacts(const vector<Residue*>& residues, mstreal cdcut = 0.0, aaConstrainedContactList* list = NULL);
+    contactList getConstrainedContacts(const vector<Residue*>& residues, mstreal cdcut = 0.0, contactList* list = NULL);
 
     /* Interference is a directional sidechain-to-backbone contact. If A and B
      * are listed as the source and destination residues, respectively, of a
