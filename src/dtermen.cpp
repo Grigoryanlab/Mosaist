@@ -1025,7 +1025,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
     c.setMatches(F.search(), this);
-    if ((c.numMatches() < selfCorrMinN) || (c.getMatch(selfCorrMinN - 1).getRMSD()) > F.getRMSDCutoff()) { finalCliques.push_back(c); }
+    if (c.getMatch(c.numMatches() - 1).getRMSD() > F.getRMSDCutoff()) { finalCliques.push_back(c); }
     else { cliquesToGrow[contResidues[i]] = c; }
   }
 
