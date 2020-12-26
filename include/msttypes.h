@@ -1624,6 +1624,7 @@ template<class T>
 bool DecoratedProximitySearch<T>::checkSizes() {
   if (tags.size() != pointSize())
     MstUtils::error("number of points and custom tags does not agree", "DecoratedProximitySearch<T>::checkSizes()");
+  return true;
 }
 
 #endif

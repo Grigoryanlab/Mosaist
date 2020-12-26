@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
   op.addOption("v", "set verbose output flag.");
   op.addOption("cycCheck","flag; if given, will check whether the fused structure has converged and will potentially quick early. Convergence is established by comparing the RMSD resultant from the current cycle to the average RMSD from the first 10 cycles. If the latter is less than a third of the former, the cycling is said to have converged.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
-  MstUtils::setSignalHandlers();
+
   op.setOptions(argc, argv);
   RMSDCalculator rc;
   Structure I(op.getString("p")), A;
@@ -326,7 +326,7 @@ int main(int argc, char** argv) {
   MstUtils::openFile(out, op.getString("o") + ".traj.pdb", op.isGiven("app") ? ios::app : ios::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
   //create a vector of RMSD_final of each cycle
-  vector<mstreal> cyc_rmsd; 
+  vector<mstreal> cyc_rmsd;
   for (int c = 0; c < Ncyc; c++) {
     cout << "Cycle " << c+1 << "..." << endl;
     if (c == 0) {
@@ -493,12 +493,12 @@ int main(int argc, char** argv) {
         bestScore = propScore;
         bestPicks = propPicks;
       }
-	 
+
       // calculate the RMSD of this cycle for cycCheck before S gets updated below
       RMSDCalculator checkPoint;
       cyc_rmsd.push_back(checkPoint.bestRMSD(init, bestFused.getAtoms()));
     }
-	
+
     // align based on the fixed part, if anything was fixed (for ease of visualization)
     if (fixed.size() > 0) {
       AtomPointerVector before = getBackbone(S, fixed);
@@ -506,7 +506,7 @@ int main(int argc, char** argv) {
       rc.align(after, before, bestFused);
     }
 
-    /* --- write intermediate result and clean up--- */	
+    /* --- write intermediate result and clean up--- */
     S = bestFused.reassignChainsByConnectivity();
     for (int si = 0; si < allMatches.size(); si++) {
       for (int mi = 0; mi < allMatches[si].size(); mi++) {
