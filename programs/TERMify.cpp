@@ -203,6 +203,7 @@ int main(int argc, char** argv) {
   op.addOption("alt", "alternative conformation PDB file (must have the same length/topology as the starting conformation file). If given, for each TERM the corresponding segment of structure will be added as a \"match\".");
   op.addOption("orig", "If given, each TERM's original conformation (from the starting structure) will be explicitly added as a \"match\".");
   op.addOption("v", "set verbose output flag.");
+  op.addOption("cycCheck","flag; if given, will check whether the fused structure has converged and will potentially quick early. Convergence is established by comparing the RMSD resultant from the current cycle to the average RMSD from the first 10 cycles. If the latter is less than a third of the former, the cycling is said to have converged.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
   MstUtils::setSignalHandlers();
   op.setOptions(argc, argv);
@@ -324,6 +325,8 @@ int main(int argc, char** argv) {
   int Ncyc = op.getInt("cyc", 10);
   MstUtils::openFile(out, op.getString("o") + ".traj.pdb", op.isGiven("app") ? ios::app : ios::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
+  //create a vector of RMSD_final of each cycle
+  vector<mstreal> cyc_rmsd; 
   for (int c = 0; c < Ncyc; c++) {
     cout << "Cycle " << c+1 << "..." << endl;
     if (c == 0) {
@@ -422,6 +425,7 @@ int main(int argc, char** argv) {
       for (int j = 0; j < allMatches[si].size(); j++) {
         if (op.isGiven("r")) {
           currPicks[si].push_back(MstUtils::randInt(allMatches[si].size()));
+          break;
         } else {
           currPicks[si].push_back(j);
         }
@@ -437,6 +441,7 @@ int main(int argc, char** argv) {
     Structure bestFused, currFused;
     fusionOutput bestScore, currScore, propScore;
     mstreal kT = 0.001;
+    mstreal rmsd_final;
     for (int it = 0; it < op.getInt("iter", 1); it++) {
       vector<vector<int> > propPicks = currPicks;
       // make a "mutation"
@@ -488,8 +493,12 @@ int main(int argc, char** argv) {
         bestScore = propScore;
         bestPicks = propPicks;
       }
+	 
+      // calculate the RMSD of this cycle for cycCheck before S gets updated below
+      RMSDCalculator checkPoint;
+      cyc_rmsd.push_back(checkPoint.bestRMSD(init, bestFused.getAtoms()));
     }
-
+	
     // align based on the fixed part, if anything was fixed (for ease of visualization)
     if (fixed.size() > 0) {
       AtomPointerVector before = getBackbone(S, fixed);
@@ -497,7 +506,7 @@ int main(int argc, char** argv) {
       rc.align(after, before, bestFused);
     }
 
-    /* --- write intermediate result and clean up--- */
+    /* --- write intermediate result and clean up--- */	
     S = bestFused.reassignChainsByConnectivity();
     for (int si = 0; si < allMatches.size(); si++) {
       for (int mi = 0; mi < allMatches[si].size(); mi++) {
@@ -507,10 +516,18 @@ int main(int argc, char** argv) {
     if (shellOut.is_open()) shellOut.close();
 
     out << "MODEL " << c+1 << endl;
-    S = Structure::combine(S, I);
-    S.writePDB(out);
+    Structure::combine(S, I).writePDB(out);
     out << "ENDMDL" << endl;
+    // if rmsd is less than one third of the rmsd average of the first 10 cycles, break off the termify cycle--
+    int initCycs = 10;
+    if (op.isGiven("cycCheck") && (c >= initCycs)) {
+      //cutoff = (the average of the RMSDs for the first initCycs cycles)/3
+      mstreal r_tot = 0;
+      for (int r = 0; r < initCycs; r++) r_tot += cyc_rmsd[r];
+      cout << "Cycle check cutoff: " << (r_tot/initCycs)/3 << endl;
+      if (cyc_rmsd.back() < (r_tot/initCycs)/3) break;
+    }
   }
   out.close();
-  S.writePDB(op.getString("o") + ".fin.pdb");
+  Structure::combine(S, I).writePDB(op.getString("o") + ".fin.pdb");
 }
