@@ -2131,16 +2131,16 @@ expressionTree* selector::buildExpressionTree(string selStr) {
         vector<string> range = MstUtils::split(part, "-");
         int lower, upper;
         if (range.size() == 1) {
-          if (!MstUtils::isInt(part)) MstUtils::error("bad selection, expected an integer, not " + str, "selector::buildExpressionTree(string)");
+          if (!MstUtils::isInt(part)) MstUtils::error("bad selection, expected an integer, not " + part, "selector::buildExpressionTree(string)");
           lower = MstUtils::toInt(part);
           upper = lower;
         } else if (range.size() == 2) {
           if (!MstUtils::isInt(range[0]) || !MstUtils::isInt(range[1])) {
-            MstUtils::error("bad selection, a range should be two integers separated by a dash, not " + str, "selector::buildExpressionTree(string)");
+            MstUtils::error("bad selection, a range should be two integers separated by a dash, not " + part, "selector::buildExpressionTree(string)");
           }
           lower = MstUtils::toInt(range[0]);
           upper = MstUtils::toInt(range[1]);
-        } else MstUtils::error("bad selection, each token separated by '+' should be an integer or a range of integers, not " + str, "selector::buildExpressionTree(string)");
+        } else MstUtils::error("bad selection, each token separated by '+' should be an integer or a range of integers, not " + part, "selector::buildExpressionTree(string)");
         tree->addToNumSet(MstUtils::range(lower, upper + 1));
       }
     }
