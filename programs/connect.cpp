@@ -61,13 +61,17 @@ int main(int argc, char** argv) {
 
   // the connect loop
   int numMatches = 100;
-  cout << "[" << numMatches << "-th match RMSD] [RMSD to final]" << endl;
+  int currNumMatches = numMatches;
+  fasstSolutionAddress prevMatch;
+  cout << "[RMSD to query] [RMSD to final]" << endl;
+  cout << "[" << numMatches << "-th match RMSD] [Chosen match RMSD] [RMSD to final]" << endl;
   while (rc.bestRMSD(RotamerLibrary::getBackbone(C), RotamerLibrary::getBackbone(E)) > op.getReal("tol", 1.1*tol)) {
-    // search for the closest numMatches to the current conformation
+    // search for the closest currNumMatches to the current conformation
     F.setQuery(C);
     F.setRMSDCutoff(999.0);
-    F.setMaxNumMatches(numMatches);
-    F.setMinNumMatches(numMatches);
+    F.options().unsetMinNumMatches(); F.options().unsetMaxNumMatches();
+    F.setMaxNumMatches(currNumMatches);
+    F.setMinNumMatches(currNumMatches);
     fasstSolutionSet matchList = F.search();
 
     // identify the one closest to the final point
@@ -76,8 +80,16 @@ int main(int argc, char** argv) {
       rmsds[i] = rc.bestRMSD(RotamerLibrary::getBackbone(E), F.getMatchStructure(matchList[i]).getAtoms());
     }
     int mi; MstUtils::min(rmsds, -1, -1, &mi);
-    cout << matchList.worstRMSD() << " " << rmsds[mi] << endl;
+    if (c > 0) {
+      if (prevMatch == matchList[mi].getAddress()) {
+        currNumMatches *= 2;
+        continue;
+      }
+    }
+    cout << matchList[numMatches - 1].getRMSD() << " " << matchList[mi].getRMSD() << " " << rmsds[mi] << endl;
     C = F.getMatchStructure(matchList[mi]);
+    prevMatch = matchList[mi].getAddress();
+    currNumMatches = numMatches;
 
     out << "MODEL " << c << endl;
     C.writePDB(out); out << "ENDMDL" << endl;

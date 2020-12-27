@@ -23,6 +23,10 @@ class fasstSolutionAddress {
       return _os;
     }
 
+    friend bool operator==(const fasstSolutionAddress& ai, const fasstSolutionAddress& aj) {
+      return (ai.targetIndex == aj.targetIndex) && (ai.alignment == aj.alignment);
+    }
+
     int targetIndex;
     vector<int> alignment;
 };
@@ -98,6 +102,10 @@ class fasstSolution {
       // this will only happen if the two solutioins are identical: have the same
       // RMSD, come from the same target, and signify exactly the same alignment
       return false;
+    }
+
+    friend bool operator==(const fasstSolution& si, const fasstSolution& sj) {
+      return !((si < sj) || (sj < si));
     }
 
     void write(ostream& _os) const;
