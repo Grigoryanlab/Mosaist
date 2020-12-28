@@ -44,10 +44,9 @@ public:
   vector<pair<Residue*, Residue*>> getOrderedContacts();
   bool areInContact(Residue* A, Residue* B);
   
-  set<mstreal> getDegrees(Residue* _resi, Residue* _resj);
   set<int> getContacts(Residue* _resi, Residue* _resj);
-  set<string> alphabetA(int i) { return resi_aa[i]; }
-  set<string> alphabetB(int i) { return resj_aa[i]; }
+  set<string> const alphabetA(int i) { return resi_aa[i]; }
+  set<string> const alphabetB(int i) { return resj_aa[i]; }
   
 private:
   struct contComp {

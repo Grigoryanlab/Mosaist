@@ -30,14 +30,6 @@ mstreal contactList::degree(Residue* _resi, Residue* _resj) {
   return degrees[*inContact[_resi][_resj].begin()];
 }
 
-set<mstreal> contactList::getDegrees(Residue* _resi, Residue* _resj) {
-  if (inContact.find(_resi) == inContact.end()) return {};
-  if (inContact[_resi].find(_resj) == inContact[_resi].end()) return {};
-  set<mstreal> degreesAtContact;
-  for (int id : inContact[_resi][_resj]) degreesAtContact.insert(degrees[id]);
-  return degreesAtContact;
-}
-
 bool contactList::areInContact(Residue* _resi, Residue* _resj) {
   if (inContact.find(_resi) == inContact.end()) return false;
   if (inContact[_resi].find(_resj) == inContact[_resi].end()) return false;
