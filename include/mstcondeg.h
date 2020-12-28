@@ -189,7 +189,7 @@ class ConFind {
     fastmap<Residue*, mstreal> freedom;
     fastmap<Residue*, int> numLibraryRotamers;
     fastmap<Residue*, vector<rotamerID*> > survivingRotamers;
-    fastmap<Residue*, fastmap<Residue*, mstreal> > degrees;
+    fastmap<Residue*, fastmap<Residue*, mstreal> > degrees; // used for caching previously computed general (non-amino acid restricted) contact degrees
     fastmap<Residue*, fastmap<rotamerID*, mstreal> > collProb;
     fastmap<Residue*, fastmap<string, DecoratedProximitySearch<rotamerID*>* > > rotamerHeavySC;
     fastmap<Residue*, fastmap<Residue*, fastmap<string, mstreal> > > interference; // interference[resA][resB][aa] will store how much the backbone of
