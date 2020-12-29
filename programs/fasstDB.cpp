@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
   op.addOption("pp", "store phi/psi/omega properties in the database.");
   op.addOption("env", "store residue freedom property in the database. If this is give, --rLib must also be given.");
   op.addOption("cont", "store inter-residue contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
+  op.addOption("contSeq", "store a specific version of inter-residue contact information which is calculated with amino acid constraints (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
   op.addOption("int", "store residue to backbone contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
   op.addOption("bb", "store the minimum distance between backbone atoms of two residues (for all residue pairs below the specified cutoff).");
   op.addOption("sim", "percent sequence identity cutoff. If specified, will store local-window sequence similarity between all pairs of positions in the database, using this cutoff.");
@@ -34,15 +35,22 @@ int main(int argc, char *argv[]) {
   if (!op.isGiven("pL") && !op.isGiven("dL") && !op.isGiven("db")) MstUtils::error("either --pL, --dL, or --db must be given!");
   if (op.isGiven("rLib")) MstUtils::assert(MstSys::fileExists(op.getString("rLib")), "--rLib is not a valid file path");
   if (op.isGiven("cont") && (!op.isReal("cont") || (op.getReal("cont") < 0) || (op.getReal("cont") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
+  if (op.isGiven("contSeq") && (!op.isReal("contSeq") || (op.getReal("contSeq") < 0) || (op.getReal("contSeq") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
   if (op.isGiven("int") && (!op.isReal("int") || (op.getReal("int") < 0) || (op.getReal("int") > 1))) MstUtils::error("--int must be a real in range [0; 1]");
   if (op.isGiven("bb") && (!op.isReal("bb") || (op.getReal("bb") < 0))) MstUtils::error("--bb must be a real greater than 0.");
-  if ((op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb"))) {
+  if ((op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb")) || (op.isGiven("contSeq"))) {
     if (!op.isGiven("rLib")) MstUtils::error("--rLib is needed, but not given");
     RL.readRotamerLibrary(op.getString("rLib"));
   }
   if (op.isGiven("sim") && (!op.isReal("sim") || (op.getReal("sim") < 0) || (op.getReal("sim") > 100))) MstUtils::error("--sim must be a non-negative value below 100.");
   if (op.isGiven("win") && (!op.isInt("win") || (op.getInt("win") <= 0) || (op.getInt("win") % 2 == 0))) MstUtils::error("--win must be a positive odd integer.");
   short memSave = op.isGiven("m");
+  
+  // create map of prop names for contact degree with amino acid constraints
+  vector<string> aaNames = {"ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "HIS", "ILE", "LEU",
+    "LYS", "MET", "PHE", "SER", "THR", "TRP", "TYR", "VAL", "ALA"}; //aa allowed in rotamer library
+  map<string, string> aaToProp;
+  for (string aa : aaNames) aaToProp[aa] = "cont"+aa;
 
   if (!op.isGiven("batch")) {
     FASST S;
@@ -67,6 +75,21 @@ int main(int argc, char *argv[]) {
     }
     if (op.isGiven("db")) {
       S.readDatabase(op.getString("db"), memSave);
+      // If adding to an existing DB, print what properties already exist within it
+      cout << "Print the current properties of the DB" << endl;
+      cout << "Structures in DB: " << S.numTargets() << endl;
+      
+      vector<string> res_prop = {"phi","psi","omega","env"};
+      // Residue properties
+      for (string prop : res_prop) cout << "Residue property: " << prop << " = " << S.isResiduePropertyDefined(prop) << endl;
+      
+      // Residue pair properties
+      vector<string> res_pair_prop = {"cont","interfering","interfered","bb"};
+      for (string prop: res_pair_prop) cout << "Residue pair property: " << prop << " = " << S.isResiduePairPropertyPopulated(prop) << endl;
+      for (auto it: aaToProp) cout << "Residue pair property: " << it.second << " = " << S.isResiduePairPropertyPopulated(it.second) << endl;
+      
+      // Residue relational properties
+      cout << "Residue relationship property: sim = " << S.isResidueRelationshipPopulated("sim") << endl;
     }
     if (op.isGiven("dL")) {
       vector<string> dbFiles = MstUtils::fileToArray(op.getString("dL"));
@@ -74,7 +97,7 @@ int main(int argc, char *argv[]) {
         S.readDatabase(dbFiles[i], memSave);
       }
     }
-    if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb")) {
+    if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont") || op.isGiven("contSeq") || op.isGiven("int") || op.isGiven("bb")) {
       cout << "Computing per-target residue properties..." << endl;
       // compute and add some properties
       for (int ti = 0; ti < S.numTargets(); ti++) {
@@ -92,7 +115,7 @@ int main(int argc, char *argv[]) {
           S.addResidueProperties(ti, "psi", psi);
           S.addResidueProperties(ti, "omega", omega);
         }
-        if (op.isGiven("env") || op.isGiven("cont") || op.isGiven("int") || op.isGiven("bb")) {
+        if (op.isGiven("env") || op.isGiven("cont") || op.isGiven("contSeq") || op.isGiven("int") || op.isGiven("bb")) {
           ConFind C(&RL, P); // both need the confind object
           // environment
           if (op.isGiven("env")) {
@@ -113,23 +136,49 @@ int main(int argc, char *argv[]) {
             }
             S.addResiduePairProperties(ti, "cont", conts);
           }
-            // interference
-            /* To account for the directionality of interference, the property is stored in two maps:
-             interfer_ing_ and interfer_ed_. These are named based on the first key, so calling
-             interfering[rA] returns a map with residues whose sidechains interfere with the backbone
-             of rA and interfered[rA] returns a map with residues whose backbones are interfered by the
-             sidechain of rA. Note that while these store the exact same info, they simplify access.
-             */
+          // contact degree, with amino acid constraints
+          /* Contact degree is calculated between residues i and j, with the rotamers at position i
+           restricted to those of a specific amino acid. Note that this form of contact degree is no
+           longer directional. To simplify access, the values for each potential amino acid at residue
+           i are stored as distinct pair properties, e.g.: contARG, contASP, ..., contVAL.
+           */
+          if (op.isGiven("contSeq")) {
+            mstreal cdcut = op.getReal("contSeq");
+            contactList list = C.getConstrainedContacts(P.getResidues(), cdcut);
+            
+            set<string> aaNames = C.getAANames();
+            for (string aa : aaNames) {
+              map<int, map<int, mstreal> > conts;
+              for (int i = 0; i < list.size(); i++) {
+                const set<string>& alphaA = list.alphabetA(i);
+                // skip if the A alphabet does not match current aa
+                if ((alphaA.size() != 1) || *alphaA.begin() != aa) continue;
+                int rA = list.residueA(i)->getResidueIndex();
+                int rB = list.residueB(i)->getResidueIndex();
+                conts[rA][rB] = list.degree(i);
+              }
+              S.addResiduePairProperties(ti, aaToProp[aa], conts);
+            }
+          }
+          // interference
+          /* To account for the directionality of interference, the property is stored in two maps:
+           interfer_ing_ and interfer_ed_. These are named based on the map that is returned when the
+           outer map is called with some residue, so calling interfering[resIdx] returns a map with
+           residues whose backbones interfere with the sidechain of res and interfered[resIdx] returns a
+           map with residues whose sidechains are interfered by the backbone of res. Note that while
+           these store the exact same info, they simplify access.
+           */
             if (op.isGiven("int")) {
                 mstreal incut = op.getReal("int");
                 contactList list = C.getInterference(P, incut);
                 map<int, map<int, mstreal> > interfering;
                 map<int, map<int, mstreal> > interfered;
                 for (int i = 0; i < list.size(); i++) {
+                    // rB backbone interferes with rA sidechain
                     int rA = list.residueA(i)->getResidueIndex();
                     int rB = list.residueB(i)->getResidueIndex();
-                    interfering[rB][rA] = list.degree(i);
-                    interfered[rA][rB] = list.degree(i);
+                    interfering[rA][rB] = list.degree(i);
+                    interfered[rB][rA] = list.degree(i);
                 }
                 S.addResiduePairProperties(ti, "interfering", interfering);
                 S.addResiduePairProperties(ti, "interfered", interfered);
