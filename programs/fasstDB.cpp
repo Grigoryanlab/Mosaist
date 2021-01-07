@@ -315,5 +315,6 @@ int main(int argc, char *argv[]) {
     fin << "fi" << endl;
     fin.close();
   }
+  cout << "Done" << endl; // this makes it easy to check if all the jobs were completed
   return 0; // success
 }
