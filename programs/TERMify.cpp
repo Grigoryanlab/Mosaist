@@ -317,6 +317,10 @@ int main(int argc, char** argv) {
   }
 
   // TERMify loop
+  // NOTE: we reassign by connectivity at the start so that we do not have to
+  // worry about connectivity during the cycling (things may get temporarily
+  // broken as TERMs fight each other, but we will always interpret topology as
+  // connectivity past this step).
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
   RotamerLibrary::standardizeBackboneNames(S);
   vector<Structure*> O = {op.isGiven("alt") ? &A : NULL, op.isGiven("orig") ? &S : NULL}; // any "other" structures from which we should get matches
@@ -352,7 +356,7 @@ int main(int argc, char** argv) {
       Chain& C = S[ci];
       for (int ri = 0; ri < C.residueSize(); ri++) {
         Structure frag; vector<int> fragResIdx;
-        vector<int> centIdx = TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
+        vector<int> centIdx = TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx, false);
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
         search.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
@@ -360,7 +364,7 @@ int main(int argc, char** argv) {
         for (int ii = 0; ii < O.size(); ii++) {
           if (O[ii] == NULL) continue;
           Structure* altFrag = new Structure();
-          TERMUtils::selectTERM({&(O[ii]->getResidue(C[ri].getResidueIndex()))}, *altFrag, pmSelf);
+          TERMUtils::selectTERM({&(O[ii]->getResidue(C[ri].getResidueIndex()))}, *altFrag, pmSelf, NULL, false);
           numberResidues(*altFrag, fragResIdx);
           matches.push_back(altFrag);
         }
@@ -388,7 +392,7 @@ int main(int argc, char** argv) {
       Residue* resA = contactList[k].first;
       Residue* resB = contactList[k].second;
       Structure frag; vector<int> fragResIdx;
-      vector<int> centIdx = TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
+      vector<int> centIdx = TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx, false);
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
       search.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
@@ -396,7 +400,7 @@ int main(int argc, char** argv) {
       for (int ii = 0; ii < O.size(); ii++) {
         if (O[ii] == NULL) continue;
         Structure* altFrag = new Structure();
-        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(O[ii]->getResidue(resB->getResidueIndex()))}, *altFrag, pmPair);
+        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(O[ii]->getResidue(resB->getResidueIndex()))}, *altFrag, pmPair, NULL, false);
         numberResidues(*altFrag, fragResIdx);
         matches.push_back(altFrag);
       }
