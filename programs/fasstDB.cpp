@@ -30,6 +30,8 @@ int main(int argc, char *argv[]) {
                         "jobs, writing corresponding batch files for submission to the cluster. Will also produce a file called "
                         "<out>.fin.sh (where <out> is the base of the name specified in --o), which is to be run after all jobs "
                         "finish to complete the database building process.");
+  op.addOption("slurm", "provide this option along with the batch argument to generate batch job files for a SLURM system");
+
   op.setOptions(argc, argv);
   RotamerLibrary RL;
   if (!op.isGiven("pL") && !op.isGiven("dL") && !op.isGiven("db")) MstUtils::error("either --pL, --dL, or --db must be given!");
@@ -287,10 +289,17 @@ int main(int argc, char *argv[]) {
       string batchFile = base + ".sh";
       string dbFile = base + ".db";
       MstUtils::openFile(outf, batchFile, ios::out);
-      outf << "#!/bin/bash\n" << "#$ -j y\n" << "#$ -cwd\n" << "#$ -V\n";
-      outf << "#$ -l vf=2G\n" << "#$ -l ironfs\n";
       int hrs = (int) ceil(10*(tasks[i].second - tasks[i].first + 1)/60.0); // ten minutes per structure should be plenty
-      outf << "#$ -l h_rt=" << hrs << ":00:00\n";
+      outf << "#!/bin/bash\n";
+      if (op.isGiven("slurm")) {
+        outf << "#SBATCH -J fasstDB.%A\n" << "#SBATCH -o fasstDB.%A.log\n";
+        outf << "#SBATCH -p defq\n" << "#SBATCH -n 1\n" << "#SBATCH --mem=2G\n";
+        outf << "#SBATCH -t 0-" << hrs << ":00:00\n";
+      } else {
+        outf << "#$ -j y\n" << "#$ -cwd\n" << "#$ -V\n";
+        outf << "#$ -l vf=2G\n" << "#$ -l ironfs\n";
+        outf << "#$ -l h_rt=" << hrs << ":00:00\n";
+      }
       outf << op.getExecName() << " --pL " << listFile << " --o " << dbFile;
       // keep all other options from the call to self
       vector<string> allOpts = op.getAllGivenOptions();
