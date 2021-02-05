@@ -203,8 +203,9 @@ int main(int argc, char** argv) {
   op.addOption("alt", "alternative conformation PDB file (must have the same length/topology as the starting conformation file). If given, for each TERM the corresponding segment of structure will be added as a \"match\".");
   op.addOption("orig", "If given, each TERM's original conformation (from the starting structure) will be explicitly added as a \"match\".");
   op.addOption("v", "set verbose output flag.");
+  op.addOption("cycCheck","flag; if given, will check whether the fused structure has converged and will potentially quick early. Convergence is established by comparing the RMSD resultant from the current cycle to the average RMSD from the first 10 cycles. If the latter is less than a third of the former, the cycling is said to have converged.");
   if (op.isGiven("f") && op.isGiven("fs")) MstUtils::error("only one of --f or --fs can be given!");
-  MstUtils::setSignalHandlers();
+
   op.setOptions(argc, argv);
   RMSDCalculator rc;
   Structure I(op.getString("p")), A;
@@ -316,6 +317,10 @@ int main(int argc, char** argv) {
   }
 
   // TERMify loop
+  // NOTE: we reassign by connectivity at the start so that we do not have to
+  // worry about connectivity during the cycling (things may get temporarily
+  // broken as TERMs fight each other, but we will always interpret topology as
+  // connectivity past this step).
   Structure S = I.reassignChainsByConnectivity(); // fixed residues are already selected, but this does not change residue order
   RotamerLibrary::standardizeBackboneNames(S);
   vector<Structure*> O = {op.isGiven("alt") ? &A : NULL, op.isGiven("orig") ? &S : NULL}; // any "other" structures from which we should get matches
@@ -324,6 +329,8 @@ int main(int argc, char** argv) {
   int Ncyc = op.getInt("cyc", 10);
   MstUtils::openFile(out, op.getString("o") + ".traj.pdb", op.isGiven("app") ? ios::app : ios::out);
   out << "MODEL " << 0 << endl; S.writePDB(out); out << "ENDMDL" << endl;
+  //create a vector of RMSD_final of each cycle
+  vector<mstreal> cyc_rmsd;
   for (int c = 0; c < Ncyc; c++) {
     cout << "Cycle " << c+1 << "..." << endl;
     if (c == 0) {
@@ -349,7 +356,7 @@ int main(int argc, char** argv) {
       Chain& C = S[ci];
       for (int ri = 0; ri < C.residueSize(); ri++) {
         Structure frag; vector<int> fragResIdx;
-        vector<int> centIdx = TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx);
+        vector<int> centIdx = TERMUtils::selectTERM({&C[ri]}, frag, pmSelf, &fragResIdx, false);
         if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
         cout << "TERM around " << C[ri] << endl;
         search.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
@@ -357,7 +364,7 @@ int main(int argc, char** argv) {
         for (int ii = 0; ii < O.size(); ii++) {
           if (O[ii] == NULL) continue;
           Structure* altFrag = new Structure();
-          TERMUtils::selectTERM({&(O[ii]->getResidue(C[ri].getResidueIndex()))}, *altFrag, pmSelf);
+          TERMUtils::selectTERM({&(O[ii]->getResidue(C[ri].getResidueIndex()))}, *altFrag, pmSelf, NULL, false);
           numberResidues(*altFrag, fragResIdx);
           matches.push_back(altFrag);
         }
@@ -385,7 +392,7 @@ int main(int argc, char** argv) {
       Residue* resA = contactList[k].first;
       Residue* resB = contactList[k].second;
       Structure frag; vector<int> fragResIdx;
-      vector<int> centIdx = TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx);
+      vector<int> centIdx = TERMUtils::selectTERM({resA, resB}, frag, pmPair, &fragResIdx, false);
       if (MstUtils::setdiff(fragResIdx, fixed).empty()) continue; // TERMs composed entirely of fixed residues have no impact
       cout << "TERM around " << *resA << " x " << *resB << endl;
       search.setRMSDCutoff(RMSDCalculator::rmsdCutoff(fragResIdx, S)); // account for spacing between residues from the same chain
@@ -393,7 +400,7 @@ int main(int argc, char** argv) {
       for (int ii = 0; ii < O.size(); ii++) {
         if (O[ii] == NULL) continue;
         Structure* altFrag = new Structure();
-        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(O[ii]->getResidue(resB->getResidueIndex()))}, *altFrag, pmPair);
+        TERMUtils::selectTERM({&(O[ii]->getResidue(resA->getResidueIndex())), &(O[ii]->getResidue(resB->getResidueIndex()))}, *altFrag, pmPair, NULL, false);
         numberResidues(*altFrag, fragResIdx);
         matches.push_back(altFrag);
       }
@@ -422,6 +429,7 @@ int main(int argc, char** argv) {
       for (int j = 0; j < allMatches[si].size(); j++) {
         if (op.isGiven("r")) {
           currPicks[si].push_back(MstUtils::randInt(allMatches[si].size()));
+          break;
         } else {
           currPicks[si].push_back(j);
         }
@@ -437,6 +445,7 @@ int main(int argc, char** argv) {
     Structure bestFused, currFused;
     fusionOutput bestScore, currScore, propScore;
     mstreal kT = 0.001;
+    mstreal rmsd_final;
     for (int it = 0; it < op.getInt("iter", 1); it++) {
       vector<vector<int> > propPicks = currPicks;
       // make a "mutation"
@@ -488,6 +497,10 @@ int main(int argc, char** argv) {
         bestScore = propScore;
         bestPicks = propPicks;
       }
+
+      // calculate the RMSD of this cycle for cycCheck before S gets updated below
+      RMSDCalculator checkPoint;
+      cyc_rmsd.push_back(checkPoint.bestRMSD(init, bestFused.getAtoms()));
     }
 
     // align based on the fixed part, if anything was fixed (for ease of visualization)
@@ -507,10 +520,18 @@ int main(int argc, char** argv) {
     if (shellOut.is_open()) shellOut.close();
 
     out << "MODEL " << c+1 << endl;
-    S = Structure::combine(S, I);
-    S.writePDB(out);
+    Structure::combine(S, I).writePDB(out);
     out << "ENDMDL" << endl;
+    // if rmsd is less than one third of the rmsd average of the first 10 cycles, break off the termify cycle--
+    int initCycs = 10;
+    if (op.isGiven("cycCheck") && (c >= initCycs)) {
+      //cutoff = (the average of the RMSDs for the first initCycs cycles)/3
+      mstreal r_tot = 0;
+      for (int r = 0; r < initCycs; r++) r_tot += cyc_rmsd[r];
+      cout << "Cycle check cutoff: " << (r_tot/initCycs)/3 << endl;
+      if (cyc_rmsd.back() < (r_tot/initCycs)/3) break;
+    }
   }
   out.close();
-  S.writePDB(op.getString("o") + ".fin.pdb");
+  Structure::combine(S, I).writePDB(op.getString("o") + ".fin.pdb");
 }

@@ -1158,7 +1158,7 @@ vector<vector<mstreal>> dTERMen::pairEnergiesNew(Residue* Ri, Residue* Rj, bool 
   int naa = globalAlphabetSize();
   termData pT({Ri, Rj}, pmPair);
   F.setOptions(foptsBase);
-  F.setQuery(pT.getTERM());
+  F.setQuery(pT.getTERM(), false);
   F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
   F.setMinNumMatches(pairMinN);
   F.setMaxNumMatches(pairMaxN);

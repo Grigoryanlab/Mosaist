@@ -138,14 +138,14 @@ vector<AtomPointerVector> TERMUtils::mostDesignableFragments(Structure& C, vecto
   return ret;
 }
 
-int TERMUtils::selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+int TERMUtils::selectTERM(Residue& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx, bool contiguous) {
   vector<Residue*> conts = C.getContactingResidues(&cenRes, cdCut);
   conts.insert(conts.begin(), &cenRes);
-  vector<int> centralIdx = TERMUtils::selectTERM(conts, frag, pm, fragResIdx);
+  vector<int> centralIdx = TERMUtils::selectTERM(conts, frag, pm, fragResIdx, contiguous);
   return centralIdx[0];
 }
 
-vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, Structure& frag, int pm, mstreal cdCut, vector<int>* fragResIdx, bool contiguous) {
   set<Residue*> included;
   vector<Residue*> list;
   // for order consistency, first insert the central residues
@@ -165,10 +165,10 @@ vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, St
       }
     }
   }
-  return TERMUtils::selectTERM(list, frag, pm, fragResIdx);
+  return TERMUtils::selectTERM(list, frag, pm, fragResIdx, contiguous);
 }
 
-vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm, vector<int>* fragResIdx) {
+vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm, vector<int>* fragResIdx, bool contiguous) {
   if (cenRes.size() == 0) return vector<int>();
   Structure* S = cenRes[0]->getChain()->getParent();
   vector<bool> selected(S->residueSize(), false);
@@ -179,10 +179,16 @@ vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& fra
     int ri = res.getResidueIndex();
     int li = C->getResidue(C->residueSize() - 1).getResidueIndex(); // last residue index in the chain
     int fi = C->getResidue(0).getResidueIndex(); // first residue index in the chain
-    for (int k = ri - pm; k <= ri + pm; k++) {
-      if ((k < fi) || (k > li)) continue;
-      selected[k] = true;
-      if (k == ri) central[k] = i;
+
+    for (int dir : {-1, 1}) {
+      for (int del = 0; del <= pm; del++) {
+        int k = ri + dir*del;
+        if ((k < fi) || (k > li)) continue;
+        // if contiguous is specified, do not select non-contiguous residues
+        if (contiguous && (k != ri) && !Residue::areBonded(S->getResidue(min(k, k-dir)), S->getResidue(max(k, k-dir)))) break;
+        selected[k] = true;
+        if (k == ri) central[k] = i;
+      }
     }
   }
 
@@ -203,15 +209,15 @@ vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& fra
   return centralIdx;
 }
 
-Structure TERMUtils::selectTERM(Residue& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+Structure TERMUtils::selectTERM(Residue& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx, bool contiguous) {
   Structure term;
-  TERMUtils::selectTERM(cenRes, C, term, pm, cdCut, fragResIdx);
+  TERMUtils::selectTERM(cenRes, C, term, pm, cdCut, fragResIdx, contiguous);
   return term;
 }
 
-Structure TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx) {
+Structure TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, int pm, mstreal cdCut, vector<int>* fragResIdx, bool contiguous) {
   Structure term;
-  TERMUtils::selectTERM(cenRes, C, term, pm, cdCut, fragResIdx);
+  TERMUtils::selectTERM(cenRes, C, term, pm, cdCut, fragResIdx, contiguous);
   return term;
 }
 

@@ -20,6 +20,8 @@ int main(int argc, char *argv[]) {
   op.addOption("outType", "what portion of matching sequences to output. Default is 'region', which refers to just the matching region. Also possible are: 'full' (for full structure) and 'withGaps' (for the matching regions plus any gaps between segments).");
   op.addOption("strOut", "dump structures into this directory.");
   op.addOption("seqOut", "sequence output file.");
+  op.addOption("matchOut", "match output file.");
+  op.addOption("m", "memory saving mode: 0 means does not do any memory savings; 1 means strip the side-chains; 2 (default) means destroy the original target structure upon reading, and only keep backbone coordinates.");
   op.addOption("sc", "dump sidechains (not only the backbone).");
   op.setOptions(argc, argv);
   int memInit = MstSys::memUsage();
@@ -44,7 +46,7 @@ int main(int argc, char *argv[]) {
   Structure query(op.getString("q"));
   S.setQuery(query);
   if (op.isGiven("b")) {
-    S.readDatabase(op.getString("b"), 2);
+    S.readDatabase(op.getString("b"), op.getInt("m", 2));
   }
   if (op.isGiven("d")) {
     vector<string> pdbFiles = MstUtils::fileToArray(op.getString("d"));
@@ -101,7 +103,6 @@ int main(int argc, char *argv[]) {
   fasstSolutionSet matches = S.getMatches(); int i = 0;
   vector<vector<mstreal> > phi, psi;
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
-    cout << S.toString(*it) << endl;
     cout << *it << endl;
     if (op.isGiven("strOut")) {
       // Structure match = S.getMatchStructure(*it, true, FASST::matchType::FULL);
@@ -109,12 +110,15 @@ int main(int argc, char *argv[]) {
       match.writePDB(op.getString("strOut") + "/match" + MstUtils::toString(i) + ".pdb");
     }
   }
-  fstream of;
+  fstream of, mof;
   if (op.isGiven("seqOut")) MstUtils::openFile(of, op.getString("seqOut"), ios::out);
+  if (op.isGiven("matchOut")) MstUtils::openFile(mof, op.getString("matchOut"), ios::out);
   for (auto it = matches.begin(); it != matches.end(); ++it, ++i) {
     Sequence seq = S.getMatchSequence(*it);
     cout << seq.toString() << endl;
     if (op.isGiven("seqOut")) of << seq.toString() << endl;
+    if (op.isGiven("matchOut")) mof << S.toString(*it) << endl;
   }
   if (op.isGiven("seqOut")) of.close();
+  if (op.isGiven("matchOut")) mof.close();
 }
