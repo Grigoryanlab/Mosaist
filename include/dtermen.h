@@ -287,8 +287,12 @@ class dTERMen {
 class termData {
   public:
     termData() {}
-    termData(vector<Residue*> _centResidues, int pm) { define(_centResidues, pm); }
-    void define(vector<Residue*> _centResidues, int pm) {
+    termData(vector<Residue*> _centResidues, int pm) {
+      vector<int> cenResFlankingRes(_centResidues.size(),pm);
+      define(_centResidues, cenResFlankingRes);
+    }
+    termData(vector<Residue*> _centResidues, vector<int> pm) : cenResFlankingRes(pm) { define(_centResidues, pm);}
+    void define(vector<Residue*> _centResidues, vector<int> pm) {
       centResidues = _centResidues;
       term.reset();
       fragResIdx.clear();
@@ -296,7 +300,8 @@ class termData {
     }
     void addCentralResidue(Residue* res, int pm) {
       centResidues.push_back(res);
-      define(centResidues, pm);
+      cenResFlankingRes.push_back(pm);
+      define(centResidues, cenResFlankingRes);
     }
 
     // void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
@@ -321,6 +326,8 @@ class termData {
     /* the central residues of each of the TERM's segments and their corres-
      * ponding indices in the template. */
     vector<Residue*> centResidues;
+    /* the flanking residues around each of the central residues */
+    vector<int> cenResFlankingRes;
     vector<int> centResIndices;
 
     /* term is the TERM itself, whose residues correspond to template posi-
