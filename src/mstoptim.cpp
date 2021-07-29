@@ -162,7 +162,7 @@ mstreal Optim::conjGradMin(optimizerEvaluator& E, vector<mstreal>& solution, int
   mstreal v = E.eval(curr, g); g = -g; g1 = g; h = g;
 
   for (int i = 0; i < numIters; i++) {
-    mstreal vNext = Optim::lineSearch(E, curr, next, h, 0.01, verbose);
+    mstreal vNext = Optim::lineSearch(E, curr, next, h, tol, verbose);
     if (v - vNext < tol) break;
     curr = next;
 
@@ -180,7 +180,8 @@ mstreal Optim::conjGradMin(optimizerEvaluator& E, vector<mstreal>& solution, int
 
 mstreal Optim::lineSearch(optimizerEvaluator& E, const vector<mstreal>& point, vector<mstreal>& solution, const Vector& dir, mstreal startStepSize, bool verbose) {
   Vector x0 = point, g0 = x0, x1 = x0, g1 = x0;
-  mstreal v0 = E.eval(x0, g0), v1; g0 = g0.getUnit();
+  mstreal v0 = E.eval(x0, g0), v1;
+  g0 = g0.getUnit();
   mstreal gamma = startStepSize;      // initial step size
   mstreal tol = 10E-8;
   for (int i = 0; 100; i++) {
@@ -189,7 +190,7 @@ mstreal Optim::lineSearch(optimizerEvaluator& E, const vector<mstreal>& point, v
     v1 = E.eval(x1, g1);
     if (fabs(v0 - v1) < tol) break;
     // adaptively change the learning rate
-    if (v1 < v0) {
+    if ((v1 < v0) && (!MstUtils::closeEnough(g1.norm(), 0.0))) {
       gamma *= 1.5;
       x0 = x1; v0 = v1; g0 = g1.getUnit();
     } else {

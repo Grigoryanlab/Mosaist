@@ -1749,7 +1749,7 @@ int EnergyTable::randomResidue(int si) const {
   return MstUtils::randInt(0, selfE[si].size() - 1);
 }
 
-vector<int> EnergyTable::mc(int Nc, int Ni, mstreal kTi, mstreal kTf, int annealType, void* rec, void (*add)(void*, const vector<int>&, mstreal), int Ne) {
+vector<int> EnergyTable::mc(int Nc, int Ni, mstreal kTi, mstreal kTf, int annealType, void* rec, void (*add)(void*, const vector<int>&, mstreal), int Ne, void* extra, mstreal (*additionalScore)(void*, const vector<int>&, EnergyTable&, int mutSite, int mutAA)) {
   if (kTf < 0) kTf = kTi;
   mstreal kT = kTi;
   int L = numSites();
@@ -1762,11 +1762,12 @@ vector<int> EnergyTable::mc(int Nc, int Ni, mstreal kTi, mstreal kTf, int anneal
       int s = MstUtils::randInt(0, L - 1);
       int aa = randomResidue(s);
       mstreal dE = scoreMutation(seq, s, aa);
+      if (additionalScore != NULL) dE = (*additionalScore)(extra, seq, *this, s, aa);
       if (MstUtils::randUnit() < exp(-dE/kT)) seq[s] = aa;
     }
-
     // data collection
     mstreal bcE = scoreSolution(seq); vector<int> bcS = seq;
+    if (additionalScore != NULL) bcE += (*additionalScore)(extra, seq, *this, -1, -1);
     if (cyc == 0) { bE = bcE; bS = bcS; }
     mstreal dEb = 0; // current change from the best energy
     for (int i = 0; i < Ni; i++) {
@@ -1774,26 +1775,25 @@ vector<int> EnergyTable::mc(int Nc, int Ni, mstreal kTi, mstreal kTf, int anneal
       // every now and again, calculate the total energy to avoid accumulation of addition errors
       if ((i+1) % 10000 == 0) {
         dEb = scoreSolution(seq) - bcE;
+        if (additionalScore != NULL) dEb += (*additionalScore)(extra, seq, *this, -1, -1);
       }
       int s = MstUtils::randInt(0, L - 1);
       int aa = randomResidue(s);
       mstreal dE = scoreMutation(seq, s, aa);
+      if (additionalScore != NULL) dE += (*additionalScore)(extra, seq, *this, s, aa);
       // annealing schedule
       switch (annealType) {
         case 1:
           // linear
           kT = kTf*f + kTi*(1-f);
           break;
-
         case 2:
           // exponential
           kT = kTi*pow(kTf/kTi, f);
           break;
-
         default:
           MstUtils::error("unrecognized annealing schedule type '" + MstUtils::toString(annealType) + "'");
       }
-
       if (MstUtils::randUnit() < exp(-dE/kT)) {
         seq[s] = aa;
         dEb += dE;

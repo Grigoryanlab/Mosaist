@@ -22,6 +22,7 @@
 #include <chrono>
 #include <execinfo.h>
 #include <signal.h>
+#include <random>
 #undef assert
 
 using namespace std;
@@ -569,6 +570,7 @@ class AtomPointerVector : public vector<Atom*> {
     using vector<Atom*>::push_back;    // base push_back of vector class
     void push_back(const Residue& R);  // overloaded push_back for Residues
     void push_back(const Residue* R) { push_back(*R); }
+    void push_back(const vector<Atom*>& atoms);  // overloaded push_back for Residues
 
     CartesianPoint getGeometricCenter();
     void getGeometricCenter(mstreal& xc, mstreal& yc, mstreal& zc);
@@ -1073,12 +1075,16 @@ class MstUtils {
     static void setSignalHandlers();
     static void errorHandler(int sig);
 
+    // random numbers
+    static unsigned seedRandEngine(unsigned seed = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count()) { mt.seed(seed); return seed; }
+    static mt19937& randEngine() { return mt; }
+
     // returns a random number in the range [lower, upper]
-    static int randInt(int lower, int upper) { return rand() % (upper - lower + 1) + lower; }
+    static int randInt(int lower, int upper);
     // returns a random number in the range [0, upper) (convenient for generating random array subscripts)
     static int randInt(int upper) { return randInt(0, upper - 1); }
     // random number in the unit range 0 and 1
-    static MST::mstreal randUnit() { return ((MST::mstreal) rand() / RAND_MAX); }
+    static MST::mstreal randUnit(MST::mstreal mi = 0, MST::mstreal ma = 1.0);
     // normally-distributed random number with mean mu and standard deviation sig
     static MST::mstreal randNormal(MST::mstreal mu = 0.0, MST::mstreal sig = 1.0);
 
@@ -1165,6 +1171,9 @@ class MstUtils {
     template <class K, class V>
     static void readBin(istream& ifs, map<K, V>& m);
     static void readBin(istream& ifs, MST::Structure& S) { S.readData(ifs); }
+
+    private:
+      static mt19937 mt; // A Mersenne Twister pseudo-random generator of 32-bit numbers with a state size of 19937 bits.
 };
 
 template <class F>

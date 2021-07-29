@@ -1,4 +1,5 @@
 #include "msttypes.h"
+mt19937 MstUtils::mt;
 
 using namespace MST;
 
@@ -1363,6 +1364,14 @@ void AtomPointerVector::push_back(const Residue& R) {
   this->resize(sz + R.atomSize());
   for (int i = 0; i < R.atomSize(); i++) {
     (*this)[i + sz] = &(R[i]);
+  }
+}
+
+void AtomPointerVector::push_back(const vector<Atom*>& atoms) {
+  int sz = this->size();
+  this->resize(sz + atoms.size());
+  for (int i = 0; i < atoms.size(); i++) {
+    (*this)[i + sz] = atoms[i];
   }
 }
 
@@ -3712,10 +3721,18 @@ void MstUtils::error(const string& message, string from, int code) {
 }
 
 MST::mstreal MstUtils::randNormal(MST::mstreal mu, MST::mstreal sig) {
-  MST::mstreal x = MstUtils::randUnit();
-  MST::mstreal y = MstUtils::randUnit();
-  MST::mstreal n = sqrt(-2*log(x))*cos(2*M_PI*y); // can also be sqrt(-2*log(x))*sin(2*M_PI*y)
-  return n*sig + mu;
+  normal_distribution<MST::mstreal> dist(mu, sig);
+  return dist(MstUtils::randEngine());
+}
+
+MST::mstreal MstUtils::randUnit(MST::mstreal mi, MST::mstreal ma) {
+  uniform_real_distribution<MST::mstreal> dist(mi, ma);
+  return dist(MstUtils::randEngine());
+}
+
+int MstUtils::randInt(int lower, int upper) {
+  uniform_int_distribution<int> dist(lower, upper);
+  return dist(MstUtils::randEngine());
 }
 
 void MstUtils::errorHandler(int sig) {
