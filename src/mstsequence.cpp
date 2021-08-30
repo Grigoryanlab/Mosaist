@@ -378,8 +378,11 @@ mstreal SeqTools::complexity(const vector<int>& seq, int mutSite, int mutAA) {
   if (seq.empty()) return 0;
 
   // get counts of all letters
-  int ma = MstUtils::max(seq);
-  int mi = MstUtils::min(seq);
+  int mi = 9999, ma = -1;
+  for (int aa : seq) {
+    mi = min(mi, aa);
+    ma = max(ma, aa);
+  }
   vector<int> counts(ma - mi + 1, 0);
   for (int aa : seq) counts[aa - mi]++;
   mstreal e = exp(1.0);

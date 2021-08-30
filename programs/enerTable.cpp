@@ -9,6 +9,25 @@ mstreal sequenceComplexityPenalty(void* extra, const vector<int>& seq, EnergyTab
   return s * SeqTools::complexity(seq, mutSite, mutAA);
 }
 
+mstreal sequenceComplexityPenaltySimple(void* extra, const vector<int>& seq, EnergyTable& tab, int mutSite, int mutAA) {
+  mstreal s = -((mstreal*) extra)[0];
+  mstreal fcut = ((mstreal*) extra)[1];
+
+  // get counts of all letters
+  vector<int> counts(100, 0);
+  int maxCount = 0;
+  for (int aa : seq) {
+    if (aa >= counts.size()) counts.resize(aa + 1, 0);
+    counts[aa]++;
+    maxCount = max(maxCount, counts[aa]);
+  }
+
+  mstreal f = (maxCount*1.0)/seq.size();
+  if (f < fcut) return 0;
+
+  return s * (f - fcut)*(f - fcut)/((1 - fcut)*(1 - fcut));
+}
+
 int main(int argc, char *argv[]) {
   MstOptions op;
   op.setTitle("Compute various things using an per-built energy table. Options:");
@@ -19,6 +38,7 @@ int main(int argc, char *argv[]) {
   op.addOption("kTi", "if --opt is given, this will set the initial sampling temperature (default is 1.0).");
   op.addOption("kTf", "if --opt is given, this will set the final annealed temperature (default is 0.1).");
   op.addOption("lc", "add a low-complexity penalty to the energy scaled by this factor (should be positive).");
+  op.addOption("fcut", "fraction of sequence cutoff allowed to be occupied by a single amino acid. If specified, will use the simpler complexity penalty rather than the one based on number of arrangements of the letter distribution.");
   op.addOption("cyc", "if --opt is given, this will set the number of MC cycles to run (default is 100).");
   op.addOption("o", "output file name of the energy table in case it needs to be written.");
   op.setOptions(argc, argv);
@@ -53,8 +73,14 @@ int main(int argc, char *argv[]) {
     auto recordLast = [](void* cont, const vector<int>& sol, mstreal ener) { *((vector<int>*) cont) = sol; };
     vector<int> bestSol;
     if (op.isGiven("lc")) {
-      mstreal lcsf = op.getReal("lc");
-      bestSol = E.mc(op.getInt("cyc", 100), Ni, op.getReal("kTi", 10.0), op.getReal("kTf", 0.1), 1, &lastSol, recordLast, -1, &lcsf, &sequenceComplexityPenalty);
+
+      if (op.isGiven("fcut")) {
+        mstreal params[] = {op.getReal("lc"), op.getReal("fcut")};
+        bestSol = E.mc(op.getInt("cyc", 100), Ni, op.getReal("kTi", 10.0), op.getReal("kTf", 0.1), 1, &lastSol, recordLast, -1, &params, &sequenceComplexityPenaltySimple);
+      } else {
+        mstreal lcsf = op.getReal("lc");
+        bestSol = E.mc(op.getInt("cyc", 100), Ni, op.getReal("kTi", 10.0), op.getReal("kTf", 0.1), 1, &lastSol, recordLast, -1, &lcsf, &sequenceComplexityPenalty);
+      }
     } else {
       bestSol = E.mc(op.getInt("cyc", 100), Ni, op.getReal("kTi", 10.0), op.getReal("kTf", 0.1), 1, &lastSol, recordLast);
     }
