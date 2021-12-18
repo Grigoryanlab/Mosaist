@@ -293,6 +293,7 @@ class fasstSearchOptions {
       rmsdCutRequested = 0.0;
       maxNumMatches = minNumMatches = suffNumMatches = -1;
       gapConstSet = false;
+      diffChainRestSet = false;
       contextLength = 30;
       redundancyCut = 1.0;
       seqConst = NULL;
@@ -319,6 +320,7 @@ class fasstSearchOptions {
     void setRMSDCutoff(mstreal cut) { rmsdCutRequested = cut; }
     void setMinGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at list gapLim long] [segment j]
     void setMaxGap(int i, int j, int gapLim); // target topology: [segment i] [gap of at most gapLim long] [segment j]
+    void setChainsDiff(int i, int j);
     void setContextLength(int len) { contextLength = len; }
     void setVerbose(bool _verb) { verb = _verb; }
     /* Normally, the redundancy cutoff is between 0 and 1. But one can set it to
@@ -336,6 +338,7 @@ class fasstSearchOptions {
     void unsetMaxNumMatches() { maxNumMatches = -1; }
     void unsetSufficientNumMatches() { suffNumMatches = -1; }
     void resetGapConstraints(int numQuerySegs);
+    void resetDiffChainConstraints(int numQuerySegs);
     void unsetRedundancyCut() { redundancyCut = 1; }
     void unsetRedundancyProperty() { redundancyProp = ""; }
     void unsetSequenceConstraints() { if (seqConst != NULL) delete(seqConst); seqConst = NULL; }
@@ -346,8 +349,10 @@ class fasstSearchOptions {
     bool isSufficientNumMatchesSet() const { return (suffNumMatches > 0); }
     bool minGapConstrained(int i, int j) const { return minGapSet[i][j]; }
     bool maxGapConstrained(int i, int j) const { return maxGapSet[i][j]; }
+    bool diffChainsConstrained(int i, int j) const { return diffChainSet[i][j]; }
     bool gapConstrained(int i, int j) const { return (minGapSet[i][j] || maxGapSet[i][j]); }
     bool gapConstraintsExist() const { return gapConstSet; }
+    bool diffChainsConstsExist() const { return diffChainRestSet; }
     bool isRedundancyCutSet() const { return redundancyCut < 1; }
     bool isRedundancyPropertySet() const { return !redundancyProp.empty(); }
     bool sequenceConstraintsSet() const { return seqConst != NULL; }
@@ -365,8 +370,8 @@ class fasstSearchOptions {
     string redundancyProp;                   // residue relational property to use for checking redundancy of sequence windows
 
     vector<vector<int> > minGap, maxGap;     // minimum and maximum sequence separations allowed between each pair of segments
-    vector<vector<bool> > minGapSet, maxGapSet;
-    bool gapConstSet, verb;
+    vector<vector<bool> > minGapSet, maxGapSet, diffChainSet;
+    bool gapConstSet, diffChainRestSet, verb;
     int maxNumMatches, minNumMatches, suffNumMatches;
     fasstSeqConst* seqConst;
 };
