@@ -53,6 +53,7 @@ PROGRAMD	:= programs
 # header and external library directories
 INC_DIRS := $(INCD)
 LIB_DIRS := 
+CONDA_DIRS :=
 
 # armadillo-dependent stuff
 ifdef INCLUDE_ARMA
@@ -139,6 +140,7 @@ DEPS := $(TARGET_DEPS) $(LIB_DEPS)
 # construct 'include' and 'library' flags from already-specified directories
 INC := $(patsubst %, -I%, $(INC_DIRS))
 LIB := $(patsubst %, -L%, $(LIB_DIRS))
+CONDA_INC := $(patsubst %, -I%, $(CONDA_DIRS))
 
 # construct the flags that will be included
 FLAGS := $(CPP_FLAGS)
@@ -149,8 +151,10 @@ endif
 # variables to compile the boost.python shared object
 uname := $(shell uname -s)
 ifeq ($(uname),Linux)
-	pythonExec := python
-	PYLIB_PATH = $(shell $(pythonExec)-config --exec-prefix)/lib64
+	pythonExec := python3
+	PYTHON_SUFFIX = $(shell $(pythonExec) -c "import sys; print(''.join(map(str,sys.version_info[0:2])));")
+	PYLIB_PATH = $(shell $(pythonExec) -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'));")
+	PYLIB = -L$(PYLIB_PATH) -L$(LIBD) -ldl $(LDLIBS) -lboost_python$(PYTHON_SUFFIX) -lboost_numpy$(PYTHON_SUFFIX) -ldtermen -lmst -lmstfasst -lmstcondeg -lmstoptim -lmstmagic -lmstfuser
 else
 	pythonExec := python3.8
 	PYTHON_SUFFIX = $(shell $(pythonExec) -c "import sys; print(''.join(map(str,sys.version_info[0:2])));")
@@ -226,7 +230,7 @@ COMPILE_LIB = ar rs $(LIBD)/$*.a $^
 $(LIBD)/%.a: $$(foreach dep, $$($$*_DEPS), $$(call DEP_OBJ_FILE_MAP, $$(dep))) | $(LIBD)
 	$(COMPILE_LIB)
 $(LIBD)/mstpython.so: $(OBJD)/mstpython.o
-	$(CC) $(PYLIB) -Wl,-rpath,$(PYLIB_PATH) -shared -o $@ $<
+	$(CC) -Wl,-rpath,$(PYLIB_PATH) -shared -o $@ $< $(PYLIB)
 
 # recipe to compile targets
 COMPILE_BIN = $(CC) $(FLAGS) $(LDLIBS) -o $@ $(INC) $(LIB) $^
