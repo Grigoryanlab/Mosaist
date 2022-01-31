@@ -113,6 +113,11 @@ class SeqTools {
      * explicitly checked!) */
     static vector<int> sortSequences(const vector<Sequence>& _seqs);
 
+    /* Implements sequence complexity, as defined in eq. 4 of Wootton and Federhen,
+     * Computers Chem. Vol. 17, NO. 2, pp. 149-163. 1993, using Stirling's
+     * to avoid calculating factorials and their logarithms. */
+    static mstreal complexity(const vector<int>& seq, int mutSite = -1, int mutAA = -1);
+
   protected:
     // helper function for sequence sorting
     static bool areWordsIdentical(res_t* wordA, res_t* wordB, int L);

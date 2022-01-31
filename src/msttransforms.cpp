@@ -288,6 +288,9 @@ void Transform::eulerAngles(mstreal& x, mstreal& y, mstreal& z) {
       x = x2; y = y2; z = z2;
     }
   }
+  x *= TransformFactory::radiansToDegrees;
+  y *= TransformFactory::radiansToDegrees;
+  z *= TransformFactory::radiansToDegrees;
 }
 
 CartesianPoint Transform::applyToCopy(CartesianPoint& p) {
@@ -472,7 +475,7 @@ Transform TransformFactory::alignVectorWithXAxis(mstreal u, mstreal v, mstreal w
     return Transform();
   }
 
-  return rotateAroundZ(u/uvw, -vw/uvw) * rotateAroundX(v/vw, -w/vw);
+  return rotateAroundZ(-vw/uvw, u/uvw) * rotateAroundX(-w/vw, v/vw);
 }
 
 Transform TransformFactory::alignVectorWithYAxis(mstreal u, mstreal v, mstreal w) {
@@ -482,7 +485,7 @@ Transform TransformFactory::alignVectorWithYAxis(mstreal u, mstreal v, mstreal w
     return Transform();
   }
 
-  return rotateAroundX(v/uvw, -uw/uvw) * rotateAroundY(w/uw, -u/uw);
+  return rotateAroundX(-uw/uvw, v/uvw) * rotateAroundY(-u/uw, w/uw);
 }
 
 Transform TransformFactory::alignVectorWithZAxis(mstreal u, mstreal v, mstreal w) {
@@ -492,7 +495,7 @@ Transform TransformFactory::alignVectorWithZAxis(mstreal u, mstreal v, mstreal w
     return Transform();
   }
 
-  return rotateAroundY(w/uvw, -uv/uvw) * rotateAroundZ(u/uv, -v/uv);
+  return rotateAroundY(-uv/uvw, w/uvw) * rotateAroundZ(-v/uv, u/uv);
 }
 
 Transform TransformFactory::alignVectorWithXAxis(CartesianPoint& p) {

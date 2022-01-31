@@ -408,6 +408,11 @@ class EnergyTable {
      *         trajectory in an entirely customizable way.
      * Ne   -- number of pre-equilibration steps to do in each cycle before
      *         beginning to record encountered solutions.
+     * additionalScore -- a pointer to a function that returns the additional
+     *                    score component for any solution. The last two arguments
+     *                    to the function are used for scoring mutations. The
+     *                    function is free to implement these as it wants, even
+     *                    if without any inherent savings.
      * Returns the lowest-energy sequence encountered. NOTE: each cycle will
      * involve an initial equilibration phase, during which iterations are
      * are performed, but the trajectory is not recorded. If the number of pre-
@@ -415,7 +420,7 @@ class EnergyTable {
      * TODO: add a two-residue mutation step (for pairs that have pair energies)
      * and choose that move some fraction of the time. Could choose the pair to
      * mutate based on the variance of interaction strengths at the pair. */
-    vector<int> mc(int Nc, int Ni, mstreal kTi, mstreal kTf = -1, int annealType = 1, void* rec = NULL, void (*add)(void*, const vector<int>&, mstreal) = NULL, int Ne = -1);
+    vector<int> mc(int Nc, int Ni, mstreal kTi, mstreal kTf = -1, int annealType = 1, void* rec = NULL, void (*add)(void*, const vector<int>&, mstreal) = NULL, int Ne = -1, void* extra = NULL, mstreal (*additionalScore)(void*, const vector<int>&, EnergyTable&, int mutSite, int mutAA) = NULL);
 
     Sequence solutionToSequence(const vector<int>& sol);
     vector<int> sequenceToSolution(const Sequence& seq, bool strict = false);

@@ -53,6 +53,7 @@ PROGRAMD	:= programs
 # header and external library directories
 INC_DIRS := $(INCD)
 LIB_DIRS := 
+CONDA_DIRS :=
 
 # armadillo-dependent stuff
 ifdef INCLUDE_ARMA
@@ -63,13 +64,14 @@ ifdef INCLUDE_ARMA
   else
     LDLIBS := -larmadillo
   endif
-  ARMA_PROGRAMS			:= chainGrow
+  ARMA_PROGRAMS			:= chainGrow align
   chainGrow_DEPS		:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms mstsequence mstoptim mstlinalg mstoptions mstmagic
+  align_DEPS			:= msttypes msttransforms mstsequence mstoptim mstlinalg mstoptions
 endif
 
 # targets and MST libraries
 TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testStride testFASST testFuser testGrads testParsing testRestrictSiteAlphabet testRotlib testTERMUtils testTransforms testdTERMen testTermanal
-PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments design pairEnergies search scoreStructure clusterStructs connect $(ARMA_PROGRAMS)
+PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments design enerTable pairEnergies search scoreStructure clusterStructs connect $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
 HELPERS		:= mstcondeg mstexternal mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes msttermanal
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfasstcache libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans libdtermen
@@ -77,6 +79,7 @@ LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfasstcache libmstfuser libmst
 # target dependencies
 findBestFreedom_DEPS	:= mstcondeg mstrotlib mstsystem msttransforms msttypes
 test_DEPS			:= msttypes mstsystem
+test1_DEPS			:= mstoptions msttypes mstsystem msttransforms mstsequence mstoptim mstlinalg
 testAutofuser_DEPS		:= mstfuser mstlinalg mstoptim msttransforms msttypes
 testConFind_DEPS		:= mstcondeg mstoptions mstrotlib mstsystem msttransforms msttypes
 testClusterer_DEPS		:= mstoptions msttypes mstfasst msttransforms mstsequence
@@ -101,6 +104,7 @@ subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstseque
 fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg mstexternal
 testdTERMen_DEPS		:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 design_DEPS			:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
+enerTable_DEPS			:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 pairEnergies_DEPS		:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 analyzeLandscape_DEPS		:= msttypes msttransforms mstsequence mstoptions mstfasst dtermen mstcondeg mstrotlib mstmagic
 search_DEPS			:= mstfasst mstoptions mstsequence msttransforms msttypes mstsystem
@@ -137,6 +141,7 @@ DEPS := $(TARGET_DEPS) $(LIB_DEPS)
 # construct 'include' and 'library' flags from already-specified directories
 INC := $(patsubst %, -I%, $(INC_DIRS))
 LIB := $(patsubst %, -L%, $(LIB_DIRS))
+CONDA_INC := $(patsubst %, -I%, $(CONDA_DIRS))
 
 # construct the flags that will be included
 FLAGS := $(CPP_FLAGS)
@@ -147,13 +152,15 @@ endif
 # variables to compile the boost.python shared object
 uname := $(shell uname -s)
 ifeq ($(uname),Linux)
-	pythonExec := python
-	PYLIB_PATH = $(shell $(pythonExec)-config --exec-prefix)/lib64
+	pythonExec := python3
+	PYTHON_SUFFIX = $(shell $(pythonExec) -c "import sys; print(''.join(map(str,sys.version_info[0:2])));")
+	PYLIB_PATH = $(shell $(pythonExec) -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'));")
+	PYLIB = -L$(PYLIB_PATH) -L$(LIBD) -ldl $(LDLIBS) -lboost_python$(PYTHON_SUFFIX) -lboost_numpy$(PYTHON_SUFFIX) -ldtermen -lmst -lmstfasst -lmstcondeg -lmstoptim -lmstmagic -lmstfuser
 else
 	pythonExec := python3.8
 	PYTHON_SUFFIX = $(shell $(pythonExec) -c "import sys; print(''.join(map(str,sys.version_info[0:2])));")
 	PYLIB_PATH = $(shell $(pythonExec) -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'));")
-	PYLIB = -L$(PYLIB_PATH) -L$(LIBD) -ldl -framework CoreFoundation -undefined dynamic_lookup -lboost_python$(PYTHON_SUFFIX) -lboost_numpy$(PYTHON_SUFFIX) -ldtermen -lmst -lmstfasst -lmstcondeg -lmstoptim -lmstmagic -lmstfuser $(LDLIBS)
+	PYLIB = -L$(PYLIB_PATH) -L$(LIBD) -ldl $(LDLIBS) -framework CoreFoundation -undefined dynamic_lookup -lboost_python$(PYTHON_SUFFIX) -lboost_numpy$(PYTHON_SUFFIX) -ldtermen -lmst -lmstfasst -lmstcondeg -lmstoptim -lmstmagic -lmstfuser
 endif
 PY_INCLUDES = $(shell $(pythonExec)-config --includes)
 PY_SITE_INCLUDE_PARENT = $(shell $(pythonExec)-config --exec-prefix)
@@ -224,7 +231,7 @@ COMPILE_LIB = ar rs $(LIBD)/$*.a $^
 $(LIBD)/%.a: $$(foreach dep, $$($$*_DEPS), $$(call DEP_OBJ_FILE_MAP, $$(dep))) | $(LIBD)
 	$(COMPILE_LIB)
 $(LIBD)/mstpython.so: $(OBJD)/mstpython.o
-	$(CC) $(PYLIB) -Wl,-rpath,$(PYLIB_PATH) -shared -o $@ $<
+	$(CC) -Wl,-rpath,$(PYLIB_PATH) -shared -o $@ $< $(PYLIB)
 
 # recipe to compile targets
 COMPILE_BIN = $(CC) $(FLAGS) $(LDLIBS) -o $@ $(INC) $(LIB) $^

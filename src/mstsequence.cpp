@@ -382,6 +382,40 @@ int SeqTools::sequenceIdentity(const Sequence& seqA, const Sequence& seqB) {
   return numID;
 }
 
+mstreal SeqTools::complexity(const vector<int>& seq, int mutSite, int mutAA) {
+  if (seq.empty()) return 0;
+
+  // get counts of all letters
+  int mi = 9999, ma = -1;
+  for (int aa : seq) {
+    mi = min(mi, aa);
+    ma = max(ma, aa);
+  }
+  vector<int> counts(ma - mi + 1, 0);
+  for (int aa : seq) counts[aa - mi]++;
+  mstreal e = exp(1.0);
+  int L = seq.size();
+
+  // if need mutational difference, fewer calculations
+  if (mutSite >= 0) {
+    mstreal del = 0;
+    int k = seq[mutSite] - mi;
+    del += 0.5*log(2*M_PI*counts[k]) + counts[k]*log(counts[k]/e);
+    if (counts[k] > 1) del -= 0.5*log(2*M_PI*(counts[k] - 1)) + (counts[k] - 1)*log((counts[k] - 1)/e);
+    k = mutAA - mi;
+    del -= 0.5*log(2*M_PI*(counts[k] + 1)) + (counts[k] + 1)*log((counts[k] + 1)/e);
+    if (counts[k] > 0) del += 0.5*log(2*M_PI*counts[k]) + counts[k]*log(counts[k]/e);
+    return del/L;
+  }
+
+  // compute complexity using Stirling's approximation of the factorial
+  mstreal C = 0.5*log(2*M_PI*L) + L*log(L/e);
+  for (int i = 0; i < counts.size(); i++) {
+    if (counts[i]) C -= 0.5*log(2*M_PI*counts[i]) + counts[i]*log(counts[i]/e);
+  }
+
+  return C;
+}
 
 /* ------------ Sequence ------------ */
 
