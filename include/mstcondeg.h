@@ -209,5 +209,4 @@ class ConFind {
     int freedomType;                   // a switch between different formulas for computing freedom
 };
 
-
 #endif

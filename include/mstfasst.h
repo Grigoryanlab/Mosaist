@@ -467,6 +467,7 @@ class FASST {
     void addTargets(const vector<string>& pdbFiles, short memSave = 0);
     void stripSidechains(Structure& S);
 
+    void addResidueStringProperties(int ti, const string& propType, const vector<string>& propVals);
     void addResidueProperties(int ti, const string& propType, const vector<mstreal>& propVals);
     void addResiduePairProperties(int ti, const string& propType, const map<int, map<int, mstreal> >& propVals);
     // void addResidueRelationships(int ti, const string& propType, const map<int, map<int, map<int, set<int> > >& resRels);
@@ -476,7 +477,11 @@ class FASST {
     bool isResiduePropertyDefined(const string& propType);
     bool isResiduePropertyDefined(const string& propType, int ti);
     bool hasResidueProperty(int ti, const string& propType, int ri);
+    bool isResidueStringPropertyDefined(const string& propType);
+    bool isResidueStringPropertyDefined(const string& propType, int ti);
+    bool hasResidueStringProperty(int ti, const string& propType, int ri);
     mstreal getResidueProperty(int ti, const string& propType, int ri);
+    string getResidueStringProperty(int ti, const string& propType, int ri);
     bool hasResiduePairProperties(int ti, const string& propType, int ri);
     mstreal isResiduePairPropertyPopulated(const string& propType);
     map<int, mstreal> getResiduePairProperties(int ti, const string& propType, int ri);
@@ -615,6 +620,11 @@ class FASST {
      * resProperties["env"][ti][ri] is the value of the "env" property for
      * residue ri in target with index ti. */
     map<string, map<int, vector<mstreal> > > resProperties;
+    
+    /* Object for holding string residue properties. Specifically,
+     * resProperties["stride"][ti][ri] is the string value of the "stride" property for
+     * residue ri in target with index ti. */
+    map<string, map<int, vector<string> > > resStringProperties;
 
     /* Object for holding real-valued residue-pair properties. Specifically,
      * resPairProperties["cont"][ti][ri][rj] is the value of the "cont" property

@@ -12,13 +12,7 @@ Frame::Frame() {
 }
 
 Frame::Frame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) {
-  MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3),
-      "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)");
-  mstreal xn = _X.norm(); mstreal yn = _Y.norm(); mstreal zn = _Z.norm();
-  O[0] = _O[0]; O[1] = _O[1]; O[2] = _O[2];
-  X[0] = _X[0]/xn; X[1] = _X[1]/xn; X[2] = _X[2]/xn;
-  Y[0] = _Y[0]/yn; Y[1] = _Y[1]/yn; Y[2] = _Y[2]/yn;
-  Z[0] = _Z[0]/zn; Z[1] = _Z[1]/zn; Z[2] = _Z[2]/zn;
+  constructFrame(_O,_X,_Y,_Z);
 }
 
 Frame::Frame(mstreal _ox, mstreal _oy, mstreal _oz, mstreal _xx, mstreal _xy, mstreal _xz, mstreal _yx, mstreal _yy, mstreal _yz, mstreal _zx, mstreal _zy, mstreal _zz) {
@@ -31,11 +25,37 @@ Frame::Frame(mstreal _ox, mstreal _oy, mstreal _oz, mstreal _xx, mstreal _xy, ms
   Z[0] = _zx/zn; Z[1] = _zy/zn; Z[2] = _zz/zn;
 }
 
-Frame::Frame(Frame& other) {
+Frame::Frame(const Frame& other) {
   O[0] = other.O[0]; O[1] = other.O[1]; O[2] = other.O[2];
   X[0] = other.X[0]; X[1] = other.X[1]; X[2] = other.X[2];
   Y[0] = other.Y[0]; Y[1] = other.Y[1]; Y[2] = other.Y[2];
   Z[0] = other.Z[0]; Z[1] = other.Z[1]; Z[2] = other.Z[2];
+}
+
+void Frame::setX(const CartesianPoint& _X) {
+  X[0] = _X[0]; X[1] = _X[1]; X[2] = _X[2];
+}
+
+void Frame::setY(const CartesianPoint& _Y) {
+  Y[0] = _Y[0]; Y[1] = _Y[1]; Y[2] = _Y[2];
+}
+
+void Frame::setZ(const CartesianPoint& _Z) {
+  Z[0] = _Z[0]; Z[1] = _Z[1]; Z[2] = _Z[2];
+}
+
+void Frame::setO(const CartesianPoint& _O) {
+  O[0] = _O[0]; O[1] = _O[1]; O[2] = _O[2];
+}
+
+void Frame::constructFrame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) {
+  MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3),
+      "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)");
+  mstreal xn = _X.norm(); mstreal yn = _Y.norm(); mstreal zn = _Z.norm();
+  O[0] = _O[0]; O[1] = _O[1]; O[2] = _O[2];
+  X[0] = _X[0]/xn; X[1] = _X[1]/xn; X[2] = _X[2]/xn;
+  Y[0] = _Y[0]/yn; Y[1] = _Y[1]/yn; Y[2] = _Y[2]/yn;
+  Z[0] = _Z[0]/zn; Z[1] = _Z[1]/zn; Z[2] = _Z[2]/zn;
 }
 
 /* --------- Transform --------- */
@@ -276,6 +296,21 @@ CartesianPoint Transform::applyToCopy(CartesianPoint& p) {
 
 void Transform::apply(CartesianPoint& p) {
   p = (*this) * p;
+}
+
+void Transform::apply(Frame& f) {
+  CartesianPoint O = f.getO();
+  CartesianPoint X = f.getX() + O;
+  CartesianPoint Y = f.getY() + O;
+  CartesianPoint Z = f.getZ() + O;
+  O = (*this) * O;
+  X = (*this) * X;
+  Y = (*this) * Y;
+  Z = (*this) * Z;
+  f.setO(O);
+  f.setX(X-O);
+  f.setY(Y-O);
+  f.setZ(Z-O);
 }
 
 void Transform::apply(Atom* a) {

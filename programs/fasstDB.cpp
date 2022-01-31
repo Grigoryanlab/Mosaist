@@ -5,6 +5,7 @@
 #include "mstsystem.h"
 #include "mstcondeg.h"
 #include "mstsequence.h"
+#include "mstexternal.h"
 #include <chrono>
 
 int main(int argc, char *argv[]) {
@@ -23,6 +24,7 @@ int main(int argc, char *argv[]) {
   op.addOption("contSeq", "store a specific version of inter-residue contact information which is calculated with amino acid constraints (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
   op.addOption("int", "store residue to backbone contact information (for all residue pairs with contact degrees above the specified threshold). If this is given, --rLib must also be given.");
   op.addOption("bb", "store the minimum distance between backbone atoms of two residues (for all residue pairs below the specified cutoff).");
+  op.addOption("stride", "store residue secondary structure classifications computed by STRIDE (external program). Argument must be the path to a STRIDE binary file.");
   op.addOption("sim", "percent sequence identity cutoff. If specified, will store local-window sequence similarity between all pairs of positions in the database, using this cutoff.");
   op.addOption("win", "window size to use with the similarity searching with --sim; must be an odd integer. Default is 31 (i.e., +/- 15 from the residue in question).");
   op.addOption("rLib", "path to an MST rotamer library file.");
@@ -70,6 +72,7 @@ int main(int argc, char *argv[]) {
         }
         if (op.isGiven("s")) {
           P = P.reassignChainsByConnectivity();
+          P.deleteShortChains();
         }
         if (P.residueSize() != 0) S.addTarget(P, memSave);
         else cout << "skipping " << pdbFiles[i] << " as it ends up having no residues..." << endl;
@@ -85,6 +88,8 @@ int main(int argc, char *argv[]) {
       // Residue properties
       for (string prop : res_prop) cout << "Residue property: " << prop << " = " << S.isResiduePropertyDefined(prop) << endl;
       
+      cout << "Residue string property: " << "stride" << " = " << S.isResidueStringPropertyDefined("stride") << endl;
+      
       // Residue pair properties
       vector<string> res_pair_prop = {"cont","interfering","interfered","bb"};
       for (string prop: res_pair_prop) cout << "Residue pair property: " << prop << " = " << S.isResiduePairPropertyPopulated(prop) << endl;
@@ -99,7 +104,7 @@ int main(int argc, char *argv[]) {
         S.readDatabase(dbFiles[i], memSave);
       }
     }
-    if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont") || op.isGiven("contSeq") || op.isGiven("int") || op.isGiven("bb")) {
+    if (op.isGiven("pp") || op.isGiven("env") || op.isGiven("cont") || op.isGiven("contSeq") || op.isGiven("int") || op.isGiven("bb") || op.isGiven("stride")) {
       cout << "Computing per-target residue properties..." << endl;
       // compute and add some properties
       for (int ti = 0; ti < S.numTargets(); ti++) {
@@ -116,6 +121,13 @@ int main(int argc, char *argv[]) {
           S.addResidueProperties(ti, "phi", phi);
           S.addResidueProperties(ti, "psi", psi);
           S.addResidueProperties(ti, "omega", omega);
+        }
+        if (op.isGiven("stride")) {
+          string strideBin = op.getString("stride","");
+          strideInterface stride(strideBin,&P);
+          stride.computeSTRIDEClassifications();
+          vector<string> strideSSType = stride.getSTRIDEClassifications();
+          S.addResidueStringProperties(ti, "stride", strideSSType);
         }
         if (op.isGiven("env") || op.isGiven("cont") || op.isGiven("contSeq") || op.isGiven("int") || op.isGiven("bb")) {
           ConFind C(&RL, P); // both need the confind object
@@ -289,7 +301,14 @@ int main(int argc, char *argv[]) {
       string batchFile = base + ".sh";
       string dbFile = base + ".db";
       MstUtils::openFile(outf, batchFile, ios::out);
-      int hrs = (int) ceil(10*(tasks[i].second - tasks[i].first + 1)/60.0); // ten minutes per structure should be plenty
+      // time per structure depends on what properties need to be calculated
+      int time_per_structure = 5;
+      vector<string> allOpts = op.getAllGivenOptions();
+      for (int j = 0; j < allOpts.size(); j++) {
+        if ((allOpts[j].compare("cont") == 0) || (allOpts[j].compare("contSeq") == 0) || (allOpts[j].compare("int") == 0) || (allOpts[j].compare("stride") == 0)) time_per_structure += 5 ;
+      }
+      cout << "Given options, calculating that " << time_per_structure << " min are needed per structure (on average)" << endl;
+      int hrs = (int) ceil(time_per_structure*(tasks[i].second - tasks[i].first + 1)/60.0); // fifteen minutes per structure should be plenty
       outf << "#!/bin/bash\n";
       if (op.isGiven("slurm")) {
         outf << "#SBATCH -J fasstDB.%A\n" << "#SBATCH -o fasstDB.%A.log\n";
@@ -302,7 +321,6 @@ int main(int argc, char *argv[]) {
       }
       outf << op.getExecName() << " --pL " << listFile << " --o " << dbFile;
       // keep all other options from the call to self
-      vector<string> allOpts = op.getAllGivenOptions();
       for (int j = 0; j < allOpts.size(); j++) {
         if ((allOpts[j].compare("batch") == 0) || (allOpts[j].compare("pL") == 0) || (allOpts[j].compare("o") == 0) || (allOpts[j].compare("sim") == 0)) continue;
         outf << " --" << allOpts[j] << " " << op.getString(allOpts[j]);

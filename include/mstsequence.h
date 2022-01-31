@@ -27,6 +27,7 @@ class Sequence {
     res_t& operator[] (int i) { return seq[i]; }
     res_t operator[] (int i) const { return seq[i]; }
     Sequence subSequence(const vector<int>& inds) const;
+    Sequence extractRange(int min, int max) const; //boundaries are inclusive
     int length() const { return seq.size(); }
     int size() const { return seq.size(); }
     void appendResidue(const string& aa);
@@ -79,13 +80,14 @@ class SeqTools {
     static vector<string> getAA1() {return aa3;}
     static vector<string> getAA3() {return aa1;}
 
-    /* For these two functions, seqA and seqB must be of the same length. This
+    /* For these three functions, seqA and seqB must be of the same length. This
      * is not checked, for efficiency. The comparison is smart, in that it stops
      * when it is clear that the identity level cannot be reached with the rest
      * of the sequences. The first function looks for a given number of identities
      * and the second one for a given fraction identity. */
     static bool areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, int numID);
     static bool areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, mstreal idCut);
+    static int sequenceIdentity(const Sequence& seqA, const Sequence& seqB);
 
     /* Performs an all-by-all sequence identity search (ungapped) using a
      * randomized algorithm inspired by the USEARCH method (Robert C. Edgar,

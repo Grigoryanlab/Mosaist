@@ -96,6 +96,7 @@ class Structure {
     bool appendChain(Chain* C, bool allowRename = true);
     Chain* appendChain(string cid, bool allowRename = true);
     void deleteChain(Chain* chain);
+    void deleteShortChains(int sizeThreshold = 5);
 
     /* makes a copy of the atom, then decides where it is supposed to go and inserts it
      * into the Structure, creating a new Chain and/or Residue as needed. */
@@ -859,7 +860,7 @@ class Clusterer {
      * Output a vector of clusters, in decreasing size, each of which is a vector of
      * indices of elements mapping to that cluster. The centroid is always listed first
      * in each cluster. */
-    vector<vector<int> > greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax = 10000, mstreal coverage = 1.0, bool verbose = true);
+    vector<vector<int> > greedyCluster(const vector<vector<Atom*> >& units, mstreal rmsdCut, int Nmax = 10000, mstreal coverage = 1.0, int maxClusters = -1, bool verbose = true);
 
     /* Perform k-means clustering of a point cloud in arbitrary dimension, using
      * Euclidean distance as the metric. Returns a list of clusters of size k,

@@ -289,10 +289,9 @@ class termData {
     termData() {}
     termData(vector<Residue*> _centResidues, int pm) {
       vector<int> cenResFlankingRes(_centResidues.size(),pm);
-      define(_centResidues, cenResFlankingRes);
+      define(_centResidues, pm);
     }
-    termData(vector<Residue*> _centResidues, vector<int> pm) : cenResFlankingRes(pm) { define(_centResidues, pm);}
-    void define(vector<Residue*> _centResidues, vector<int> pm) {
+    void define(vector<Residue*> _centResidues, int pm) {
       centResidues = _centResidues;
       term.reset();
       fragResIdx.clear();
@@ -300,8 +299,7 @@ class termData {
     }
     void addCentralResidue(Residue* res, int pm) {
       centResidues.push_back(res);
-      cenResFlankingRes.push_back(pm);
-      define(centResidues, cenResFlankingRes);
+      define(centResidues, pm);
     }
 
     // void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
