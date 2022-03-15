@@ -41,7 +41,6 @@ int main(int argc, char *argv[]) {
   op.addOption("fcut", "if --opt is given, will set a limit on the fraction of positions allowed to be occupied by a single amino acid type. If specified, will use the simpler complexity penalty rather than the one based on number of arrangements of the letter distribution.");
   op.addOption("cyc", "if --opt is given, this will set the number of MC cycles to run (default is 100).");
   op.addOption("randomSeed","If --opt is given, will set a new random seed each time the program is run. Otherwise will use the same random seed and provide consistent results");
-=======
   op.setOptions(argc, argv);
   if (op.isGiven("lc") && !op.isReal("lc")) {
     cout << op.usage() << endl;
