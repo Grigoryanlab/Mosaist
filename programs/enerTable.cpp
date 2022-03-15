@@ -46,10 +46,8 @@ int main(int argc, char *argv[]) {
     cout << op.usage() << endl;
     MstUtils::error("if given, --lc must be real");
   }
-  if (op.isGiven("randomSeed")) srand(time(NULL) + int(getpid()));
-  else srand(1);
-
-  srand(time(NULL) + int(getpid()));
+  if (op.isGiven("randomSeed")) MstUtils::seedRandEngine();
+  else MstUtils::seedRandEngine(42);
 
   EnergyTable E;
   E.readFromFile(op.getString("e"));
