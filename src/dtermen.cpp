@@ -19,7 +19,7 @@ void dTERMen::init() {
   selfResidualPC = selfCorrPC = 1.0;
   selfResidualMinN = 1000;
   selfResidualMaxN = 5000;
-   
+  selfCorrMaxCliqueSize = -1;
   selfCorrMinN = 200;
   selfCorrMaxN = 5000;
   pairMinN = 1000;
