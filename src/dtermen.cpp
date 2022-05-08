@@ -1553,6 +1553,13 @@ int EnergyTable::addToSiteAlphabet(int siteIdx, const string& aa) {
   return a;
 }
 
+void EnergyTable::renameSiteResidue(int si, int ai, const string& aa) {
+  string oldAA = aaAlpha[si][ai];
+  aaAlpha[si][ai] = aa;
+  aaIndices[si].erase(oldAA);
+  aaIndices[si][aa] = ai;
+}
+
 void EnergyTable::clear() {
   siteIndices.clear();
   sites.clear();
