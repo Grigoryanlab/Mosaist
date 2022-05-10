@@ -405,7 +405,7 @@ mstreal SeqTools::complexity(const vector<int>& seq, int mutSite, int mutAA) {
     k = mutAA - mi;
     del -= 0.5*log(2*M_PI*(counts[k] + 1)) + (counts[k] + 1)*log((counts[k] + 1)/e);
     if (counts[k] > 0) del += 0.5*log(2*M_PI*counts[k]) + counts[k]*log(counts[k]/e);
-    return del/L;
+    return del;
   }
 
   // compute complexity using Stirling's approximation of the factorial

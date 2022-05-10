@@ -365,6 +365,7 @@ class EnergyTable {
     bool siteExists(const string& siteName) { return siteIndices.find(siteName) != siteIndices.end(); }
     void setSiteAlphabet(const string& siteName, const vector<string>& alpha) { setSiteAlphabet(siteIndex(siteName), alpha); }
     void setSiteAlphabet(int siteIdx, const vector<string>& alpha);
+    void renameSiteResidue(int si, int ai, const string& aa);
     vector<string> getSiteAlphabet(int siteIdx) { return aaAlpha[siteIdx]; }
     int addToSiteAlphabet(int siteIdx, const string& aa);
     bool inSiteAlphabet(int siteIdx, const string& aa) { return aaIndices[siteIdx].find(aa) != aaIndices[siteIdx].end(); }

@@ -41,6 +41,8 @@ int main(int argc, char *argv[]) {
   op.addOption("fcut", "if --opt is given, will set a limit on the fraction of positions allowed to be occupied by a single amino acid type. If specified, will use the simpler complexity penalty rather than the one based on number of arrangements of the letter distribution.");
   op.addOption("cyc", "if --opt is given, this will set the number of MC cycles to run (default is 100).");
   op.addOption("randomSeed","If --randomSeed is given, will set a new random seed each time the program is run. Otherwise will use the same random seed and provide consistent results");
+  op.addOption("o", "output file name of the energy table in case it needs to be written.");
+  op.addOption("es", "indicates that the energy table is written in single-letter code for residue names rather than three-letter code");
   op.setOptions(argc, argv);
   if (op.isGiven("lc") && !op.isReal("lc")) {
     cout << op.usage() << endl;
@@ -51,11 +53,17 @@ int main(int argc, char *argv[]) {
 
   EnergyTable E;
   E.readFromFile(op.getString("e"));
+  if (op.isGiven("es")) {
+    for (int si = 0; si < E.numSites(); si++) {
+      vector<string> alpha = E.getSiteAlphabet(si);
+      for (int i = 0; i < alpha.size(); i++) E.renameSiteResidue(si, i, SeqTools::toTriple(alpha[i]));
+    }
+  }
 
   // read sequences from various sources
   vector<Sequence> seqs;
   if (op.isGiven("p")) seqs.push_back(Sequence(Structure(op.getString("p"))));
-  if (op.isGiven("s")) seqs.push_back(Sequence(op.getString("s"), "seq", op.getString("sd", "")));
+  if (op.isGiven("s")) seqs.push_back(Sequence(op.getString("s"), "seq", ""));
 
   // score sequences
   for (int i = 0; i < seqs.size(); i++) {
@@ -89,5 +97,14 @@ int main(int argc, char *argv[]) {
     if (!lastSol.empty()) cout << "last sequence visited: " << (E.solutionToSequence(lastSol)).toString() << endl;
     cout << "lowest-energy sequence found: " << (E.solutionToSequence(bestSol)).toString() << endl;
     cout << "lowest-energy score found: " << E.scoreSolution(bestSol) << endl;
+
+    // compute sequence recovery relative to the sequence specified in --s, if any
+    if (op.isGiven("s")) {
+      Sequence best = E.solutionToSequence(bestSol);
+      Sequence ref = Sequence(op.getString("s"), "reference", "");
+      int nID = 0;
+      for (int i = 0; i < best.size(); i++) nID += (best[i] == ref[i]);
+      cout << "sequence recovery: " << nID << "/" << best.size() << " = " << (100.0*nID)/best.size() << " %" << endl;
+    }
   }
 }
