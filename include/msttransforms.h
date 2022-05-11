@@ -12,7 +12,7 @@ class Frame {
     Frame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z);
     Frame(const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) : Frame(CartesianPoint(0, 0, 0), _X, _Y, _Z) {};
     Frame(mstreal _ox, mstreal _oy, mstreal _oz, mstreal _xx, mstreal _xy, mstreal _xz, mstreal _yx, mstreal _yy, mstreal _yz, mstreal _zx, mstreal _zy, mstreal _zz);
-    Frame(Frame& other);
+    Frame(const Frame& other);
 
     CartesianPoint getX() const { return CartesianPoint(X[0], X[1], X[2]); }
     CartesianPoint getY() const { return CartesianPoint(Y[0], Y[1], Y[2]); }
@@ -23,6 +23,11 @@ class Frame {
     mstreal getZ(int i) const { return Z[i]; }
     mstreal getO(int i) const { return O[i]; }
 
+    void setX(const CartesianPoint& _X);
+    void setY(const CartesianPoint& _Y);
+    void setZ(const CartesianPoint& _Z);
+    void setO(const CartesianPoint& _O);
+
     friend ostream & operator<<(ostream &_os, Frame& _F) {
       _os << "O: " << _F.O[0] << " " << _F.O[1] << " " << _F.O[2] << endl;
       _os << "X: " << _F.X[0] << " " << _F.X[1] << " " << _F.X[2] << endl;
@@ -30,6 +35,9 @@ class Frame {
       _os << "Z: " << _F.Z[0] << " " << _F.Z[1] << " " << _F.Z[2] << endl;
       return _os;
     }
+
+  protected:
+    void constructFrame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z);
 
   private:
     mstreal O[3];             // coordinates of the origin in the laboratory frame
@@ -71,6 +79,7 @@ class Transform {
 
     CartesianPoint applyToCopy(CartesianPoint& p);
     void apply(CartesianPoint& p);
+    void apply(Frame& f);
     void apply(Atom& a) { apply(&a); }
     void apply(Atom* a);
     void apply(mstreal& x, mstreal& y, mstreal& z);

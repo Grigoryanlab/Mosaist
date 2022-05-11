@@ -475,6 +475,12 @@ void Structure::deleteChain(Chain* chain) {
   delete chain;
 }
 
+void Structure::deleteShortChains(int sizeThreshold) {
+  vector<Chain*> toDelete;
+  for (Chain* C : chains) if (C->residueSize() < sizeThreshold) toDelete.push_back(C);
+  for (Chain* C : toDelete) deleteChain(C);
+}
+
 Residue& Structure::getResidue(int i) const {
   if ((i < 0) || (i >= residueSize()))
     MstUtils::error("residue index " + MstUtils::toString(i) + " out of range for Structure", "Structure::getResidue(int)");
@@ -3306,12 +3312,14 @@ bool ProximitySearch::overlaps(ProximitySearch& other, mstreal pad) {
 }
 
 /* --------- Clusterer --------- */
-vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units, mstreal rmsdCut, int Nmax, mstreal coverage, bool verbose) {
+vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units, mstreal rmsdCut, int Nmax, mstreal coverage, int maxClusters, bool verbose) {
   vector<vector<int>> clusters;
   if (units.empty()) return clusters;
   set<int> remIndices;
   for (int i = 0; i < units.size(); i++) remIndices.insert(i);
   if (remIndices.size() <= Nmax) return Clusterer::greedyClusterBruteForce(units, remIndices, rmsdCut);
+  
+  cout << "There are " << units.size() << " total points to cluster, will continue until " << floor(units.size()*coverage) << " (" << coverage << ") or " << maxClusters << "are covered" << endl;
 
   // create some dummy storage vectors
   int L = units[0].size();
@@ -3323,7 +3331,7 @@ vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units,
   int numToLeave = total * (1 - coverage);
 
   // iterate to find a new cluster each time
-  while ((remIndices.size() > Nmax) && (remIndices.size() > numToLeave)) {
+  while ((remIndices.size() > Nmax) && (remIndices.size() > numToLeave) && (maxClusters > 0) && (clusters.size() < maxClusters)) {
     // sub-sample Nmax elements
     set<int> subSample = Clusterer::randomSubsample(remIndices, Nmax);
 
@@ -3338,7 +3346,7 @@ vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units,
       mean.copyCoordinates(units[topClust[0]]);
       for (int i = 1; i < topClust.size(); i++) {
         copy.copyCoordinates(units[topClust[i]]);
-        rCalc.align(copy, units[topClust[0]], copy);
+        if (optimAlign) rCalc.align(copy, units[topClust[0]], copy);
         mean *= (mstreal) i; mean += copy; mean /= (mstreal) (i + 1);
       }
       vector<int> topClustNew = Clusterer::elementsWithin(units, remIndices, mean, rmsdCut);
@@ -3362,11 +3370,14 @@ vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units,
   }
 
   // brute force through the rest
-  int numToCluster = remIndices.size() - numToLeave;
-  if (numToCluster >= 1) {
+  if ((maxClusters > 0) && (clusters.size() < maxClusters)) {
+    int remainingClusters = maxClusters - clusters.size();
+    vector<vector<int>> remClusters = greedyClusterBruteForce(units, remIndices, rmsdCut, remainingClusters);
+    clusters.insert(clusters.end(), remClusters.begin(), remClusters.end());
+  } else if ((maxClusters <= 0) && ((remIndices.size() - numToLeave) >= 1)) {
     set<int> indsToCluster;
     auto curInd = remIndices.begin();
-    for (int i = 0; i < numToCluster; i++) {
+    for (int i = 0; i < (remIndices.size() - numToLeave); i++) {
       auto it = remIndices.begin();
       indsToCluster.insert(*it);
       remIndices.erase(it);

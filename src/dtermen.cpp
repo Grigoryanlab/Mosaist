@@ -996,7 +996,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
   F.setRMSDCutoff(rmsdCutSelfRes(sT.getResidueIndices(), S));
   F.setMinNumMatches(selfResidualMinN);
   F.setMaxNumMatches(selfResidualMaxN);
-  sT.setMatches(F.search(), this);
+  sT.setMatches(F.search(), homCut, &F);
   CartesianPoint selfResidual = singleBodyStatEnergy(sT.getMatches(), sT.getCentralResidueIndices()[0], selfResidualPC);
   if (recordData) data.push_back(sT);
   if (verbose) printSelfComponent(selfResidual, "\t");
@@ -1024,7 +1024,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
     F.setRMSDCutoff(rmsdCutSelfCor(c.getResidueIndices(), S));
     F.setMinNumMatches(selfCorrMinN);
     F.setMaxNumMatches(selfCorrMaxN);
-    c.setMatches(F.search(), this);
+    c.setMatches(F.search(), homCut, &F);
     if ((c.numMatches() < selfCorrMinN) || (c.getMatch(selfCorrMinN - 1).getRMSD()) > F.getRMSDCutoff()) { finalCliques.push_back(c); }
     else { cliquesToGrow[contResidues[i]] = c; }
   }
@@ -1052,7 +1052,7 @@ vector<mstreal> dTERMen::selfEnergies(Residue* R, ConFind& C, bool verbose) {
         F.setQuery(newClique.getTERM());
         F.setRMSDCutoff(rmsdCutSelfCor(newClique.getResidueIndices(), S));
         F.setMaxNumMatches(selfCorrMaxN);
-        newClique.setMatches(F.search(), this);
+        newClique.setMatches(F.search(), homCut, &F);
         if ((j == 0) || (newClique.numMatches() > grownClique.numMatches())) {
           if (verbose) cout << "\t\t\t\tdTERMen::selfEnergies -> new best" << endl;
           grownClique = newClique;
@@ -1116,7 +1116,7 @@ vector<vector<mstreal>> dTERMen::pairEnergies(Residue* Ri, Residue* Rj, bool ver
   F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
   F.setMinNumMatches(pairMinN);
   F.setMaxNumMatches(pairMaxN);
-  pT.setMatches(F.search(), this);
+  pT.setMatches(F.search(), homCut, &F);
   if (recordData) data.push_back(pT);
 
   // for each of the two positions, compute expectation of every amino acid in
@@ -1162,7 +1162,7 @@ vector<vector<mstreal>> dTERMen::pairEnergiesNew(Residue* Ri, Residue* Rj, bool 
   F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
   F.setMinNumMatches(pairMinN);
   F.setMaxNumMatches(pairMaxN);
-  pT.setMatches(F.search(), this);
+  pT.setMatches(F.search(), homCut, &F);
   if (recordData) data.push_back(pT);
 
   // figure out which matches are from "homo-dimers"
@@ -1221,7 +1221,7 @@ vector<vector<mstreal>> dTERMen::pairEnergiesNew2(Residue* Ri, Residue* Rj, bool
   F.setRMSDCutoff(rmsdCutPair(pT.getResidueIndices(), S));
   F.setMinNumMatches(pairMinN);
   F.setMaxNumMatches(pairMaxN);
-  pT.setMatches(F.search(), this);
+  pT.setMatches(F.search(), homCut, &F);
   if (recordData) data.push_back(pT);
 
   // figure out which matches are from "homo-dimers"
@@ -1388,8 +1388,8 @@ pair<int, int> dTERMen::idxToPair(int idx) const {
 }
 
 /* ----------- EnergyTable --------------- */
-int dTERMen::termData::setMatches(const fasstSolutionSet& _matches, dTERMen* D) {
-  if (D == NULL) { matches = _matches; return matches.size(); }
+int termData::setMatches(const fasstSolutionSet& _matches, mstreal homologyCutoff, FASST* F) {
+  if (F == NULL) { matches = _matches; return matches.size(); }
 
   // need at least one match (to structure the dummy match around) and at least
   // one central residue for the underlying TERM (to infer the parent Structure)
@@ -1410,11 +1410,11 @@ int dTERMen::termData::setMatches(const fasstSolutionSet& _matches, dTERMen* D) 
     off += ex.segLength(i);
   }
   fasstSolution orig(fasstSolutionAddress(0, algn), segLen);
-  orig.addSequenceContext(*querySource, D->getFASST()->options().getContextLength());
+  orig.addSequenceContext(*querySource, F->options().getContextLength());
 
   // fill the sequence context of all solutions
   fasstSolutionSet matchesWithContext = _matches;
-  D->getFASST()->addSequenceContext(matchesWithContext);
+  F->addSequenceContext(matchesWithContext);
 
   // create a solution set with just the dummy solution and add each of the real
   // solutions into it, one by one, with redundancy turned on. If they are not
@@ -1423,7 +1423,7 @@ int dTERMen::termData::setMatches(const fasstSolutionSet& _matches, dTERMen* D) 
   fasstSolutionSet origSet(orig);
   matches.clear();
   for (int i = 0; i < matchesWithContext.size(); i++) {
-    if (origSet.insert(matchesWithContext[i], D->getHomologyCutoff())) {
+    if (origSet.insert(matchesWithContext[i], homologyCutoff)) {
       matches.insert(matchesWithContext[i]);
       origSet.erase(matchesWithContext[i]);
       if (origSet.size() != 1) MstUtils::error("it appears the original dummy solution has been lost (this should not happen)", "dTERMen::termData::setMatches"); // sanity check

@@ -387,6 +387,13 @@ bool FASST::parseChain(const Chain& C, AtomPointerVector* searchable, Sequence* 
   return foundAll;
 }
 
+void FASST::addResidueStringProperties(int ti, const string& propType, const vector<string>& propVals) {
+  if ((ti < 0) || (ti >= targetStructs.size())) MstUtils::error("requested target out of range: " + MstUtils::toString(ti), "FASST::addResidueStringProperties");
+  int N = targetStructs[ti]->residueSize();
+  if (N != propVals.size()) MstUtils::error("size of properties vector (" + MstUtils::toString(propVals.size()) + ") inconsistent with number of residues ("+ MstUtils::toString(N) +") for target: " + MstUtils::toString(ti), "FASST::addResidueStringProperties");
+  resStringProperties[propType][ti] = propVals;
+}
+
 void FASST::addResidueProperties(int ti, const string& propType, const vector<mstreal>& propVals) {
   if ((ti < 0) || (ti >= targetStructs.size())) MstUtils::error("requested target out of range: " + MstUtils::toString(ti), "FASST::addResidueProperties");
   int N = targetStructs[ti]->residueSize();
@@ -420,8 +427,18 @@ bool FASST::hasResidueProperty(int ti, const string& propType, int ri) {
           (resProperties[propType][ti].size() > ri) && (ri >= 0));
 }
 
+bool FASST::hasResidueStringProperty(int ti, const string& propType, int ri) {
+  return ((resStringProperties.find(propType) != resStringProperties.end()) &&
+          (resStringProperties[propType].find(ti) != resStringProperties[propType].end()) &&
+          (resStringProperties[propType][ti].size() > ri) && (ri >= 0));
+}
+
 mstreal FASST::getResidueProperty(int ti, const string& propType, int ri) {
   return hasResidueProperty(ti, propType, ri) ? resProperties[propType][ti][ri] : 0.0;
+}
+
+string FASST::getResidueStringProperty(int ti, const string& propType, int ri) {
+  return hasResidueStringProperty(ti, propType, ri) ? resStringProperties[propType][ti][ri] : "";
 }
 
 bool FASST::hasResiduePairProperties(int ti, const string& propType, int ri) {
@@ -455,6 +472,15 @@ void FASST::writeDatabase(const string& dbFile) {
         MstUtils::writeBin(ofs, 'P'); // marks the start of a residue property section
         MstUtils::writeBin(ofs, (string) p->first);
         MstUtils::assert(targetStructs[ti]->residueSize() == vals.size(), "the number of residue properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
+        for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
+      }
+    }
+    for (auto p = resStringProperties.begin(); p != resStringProperties.end(); ++p) {
+      if ((p->second).find(ti) != (p->second).end()) {
+        vector<string>& vals = (p->second)[ti];
+        MstUtils::writeBin(ofs, 'N'); // marks the start of a residue string property section
+        MstUtils::writeBin(ofs, (string) p->first);
+        MstUtils::assert(targetStructs[ti]->residueSize() == vals.size(), "the number of residue string properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
         for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
       }
     }
@@ -498,7 +524,7 @@ void FASST::writeDatabase(const string& dbFile) {
 
 void FASST::readDatabase(const string& dbFile, short memSave) {
   fstream ifs; MstUtils::openFile(ifs, dbFile, fstream::in | fstream::binary, "FASST::readDatabase");
-  char sect; string name; mstreal val;
+  char sect; string name; mstreal val; string sval;
   int ver = 0;
   int ti = numTargets();
   MstUtils::readBin(ifs, sect);
@@ -523,6 +549,14 @@ void FASST::readDatabase(const string& dbFile, short memSave) {
         for (int i = 0; i < L; i++) {
           MstUtils::readBin(ifs, val);
           vals[i] = val;
+        }
+      } else if (sect == 'N') {
+        MstUtils::readBin(ifs, name);
+        vector<string>& vals = resStringProperties[name][ti];
+        vals.resize(L);
+        for (int i = 0; i < L; i++) {
+          MstUtils::readBin(ifs, sval);
+          vals[i] = sval;
         }
       } else if (sect == 'I') {
         MstUtils::readBin(ifs, name);
@@ -1133,6 +1167,14 @@ bool FASST::isResiduePropertyDefined(const string& propType, int ti) {
 
 bool FASST::isResiduePropertyDefined(const string& propType) {
   return (resProperties.find(propType) != resProperties.end());
+}
+
+bool FASST::isResidueStringPropertyDefined(const string& propType, int ti) {
+  return ((resStringProperties.find(propType) != resStringProperties.end()) || (resStringProperties[propType].find(ti) != resStringProperties[propType].end()));
+}
+
+bool FASST::isResidueStringPropertyDefined(const string& propType) {
+  return (resStringProperties.find(propType) != resStringProperties.end());
 }
 
 vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType type) {

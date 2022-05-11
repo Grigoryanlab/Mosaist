@@ -9,7 +9,7 @@
 using namespace MST;
 
 class EnergyTable;
-
+class termData;
 /* Remaining questions:
  * TODO: when there is no +/- pmSelf or +/- pmPair on one side, extend on the other side (current dTERMen)!
  * TODO: make terminus-specific trivial potentials (probably all of them)
@@ -36,56 +36,6 @@ class dTERMen {
     void readConfigFile(const string& configFile);
     void setEnergyFunction(const string& ver); // sets the energy function version and alters any necessary parameters
     void setRecordFlag(bool record = true) { recordData = record; }
-
-    /* Stores data about a single TERM searched in the process of the dTERMen
-     * energy-table calculation. */
-    class termData {
-      public:
-        termData() {}
-        termData(vector<Residue*> _centResidues, int pm) { define(_centResidues, pm); }
-        void define(vector<Residue*> _centResidues, int pm) {
-          centResidues = _centResidues;
-          term.reset();
-          fragResIdx.clear();
-          centResIndices = TERMUtils::selectTERM(centResidues, term, pm, &fragResIdx);
-        }
-        void addCentralResidue(Residue* res, int pm) {
-          centResidues.push_back(res);
-          define(centResidues, pm);
-        }
-
-        // void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
-        int setMatches(const fasstSolutionSet& _matches, dTERMen* D = NULL);
-        fasstSolutionSet& getMatches() { return matches; }
-        fasstSolution& getMatch(int i) { return matches[i]; }
-        int numMatches() const { return matches.size(); }
-        const Structure& getTERM() const { return term; }
-        const vector<int>& getResidueIndices() const { return fragResIdx; }
-        const vector<Residue*>& getCentralResidues() const { return centResidues; }
-        const vector<int>& getCentralResidueIndices() const { return centResIndices; }
-        int numCentralResidues() const { return centResidues.size(); }
-
-        friend ostream & operator<<(ostream &_os, const termData& _td) {
-          _os << "TERM clique with " << _td.centResidues.size() << " central residues, " << _td.matches.size() << " matches:";
-          for (int i = 0; i < _td.centResidues.size(); i++) _os << " " << *(_td.centResidues[i]);
-          return _os;
-        }
-        string toString() { stringstream ss; ss << *this; return ss.str(); }
-
-      private:
-        /* the central residues of each of the TERM's segments and their corres-
-         * ponding indices in the template. */
-        vector<Residue*> centResidues;
-        vector<int> centResIndices;
-
-        /* term is the TERM itself, whose residues correspond to template posi-
-         * tions at indices fragResIdx. */
-        Structure term;
-        vector<int> fragResIdx;
-
-        /* matches resulting from querying the TERM. */
-        fasstSolutionSet matches;
-    };
 
     /* Builds an energy table for design. Parameters:
      * - a list of mutable positions as vector<Residue*>. All residues must belong
@@ -330,6 +280,61 @@ class dTERMen {
     map<res_t, int> aaIdx;
     int aaMapType;
 
+};
+
+/* Helper class that stores data about a single TERM searched in the process of the dTERMen
+ * energy-table calculation. */
+class termData {
+  public:
+    termData() {}
+    termData(vector<Residue*> _centResidues, int pm) {
+      vector<int> cenResFlankingRes(_centResidues.size(),pm);
+      define(_centResidues, pm);
+    }
+    void define(vector<Residue*> _centResidues, int pm) {
+      centResidues = _centResidues;
+      term.reset();
+      fragResIdx.clear();
+      centResIndices = TERMUtils::selectTERM(centResidues, term, pm, &fragResIdx);
+    }
+    void addCentralResidue(Residue* res, int pm) {
+      centResidues.push_back(res);
+      define(centResidues, pm);
+    }
+
+    // void setMatches(const fasstSolutionSet& _matches) { matches = _matches; }
+    int setMatches(const fasstSolutionSet& _matches, mstreal homologyCutoff, FASST* F = NULL);
+    fasstSolutionSet& getMatches() { return matches; }
+    fasstSolution& getMatch(int i) { return matches[i]; }
+    int numMatches() const { return matches.size(); }
+    const Structure& getTERM() const { return term; }
+    const vector<int>& getResidueIndices() const { return fragResIdx; }
+    const vector<Residue*>& getCentralResidues() const { return centResidues; }
+    const vector<int>& getCentralResidueIndices() const { return centResIndices; }
+    int numCentralResidues() const { return centResidues.size(); }
+
+    friend ostream & operator<<(ostream &_os, const termData& _td) {
+      _os << "TERM clique with " << _td.centResidues.size() << " central residues, " << _td.matches.size() << " matches:";
+      for (int i = 0; i < _td.centResidues.size(); i++) _os << " " << *(_td.centResidues[i]);
+      return _os;
+    }
+    string toString() { stringstream ss; ss << *this; return ss.str(); }
+
+  private:
+    /* the central residues of each of the TERM's segments and their corres-
+     * ponding indices in the template. */
+    vector<Residue*> centResidues;
+    /* the flanking residues around each of the central residues */
+    vector<int> cenResFlankingRes;
+    vector<int> centResIndices;
+
+    /* term is the TERM itself, whose residues correspond to template posi-
+     * tions at indices fragResIdx. */
+    Structure term;
+    vector<int> fragResIdx;
+
+    /* matches resulting from querying the TERM. */
+    fasstSolutionSet matches;
 };
 
 class EnergyTable {

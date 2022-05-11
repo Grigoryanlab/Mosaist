@@ -46,6 +46,11 @@ class TERMUtils {
      * as source residues) are already specified. Returns indices of central
      * residues in the final motif structure. */
     static vector<int> selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm = 2, vector<int>* fragResIdx = NULL, bool contiguous = true);
+    /* case 6: all central residues + contacting residues (together referred to
+     * as source residues) are already specified. Each central residue + contacting
+     * residue also has the number of flanking residues specified individually.
+     * Returns indices of central residues in the final motif structure. */
+       static vector<int> selectTERM(const vector<Residue*>& cenRes, Structure& frag, vector<int> pm, vector<int>* fragResIdx = NULL, bool contiguous = true);
 
     // /* The following function is a little different, in that it simply cuts out
     //  * one segment at a time, and splices them together. It does not worry about

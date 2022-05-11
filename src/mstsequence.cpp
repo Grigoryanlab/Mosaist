@@ -374,6 +374,14 @@ bool SeqTools::areSequencesWithinID(const Sequence& seqA, const Sequence& seqB, 
   return areSequencesWithinID(seqA, seqB, (int) ceil(seqA.size() * idCut));
 }
 
+int SeqTools::sequenceIdentity(const Sequence& seqA, const Sequence& seqB) {
+  int numID = 0, L = seqA.size();
+  for (int i = 0; i < L; i++) {
+    if (seqA[i] == seqB[i]) numID++;
+  }
+  return numID;
+}
+
 mstreal SeqTools::complexity(const vector<int>& seq, int mutSite, int mutAA) {
   if (seq.empty()) return 0;
 
@@ -478,6 +486,14 @@ string Sequence::getResidue(int i, bool triple) const {
 Sequence Sequence::subSequence(const vector<int>& inds) const {
   Sequence sub(inds.size());
   for (int i = 0; i < inds.size(); i++) sub[i] = (*this)[inds[i]];
+  return sub;
+}
+
+Sequence Sequence::extractRange(int min, int max) const {
+  if (max < min) MstUtils::error("max ("+MstUtils::toString(max)+") must be > than min ("+MstUtils::toString(min)+")","Sequence::extractRange");
+  if ((max >= seq.size())||(min < 0)) MstUtils::error("max ("+MstUtils::toString(max)+") and min ("+MstUtils::toString(min)+") must be in the range [0,L)","Sequence::extractRange");
+  Sequence sub(max-min+1);
+  for (int i = 0; i+min <= max; i++) sub[i] = (*this)[i+min];
   return sub;
 }
 

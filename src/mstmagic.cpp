@@ -169,7 +169,13 @@ vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, ConFind& C, St
 }
 
 vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, int pm, vector<int>* fragResIdx, bool contiguous) {
+    vector<int> pmCenRes(cenRes.size(),pm);
+    return TERMUtils::selectTERM(cenRes, frag, pmCenRes, fragResIdx, contiguous);
+}
+
+vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& frag, vector<int> pm, vector<int>* fragResIdx, bool contiguous) {
   if (cenRes.size() == 0) return vector<int>();
+    if (cenRes.size() != pm.size()) MstUtils::error("The length of cenRes and pm vectors must match: "+MstUtils::toString(cenRes.size())+" and "+MstUtils::toString(pm.size()),"TERMUtils::selectTERM");
   Structure* S = cenRes[0]->getChain()->getParent();
   vector<bool> selected(S->residueSize(), false);
   vector<int> central(S->residueSize(), -1);
@@ -181,7 +187,7 @@ vector<int> TERMUtils::selectTERM(const vector<Residue*>& cenRes, Structure& fra
     int fi = C->getResidue(0).getResidueIndex(); // first residue index in the chain
 
     for (int dir : {-1, 1}) {
-      for (int del = 0; del <= pm; del++) {
+      for (int del = 0; del <= pm[i]; del++) {
         int k = ri + dir*del;
         if ((k < fi) || (k > li)) continue;
         // if contiguous is specified, do not select non-contiguous residues

@@ -36,8 +36,8 @@
 
 # flags
 CC := g++
-CPP_FLAGS := -O3 -std=c++11 -fPIC
-DEBUG_FLAGS := -g -rdynamic
+CPP_FLAGS := -std=c++11 -fPIC
+DEBUG_FLAGS := -g3 #-g3 -rdynamic -gdwarf-3
 
 # essential directories
 INCD := include
@@ -70,10 +70,10 @@ ifdef INCLUDE_ARMA
 endif
 
 # targets and MST libraries
-TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testFASST testFuser testGrads testParsing testRestrictSiteAlphabet testRotlib testTERMUtils testTransforms testdTERMen testTermanal
+TESTS		:= findBestFreedom test testAutofuser testConFind testClusterer testSequence testStride testFASST testFuser testGrads testParsing testRestrictSiteAlphabet testRotlib testTERMUtils testTransforms testdTERMen testTermanal
 PROGRAMS	:= findTERMs renumber TERMify subMatrix fasstDB bind analyzeLandscape extractSegments design enerTable pairEnergies search scoreStructure clusterStructs connect $(ARMA_PROGRAMS)
 TARGETS		:= $(TESTS) $(PROGRAMS)
-HELPERS		:= mstcondeg mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes msttermanal
+HELPERS		:= mstcondeg mstexternal mstfasst mstfuser mstlinalg mstmagic mstoptim mstoptions mstrotlib mstsequence mstsystem msttransforms msttypes msttermanal
 LIBRARIES	:= libmst libmstcondeg libmstfasst libmstfasstcache libmstfuser libmstlinalg libmstmagic libmstoptim libmsttrans libdtermen
 
 # target dependencies
@@ -90,6 +90,7 @@ testGrads_DEPS			:= msttypes
 testParsing_DEPS		:= msttypes
 testRestrictSiteAlphabet_DEPS   := msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 testRotlib_DEPS			:= mstrotlib msttransforms msttypes
+testStride_DEPS			:= msttypes mstexternal mstsystem
 testTERMUtils_DEPS		:= mstmagic msttypes mstcondeg mstrotlib msttransforms
 testTransforms_DEPS		:= mstlinalg msttransforms msttypes
 testTermanal_DEPS		:= msttermanal msttypes mstrotlib mstcondeg mstfasst mstoptions mstsequence msttransforms mstmagic
@@ -100,7 +101,7 @@ TERMify_DEPS			:= msttypes mstfasst mstcondeg mstfuser mstrotlib msttransforms m
 bind_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions mstmagic
 connect_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
 subMatrix_DEPS			:= msttypes mstfasst mstcondeg mstrotlib msttransforms mstsequence mstoptions
-fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg
+fasstDB_DEPS			:= msttypes mstfasst mstrotlib mstoptions msttransforms mstsequence mstsystem mstcondeg mstexternal
 testdTERMen_DEPS		:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 design_DEPS			:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
 enerTable_DEPS			:= msttypes mstfasst dtermen msttransforms mstsequence mstrotlib mstcondeg mstoptions mstmagic mstsystem
@@ -144,7 +145,7 @@ CONDA_INC := $(patsubst %, -I%, $(CONDA_DIRS))
 
 # construct the flags that will be included
 FLAGS := $(CPP_FLAGS)
-ifdef DEBUG
+ifdef DEBUG_FLAGS
 	FLAGS += $(DEBUG_FLAGS)
 endif
 

@@ -30,16 +30,17 @@ mstreal sequenceComplexityPenaltySimple(void* extra, const vector<int>& seq, Ene
 
 int main(int argc, char *argv[]) {
   MstOptions op;
-  op.setTitle("Compute various things using an per-built energy table. Options:");
-  op.addOption("e", "energy table file.", true);
-  op.addOption("p", "PDB file to score the sequence of.");
-  op.addOption("s", "single-letter amino-acid sequence to score.");
-  op.addOption("opt", "optimize energy using MC sampling with default parameters. If an integer is specified, will use this many iterations per cycle (1E6 by default).");
+  op.setTitle("Loads a pre-built energy table and scores sequences or performs MCMC optimization to design a new sequence. Options:");
+  op.addOption("e", "Energy table file.", true);
+  op.addOption("p", "PDB file. If provided, will score the sequence of the structure. Note: must have the same number of residues as the energy table.");
+  op.addOption("s", "Single-letter amino-acid sequence. If provided, will score. Must have the same number of residues as the energy table");
+  op.addOption("opt", "If provided, will perform MCMC simulated annealing to find the optimal sequence with default parameters. If an integer is specified, will use this many iterations per cycle (otherwise 1E6 by default).");
   op.addOption("kTi", "if --opt is given, this will set the initial sampling temperature (default is 1.0).");
   op.addOption("kTf", "if --opt is given, this will set the final annealed temperature (default is 0.1).");
-  op.addOption("lc", "add a low-complexity penalty to the energy scaled by this factor (should be positive).");
-  op.addOption("fcut", "fraction of sequence cutoff allowed to be occupied by a single amino acid. If specified, will use the simpler complexity penalty rather than the one based on number of arrangements of the letter distribution.");
+  op.addOption("lc", "if --opt is givem, will add a low-complexity penalty to the energy scaled by this factor (should be positive).");
+  op.addOption("fcut", "if --opt is given, will set a limit on the fraction of positions allowed to be occupied by a single amino acid type. If specified, will use the simpler complexity penalty rather than the one based on number of arrangements of the letter distribution.");
   op.addOption("cyc", "if --opt is given, this will set the number of MC cycles to run (default is 100).");
+  op.addOption("randomSeed","If --randomSeed is given, will set a new random seed each time the program is run. Otherwise will use the same random seed and provide consistent results");
   op.addOption("o", "output file name of the energy table in case it needs to be written.");
   op.addOption("es", "indicates that the energy table is written in single-letter code for residue names rather than three-letter code");
   op.setOptions(argc, argv);
@@ -47,6 +48,8 @@ int main(int argc, char *argv[]) {
     cout << op.usage() << endl;
     MstUtils::error("if given, --lc must be real");
   }
+  if (op.isGiven("randomSeed")) MstUtils::seedRandEngine();
+  else MstUtils::seedRandEngine(42);
 
   EnergyTable E;
   E.readFromFile(op.getString("e"));
