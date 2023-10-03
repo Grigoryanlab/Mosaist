@@ -1700,16 +1700,6 @@ mstreal CartesianPoint::distance2nc(const CartesianPoint& another) const {
   return d;
 }
 
-/*mstreal Atom::distance2nc(const CartesianPoint& another) const {
-  mstreal d = 0, dd;
-  const CartesianPoint& p = *this;
-  for (int i = 0; i < p.size(); i++) {
-    dd = p[i] - another[i];
-    d += dd*dd;
-  }
-  return d;
-}*/
-
 /* --------- CartesianGeometry --------- */
 mstreal CartesianGeometry::dihedral(const CartesianPoint & _p1, const CartesianPoint & _p2, const CartesianPoint & _p3, const CartesianPoint & _p4, bool radians) {
   CartesianPoint AB = _p1 - _p2;
@@ -2360,6 +2350,16 @@ mstreal RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*
     if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
     else { if (_suc != NULL) *_suc = false; }
     return sqrt(_res/_n);
+}
+
+vector<mstreal> RMSDCalculator::bestRMSD(const vector<vector<Atom*>> &_alignSet, const vector<Atom*> &_ref, int start, int fromEnd) {
+  vector<mstreal> rmsdVector(_alignSet.size());
+  fill(rmsdVector.begin(), rmsdVector.end(), -1.0);
+  RMSDCalculator rc;
+  for (int i = start; i < _alignSet.size() - fromEnd; i++) {
+    rmsdVector[i] = rc.bestRMSD(_alignSet[i], _ref);
+  }
+  return rmsdVector;
 }
 
 mstreal RMSDCalculator::bestResidual(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot, bool* _suc) {
@@ -3307,62 +3307,6 @@ bool ProximitySearch::pointsWithin(const CartesianPoint& c, mstreal dmin, mstrea
   }
   return found;
 }
-
-/*bool ProximitySearch::pointsWithin(Atom* c, mstreal dmin, mstreal dmax, vector<int>* list, bool byTag) {
-  mstreal cx = c->getX(); mstreal cy = c->getY(); mstreal cz = c->getZ();
-  // first check if the point is outside of the bounding box of the point cloud by a sufficient amount
-  if ((cx < xlo - dmax) || (cy < ylo - dmax) || (cz < zlo - dmax) || (cx > xhi + dmax) || (cy > yhi + dmax) || (cz > zhi + dmax)) return false;
-
-  mstreal d2, dmin2, dmax2;
-  int ci, cj, ck;
-  int iOutLo, jOutLo, kOutLo, iOutHi, jOutHi, kOutHi; // external box (no point in looking beyond it, points there are too far)
-  int iInLo, jInLo, kInLo, iInHi, jInHi, kInHi;       // internal box (no point in looking within it, points there are too close)
-  pointBucket(limitX(cx), limitY(cy), limitZ(cz), &ci, &cj, &ck);
-  pointBucket(limitX(cx - dmax), limitY(cy - dmax), limitZ(cz - dmax), &iOutLo, &jOutLo, &kOutLo);
-  pointBucket(limitX(cx + dmax), limitY(cy + dmax), limitZ(cz + dmax), &iOutHi, &jOutHi, &kOutHi);
-  if (dmin > 0) {
-    mstreal sr3 = sqrt(3);
-    pointBucket(cx - dmin/sr3, cy - dmin/sr3, cz - dmin/sr3, &iInLo, &jInLo, &kInLo);
-    pointBucket(cx + dmin/sr3, cy + dmin/sr3, cz + dmin/sr3, &iInHi, &jInHi, &kInHi);
-  } else {
-    iInLo = iInHi = ci;
-    jInLo = jInHi = cj;
-    kInLo = kInHi = ck;
-  }
-  // limitIndex(&iInLo); limitIndex(&iInHi); limitIndex(&jInLo); limitIndex(&jInHi); limitIndex(&kInLo); limitIndex(&kInHi);
-  // limitIndex(&iOutLo); limitIndex(&iOutHi); limitIndex(&jOutLo); limitIndex(&jOutHi); limitIndex(&kOutLo); limitIndex(&kOutHi);
-
-  // search only within the boxes where points of interest can be, in principle
-  if (list != NULL) list->clear();
-  bool found = false, insi, ins;
-  bool yesno = (list == NULL);
-  dmin2 = dmin*dmin; dmax2 = dmax*dmax;
-  int i, j, k, ii, pi;
-  for (i = iOutLo; i <= iOutHi; i++) {
-    insi = (i > iInLo) && (i < iInHi);
-    vector<vector<vector<int> > >& Bi = buckets[i];
-    for (j = jOutLo; j <= jOutHi; j++) {
-      ins = insi && (j > jInLo) && (j < jInHi);
-      vector<vector<int> >& Bij = Bi[j];
-      for (k = kOutLo; k <= kOutHi; k++) {
-        vector<int>& Bijk = Bij[k];
-        // check all points in bucket i, j, k
-        for (ii = 0; ii < Bijk.size(); ii++) {
-          pi = Bijk[ii];
-          d2 = c->distance2nc(pointList[pi]);
-          if ((d2 >= dmin2) && (d2 <= dmax2)) {
-            if (yesno) return true;
-            list->push_back(byTag ? pointTags[pi] : pi);
-            found = true;
-          }
-        }
-        // skip the range from kInLo to kInHi (too close)
-        if (ins && (k == kInLo) && (kInLo != kInHi)) k = kInHi - 1;
-      }
-    }
-  }
-  return found;
-}*/
 
 vector<int> ProximitySearch::getPointsWithin(const CartesianPoint& c, mstreal dmin, mstreal dmax, bool byTag) {
   vector<int> closeOnes;

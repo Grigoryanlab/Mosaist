@@ -301,14 +301,11 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("bestRMSD", &fasstSolutionSet::bestRMSD)
     ;
 
-    //*** new
-    class_<fasstSeqConstSimple>("fasstSeqConstSimple", init<>())
-    //*** new
-    .def("addConstraint", &fasstSearchOptions::addConstraint)
+    class_<fasstSeqConstSimple>("fasstSeqConstSimple", init<int>())
+    .def("addConstraint", &fasstSeqConstSimple::addConstraint)
+    ;
 
     class_<fasstSearchOptions>("fasstSearchOptions", init<>())
-    //*** new
-    .add_property("seqConst", &fasstSearchOptions::setSequenceConstraints, &fasstSearchOptions::setMinNumMatches)
     .add_property("minNumMatches", &fasstSearchOptions::getMinNumMatches, &fasstSearchOptions::setMinNumMatches)
     .add_property("maxNumMatches", &fasstSearchOptions::getMaxNumMatches, &fasstSearchOptions::setMaxNumMatches)
     .add_property("sufficientNumMatches", &fasstSearchOptions::getSufficientNumMatches, &fasstSearchOptions::setSufficientNumMatches)
@@ -322,11 +319,8 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("unsetMaxNumMatches", &fasstSearchOptions::unsetMaxNumMatches)
     .def("unsetSufficientNumMatches", &fasstSearchOptions::unsetSufficientNumMatches)
     .def("resetGapConstraints", &fasstSearchOptions::resetGapConstraints)
-    .def("resetDiffChainConstraints", &fasstSearchOptions::resetDiffChainConstraints)
     .def("unsetRedundancyCut", &fasstSearchOptions::unsetRedundancyCut)
     .def("unsetRedundancyProperty", &fasstSearchOptions::unsetRedundancyProperty)
-    //*** new
-    .def("unsetSequenceConstraints", &fasstSearchOptions::unsetSequenceConstraints)
     .def("isMinNumMatchesSet", &fasstSearchOptions::isMinNumMatchesSet)
     .def("isMaxNumMatchesSet", &fasstSearchOptions::isMaxNumMatchesSet)
     .def("isSufficientNumMatchesSet", &fasstSearchOptions::isSufficientNumMatchesSet)
@@ -342,6 +336,9 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("validateSearchRequest", &fasstSearchOptions::validateSearchRequest)
     .def("areNumMatchConstraintsConsistent", &fasstSearchOptions::areNumMatchConstraintsConsistent)
     .def("setChainsDiff", &fasstSearchOptions::setChainsDiff)
+    .def("resetDiffChainConstraints", &fasstSearchOptions::resetDiffChainConstraints)
+    //***
+    //.def("setSequenceConstraints", &fasstSearchOptions::setSequenceConstraints)
     ;
 
     class_<contactList>("ContactList", init<>())

@@ -67,7 +67,6 @@ class Structure {
     void readData(istream& ifs);
     void reset();
     Structure& operator=(const Structure& A);
-
     int chainSize() const { return chains.size(); }
     int residueSize() const { return numResidues; }
     int positionSize() const { return residueSize(); }  // for interchangability with MSL
@@ -82,7 +81,6 @@ class Structure {
     void setName(const string& _name) { name = _name; }
     string getName() const { return name; }
     void renumber(int startResNum=1, int startAtomIndex=1); // make residue numbering consequitive in each chain and atom index consequitive throughout
-
     // looks at the length of the peptide bond between adjacent residues to figure out where chains break
     void reassignChainsByConnectivity(Structure& dest, mstreal maxPeptideBond = 2.0);
     Structure reassignChainsByConnectivity(mstreal maxPeptideBond = 2.0);
@@ -681,6 +679,8 @@ class RMSDCalculator {
 
     // quickly calculate RMSD upon optimal superposition without generating the rotation matrix
     mstreal bestRMSD(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot = false, bool* _suc = NULL);
+    // calculates many RMSDs from a vector of atom pointer vectors; the first int determines where this starts the comparison along the vector of atom pointer vectors, and the second determines how far from the end it goes
+    vector<mstreal> bestRMSD(const vector<vector<Atom*>> &_align, const vector<Atom*> &_ref, int, int);
     mstreal bestResidual(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot = false, bool* _suc = NULL);
 
     // in-place RMSD (no transformations)
