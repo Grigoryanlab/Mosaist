@@ -3370,12 +3370,6 @@ vector<int> ProximitySearch::getPointsWithin(const CartesianPoint& c, mstreal dm
   return closeOnes;
 }
 
-vector<int> ProximitySearch::getPointsWithin(Atom* c, mstreal dmin, mstreal dmax, bool byTag) {
-  vector<int> closeOnes;
-  pointsWithin(c, dmin, dmax, &closeOnes, byTag);
-  return closeOnes;
-}
-
 bool ProximitySearch::overlaps(ProximitySearch& other, mstreal pad) {
   if ((other.xlo > xhi + pad) || (xlo > other.xhi + pad) || (other.ylo > yhi + pad) || (ylo > other.yhi + pad) || (other.zlo > zhi + pad) || (zlo > other.zhi + pad)) {
     return false;
