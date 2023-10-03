@@ -1049,7 +1049,7 @@ class MstUtils {
     static string trim(const string& str, string delimiters = " \t\n\v\f\r");
     static void warn(const string& message, string from = "");
     static void error(const string& message, string from = "", int code = -1);
-    static void assert(bool condition, string message = "error: assertion failed", string from = "", int exitCode = -1);
+    static void assertCond(bool condition, string message = "error: assertion failed", string from = "", int exitCode = -1);
     static string uc(const string& str);                        // returns an upper-case copy of the input string
     static string lc(const string& str);                        // returns an lower-case copy of the input string
     static bool stringsEqual(const string& A, const string& B, bool caseInsensitive = true);
@@ -1277,11 +1277,11 @@ T MstUtils::max(const T& a, const T& b) {
 
 template <class T>
 T MstUtils::min(const vector<T>& vec, int beg, int end, int* minIndex) {
-  MstUtils::assert(vec.size() > 0, "empty vector passed!", "MstUtils::min(vector<T>&)");
+  MstUtils::assertCond(vec.size() > 0, "empty vector passed!", "MstUtils::min(vector<T>&)");
   if (beg < 0) beg = 0;
   if (end < 0) end = vec.size()-1;
-  MstUtils::assert(beg <= end, "beg = " + MstUtils::toString(beg) + " and end = " + MstUtils::toString(end), "MstUtils::min(vector<T>&)");
-  MstUtils::assert(end < vec.size(), "end index out of bounds, " + MstUtils::toString(end), "MstUtils::min(vector<T>&)");
+  MstUtils::assertCond(beg <= end, "beg = " + MstUtils::toString(beg) + " and end = " + MstUtils::toString(end), "MstUtils::min(vector<T>&)");
+  MstUtils::assertCond(end < vec.size(), "end index out of bounds, " + MstUtils::toString(end), "MstUtils::min(vector<T>&)");
 
   T mv = vec[beg];
   if (minIndex != NULL) *minIndex = beg;
@@ -1296,11 +1296,11 @@ T MstUtils::min(const vector<T>& vec, int beg, int end, int* minIndex) {
 
 template <class T>
 T MstUtils::max(const vector<T>& vec, int beg, int end, int* maxIndex) {
-  MstUtils::assert(vec.size() > 0, "empty vector passed!", "MstUtils::max(vector<T>&)");
+  MstUtils::assertCond(vec.size() > 0, "empty vector passed!", "MstUtils::max(vector<T>&)");
   if (beg < 0) beg = 0;
   if (end < 0) end = vec.size()-1;
-  MstUtils::assert(beg <= end, "beg = " + MstUtils::toString(beg) + " and end = " + MstUtils::toString(end), "MstUtils::max(vector<T>&)");
-  MstUtils::assert(end < vec.size(), "end index out of bounds, " + MstUtils::toString(end), "MstUtils::max(vector<T>&)");
+  MstUtils::assertCond(beg <= end, "beg = " + MstUtils::toString(beg) + " and end = " + MstUtils::toString(end), "MstUtils::max(vector<T>&)");
+  MstUtils::assertCond(end < vec.size(), "end index out of bounds, " + MstUtils::toString(end), "MstUtils::max(vector<T>&)");
 
   T mv = vec[beg];
   if (maxIndex != NULL) *maxIndex = beg;

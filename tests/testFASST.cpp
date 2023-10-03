@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   op.addOption("pp", "store phi/psi properties in the database, if creating a new one from PDB files.");
   op.setOptions(argc, argv);
   int memInit = MstSys::memUsage();
-  if (op.isGiven("redProp")) MstUtils::assert(!op.getString("redProp").empty(), "--redProp must specify a property name");
+  if (op.isGiven("redProp")) MstUtils::assertCond(!op.getString("redProp").empty(), "--redProp must specify a property name");
   FASST::matchType type = FASST::matchType::REGION;
   if (op.isGiven("outType")) {
     if (op.getString("outType").compare("region") == 0) {
@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
     vector<string> cons = MstUtils::split(op.getString("const"), ";");
     for (int i = 0; i < cons.size(); i++) {
       vector<string> con = MstUtils::split(MstUtils::trim(cons[i]), " ");
-      MstUtils::assert(con.size() == 3, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("const"));
+      MstUtils::assertCond(con.size() == 3, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("const"));
       int segIdx = MstUtils::toInt(con[0]);
       int resIdx = MstUtils::toInt(con[1]);
       vector<string> aas = MstUtils::split(MstUtils::trim(con[2]), "|");

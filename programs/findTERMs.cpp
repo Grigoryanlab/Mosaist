@@ -23,10 +23,10 @@ int main(int argc, char** argv) {
   op.addOption("minSegs", "minimal number of segments in the TERMs to consider.");
   op.addOption("maxSegs", "maximal number of segments in the TERMs to consider");
   op.setOptions(argc, argv);
-  if (op.isGiven("max")) MstUtils::assert(op.isReal("max") && (op.getReal("max") > 0), "--max must be a positive number");
-  if (op.isGiven("L")) MstUtils::assert(op.isInt("L") && (op.getInt("L") > 0), "--L must be a positive integer");
-  if (op.isGiven("minSegs")) MstUtils::assert(op.isInt("minSegs") && (op.getInt("minSegs") > 0), "--minSegs must be a positive integer");
-  if (op.isGiven("maxSegs")) MstUtils::assert(op.isInt("maxSegs") && (op.getInt("maxSegs") > 0), "--maxSegs must be a positive integer");
+  if (op.isGiven("max")) MstUtils::assertCond(op.isReal("max") && (op.getReal("max") > 0), "--max must be a positive number");
+  if (op.isGiven("L")) MstUtils::assertCond(op.isInt("L") && (op.getInt("L") > 0), "--L must be a positive integer");
+  if (op.isGiven("minSegs")) MstUtils::assertCond(op.isInt("minSegs") && (op.getInt("minSegs") > 0), "--minSegs must be a positive integer");
+  if (op.isGiven("maxSegs")) MstUtils::assertCond(op.isInt("maxSegs") && (op.getInt("maxSegs") > 0), "--maxSegs must be a positive integer");
   mstreal max = op.getReal("max", 1.1);
   int L0 = op.getInt("L", 15);
   int maxSegs = op.getInt("maxSegs", 10E6);

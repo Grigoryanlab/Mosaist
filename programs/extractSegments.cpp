@@ -127,7 +127,7 @@ int main(int argc, char *argv[]) {
   srand(x);
 
   if (op.isGiven("e")) {
-    MstUtils::assert(op.isGiven("nc") && op.isGiven("ni") && op.isGiven("kT"), "not all MC-related parameters are specifieed");
+    MstUtils::assertCond(op.isGiven("nc") && op.isGiven("ni") && op.isGiven("kT"), "not all MC-related parameters are specifieed");
     EnergyTable Etab(op.getString("e"));
     for (int c = 0; c < op.getInt("nc"); c++) {
       vector<int> bestSol = Etab.mc(1, op.getInt("ni"), op.getReal("kT"), op.getReal("kTf", op.getReal("kT")));
@@ -140,7 +140,7 @@ int main(int argc, char *argv[]) {
   // an approach based on encoding each sequence as a delta from the native sequence
   if (op.isGiven("n")) {
     Sequence N(op.getString("n"));
-    MstUtils::assert(N.length() == M[0].length(), "native sequence of different length than sequences in the MSA");
+    MstUtils::assertCond(N.length() == M[0].length(), "native sequence of different length than sequences in the MSA");
     int L = N.length();
 
     // build the alphabet at each position from the MSA and native

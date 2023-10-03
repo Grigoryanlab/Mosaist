@@ -70,9 +70,9 @@ class attachment {
 attachment::attachment(const Structure& _S, mstreal _score) {
   score = _score;
   S = _S;
-  MstUtils::assert(S.chainSize() >=2, "an attachment must have at least two chains", "attachment::attachment");
+  MstUtils::assertCond(S.chainSize() >=2, "an attachment must have at least two chains", "attachment::attachment");
   RotamerLibrary::standardizeBackboneNames(S);
-  MstUtils::assert(RotamerLibrary::hasFullBackbone(S), "not all backbone atoms are defined!", "attachment::attachment");
+  MstUtils::assertCond(RotamerLibrary::hasFullBackbone(S), "not all backbone atoms are defined!", "attachment::attachment");
   AtomPointerVector bb = RotamerLibrary::getBackbone(S);
   int nbba = bb.size()/S.residueSize();
   bbSource = bb.subvector(0, S[0].residueSize() * nbba);
@@ -81,7 +81,7 @@ attachment::attachment(const Structure& _S, mstreal _score) {
 
 bool attachment::isAnExampleOf(const Structure& ex) {
   AtomPointerVector bbEx = ex.getAtoms();
-  MstUtils::assert(bbEx.size() == bbAtt.size(), "given structure not of the right size", "attachment::isAnExampleOf");
+  MstUtils::assertCond(bbEx.size() == bbAtt.size(), "given structure not of the right size", "attachment::isAnExampleOf");
   RMSDCalculator rc;
 cout << "\t\tinside attachment::isAnExampleOf: " << rc.rmsd(bbAtt, bbEx) << endl;
 if ((rc.rmsd(bbAtt, bbEx) > 0.5) && (rc.rmsd(bbAtt, bbEx) < 2.0)) {
@@ -270,7 +270,7 @@ mstreal scoreAttachment(Residue* sR, Structure& contactTERM, bindOptions& opts) 
 //   vector<attachment> A = getAttachments(sR, opts);
 //   for (int i = 0; i < A.size(); i++) {
 //     Structure* parentStructure = sR->getStructure();
-//     MstUtils::assert(parentStructure != NULL, "source residue does not belong to a structure!", "getAttachmentsInContext");
+//     MstUtils::assertCond(parentStructure != NULL, "source residue does not belong to a structure!", "getAttachmentsInContext");
 //     Structure S(parentStructure);
 //     Chain* nch = S.addChain("A");
 //     nch->appendResidue(new Residue(sR));

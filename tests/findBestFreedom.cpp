@@ -200,8 +200,8 @@ void parseCommandLine(int argc, char** argv, options& iopts) {
 
   // error checking
   // make sure lists are of the proper size
-  if (iopts.omapfs.size() > 1) MstUtils::assert(iopts.omapfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output map files does not agree");
-  if (iopts.opdbfs.size() > 1) MstUtils::assert(iopts.opdbfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output PDB files does not agree");
+  if (iopts.omapfs.size() > 1) MstUtils::assertCond(iopts.omapfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output map files does not agree");
+  if (iopts.opdbfs.size() > 1) MstUtils::assertCond(iopts.opdbfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output PDB files does not agree");
   if (iopts.pdbfs.size() > 1) {
     if (iopts.omapfs.size() == 1) {
       iopts.omapfs.resize(iopts.pdbfs.size());

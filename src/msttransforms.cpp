@@ -49,7 +49,7 @@ void Frame::setO(const CartesianPoint& _O) {
 }
 
 void Frame::constructFrame(const CartesianPoint& _O, const CartesianPoint& _X, const CartesianPoint& _Y, const CartesianPoint& _Z) {
-  MstUtils::assert((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3),
+  MstUtils::assertCond((_O.size() == 3) && (_X.size() == 3) && (_Y.size() == 3) && (_Z.size() == 3),
       "Frame class currently supports only 3D coordinate frames; specified origin and axes must be 3D vectors", "Frame::Frame(CartesianPoint&, CartesianPoint&, CartesianPoint&, CartesianPoint&)");
   mstreal xn = _X.norm(); mstreal yn = _Y.norm(); mstreal zn = _Z.norm();
   O[0] = _O[0]; O[1] = _O[1]; O[2] = _O[2];
@@ -297,8 +297,17 @@ CartesianPoint Transform::applyToCopy(CartesianPoint& p) {
   return (*this) * p;
 }
 
-void Transform::apply(CartesianPoint& p) {
-  p = (*this) * p;
+void Transform::apply(mstreal& x, mstreal& y, mstreal& z) {
+  mstreal p[3];
+  for (int i = 0; i < 3; i++) {
+    p[i] += (*this)(i, 0) * x;
+    p[i] += (*this)(i, 1) * y;
+    p[i] += (*this)(i, 2) * z;
+    p[i] += (*this)(i, 3); // add W (homogeneous coordinate) of 1 to the point
+  }
+  x = p[0];
+  y = p[1];
+  z = p[2];
 }
 
 void Transform::apply(Frame& f) {
@@ -316,16 +325,12 @@ void Transform::apply(Frame& f) {
   f.setZ(Z-O);
 }
 
-void Transform::apply(Atom* a) {
-  CartesianPoint point(*a);
-  point = (*this) * point;
-  a->setCoor(point);
+void Transform::apply(CartesianPoint& p) {
+  this->apply(p[0], p[1], p[2]);
 }
 
-void Transform::apply(mstreal& x, mstreal& y, mstreal& z) {
-  CartesianPoint point(x, y, z);
-  point = (*this) * point;
-  x = point[0]; y = point[1]; z = point[2];
+void Transform::apply(Atom* a) {
+  this->apply((*a)[0], (*a)[1], (*a)[2]);
 }
 
 void Transform::apply(Residue* res) {

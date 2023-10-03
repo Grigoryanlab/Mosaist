@@ -247,7 +247,7 @@ void FASST::processQuery() {
     if (!parseChain(queryStruct[i], &(query[i]))) {
       MstUtils::error("could not set query, because some atoms for the specified search type were missing", "FASST::processQuery");
     }
-    MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "FASST::processQuery");
+    MstUtils::assertCond(query[i].size() > 0, "query contains empty segment(s)", "FASST::processQuery");
     querySize += query[i].size();
   }
   currAlignment.resize(query.size(), -1);
@@ -326,7 +326,7 @@ void FASST::addTargetStructure(Structure* targetStruct, short memSave) {
     bool foundAll = parseChain(targetStruct->getChain(i), &target, &seq);
     if ((memSave == 2) && !foundAll) MstUtils::error("for targets added under strict memory savings, all residues must be searchable", "FASST::addTargetStructure(Structure*, short)");
   }
-  MstUtils::assert(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
+  MstUtils::assertCond(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
   seq.setName(targetStruct->getName());
 
   // orient the target structure in common frame (remember the transform)
@@ -471,7 +471,7 @@ void FASST::writeDatabase(const string& dbFile) {
         vector<mstreal>& vals = (p->second)[ti];
         MstUtils::writeBin(ofs, 'P'); // marks the start of a residue property section
         MstUtils::writeBin(ofs, (string) p->first);
-        MstUtils::assert(targetStructs[ti]->residueSize() == vals.size(), "the number of residue properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
+        MstUtils::assertCond(targetStructs[ti]->residueSize() == vals.size(), "the number of residue properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
         for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
       }
     }
@@ -480,7 +480,7 @@ void FASST::writeDatabase(const string& dbFile) {
         vector<string>& vals = (p->second)[ti];
         MstUtils::writeBin(ofs, 'N'); // marks the start of a residue string property section
         MstUtils::writeBin(ofs, (string) p->first);
-        MstUtils::assert(targetStructs[ti]->residueSize() == vals.size(), "the number of residue string properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
+        MstUtils::assertCond(targetStructs[ti]->residueSize() == vals.size(), "the number of residue string properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
         for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
       }
     }
@@ -1112,7 +1112,7 @@ vector<Sequence> FASST::getMatchSequences(fasstSolutionSet& sols, matchType type
   for (int i = 0; i < sols.size(); i++) {
     const fasstSolution& sol = sols[i];
     int idx = sol.getTargetIndex();
-    MstUtils::assert((idx >= 0) && (idx < targSeqs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
+    MstUtils::assertCond((idx >= 0) && (idx < targSeqs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
     vector<int> alignment = sol.getAlignment();
     seqs[i].setName(targSeqs[idx].getName());
 
@@ -1140,7 +1140,7 @@ vector<vector<mstreal> > FASST::getResidueProperties(fasstSolutionSet& sols, con
   for (int i = 0; i < sols.size(); i++) {
     const fasstSolution& sol = sols[i];
     int idx = sol.getTargetIndex();
-    MstUtils::assert((idx >= 0) && (idx < targets.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
+    MstUtils::assertCond((idx >= 0) && (idx < targets.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
     AtomPointerVector& target = targets[idx];
     if (!isResiduePropertyDefined(propType, idx)) {
       MstUtils::error("target with index " + MstUtils::toString(idx) + " does not have property type " + propType, "FASST::getResidueProperties(fasstSolutionSet&, const string&, matchType)");
@@ -1213,7 +1213,7 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
     }
     case matchType::FULL: {
       int idx = sol.getTargetIndex();
-      MstUtils::assert((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchResidueIndices");
+      MstUtils::assertCond((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchResidueIndices");
       for (int i = 0; i < getTargetResidueSize(idx); i++) residueIndices.push_back(i);
       break;
     }

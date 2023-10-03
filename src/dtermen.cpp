@@ -451,7 +451,7 @@ void dTERMen::buildBackgroundPotentials() {
   vector<string> propNames = {"phi", "psi", "omega", "env"};
   map<string, vector<mstreal> > propVals;
   vector<int> aa;
-  for (int i = 0; i < propNames.size(); i++) MstUtils::assert(F.isResiduePropertyDefined(propNames[i]), "property " + propNames[i] + " is not defined in the FASST database", "dTERMen::buildBackgroundPotentials()");
+  for (int i = 0; i < propNames.size(); i++) MstUtils::assertCond(F.isResiduePropertyDefined(propNames[i]), "property " + propNames[i] + " is not defined in the FASST database", "dTERMen::buildBackgroundPotentials()");
 
   for (int ti = 0; ti < F.numTargets(); ti++) {
     Sequence S = F.getTargetSequence(ti);

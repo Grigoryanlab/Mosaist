@@ -79,7 +79,7 @@ vector<Structure*> getMatches(FASST& C, Structure& frag, const vector<int>& frag
         continue;
       }
       RotamerLibrary::standardizeBackboneNames(match);
-      MstUtils::assert(match.residueSize() == fragResIdx.size(), "unexpected match size");
+      MstUtils::assertCond(match.residueSize() == fragResIdx.size(), "unexpected match size");
       numberResidues(match, fragResIdx); // make residue numbers store indices into the original structure
     }
     if (C.isVerbose()) cout << "\tfound " << matchStructures.size() << " matches" << endl;
@@ -108,7 +108,7 @@ fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<in
     if (matchOut.is_open()) match.writePDB(matchOut);
   }
   if (global != NULL) {
-    MstUtils::assert(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
+    MstUtils::assertCond(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
     resTopo.addFragment(*global, MstUtils::range(0, L), -10.0);
     if (matchOut.is_open()) global->writePDB(matchOut);
   }
@@ -125,7 +125,7 @@ fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<ve
     }
   }
   if (global != NULL) {
-    MstUtils::assert(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
+    MstUtils::assertCond(global->residueSize() == L, "the global target structure specified has an unexpected number of residues for the topology");
     resTopo.addFragment(*global, MstUtils::range(0, L), -10.0);
     if (matchOut.is_open()) global->writePDB(matchOut);
   }
@@ -133,7 +133,7 @@ fusionTopology getTopo(int L, vector<vector<Structure*> >& allMatches, vector<ve
 }
 
 AtomPointerVector getCorrespondingAtoms(Structure& from, Structure& like) {
-  MstUtils::assert(from.residueSize() == like.residueSize(), "the two structures must have the same number of residues", "getCorrespondingAtoms()");
+  MstUtils::assertCond(from.residueSize() == like.residueSize(), "the two structures must have the same number of residues", "getCorrespondingAtoms()");
   AtomPointerVector atoms;
   for (int ri = 0; ri < like.residueSize(); ri++) {
     Residue& fromRes = from.getResidue(ri);

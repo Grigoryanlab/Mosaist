@@ -73,17 +73,17 @@ int MstSys::csystem(const string& cmd, bool checkError, int success, const strin
 void MstSys::cmkdir(const string& dirPath, bool makeParents) {
   if (MstSys::isDir(dirPath)) return; // return if the path is already a dir
   int ret = MstSys::csystem("mkdir " + (makeParents ? (string) "-p " : (string) "") + dirPath, false);
-  MstUtils::assert(ret == 0, "failed to make directory '" + dirPath + "'");
+  MstUtils::assertCond(ret == 0, "failed to make directory '" + dirPath + "'");
 }
 
 void MstSys::crmdir(const string& dirPath, bool recursive) {
   int ret = MstSys::csystem((recursive ? (string) "rmdir " : (string) "rm -r ") + dirPath, false);
-  MstUtils::assert(ret == 0, "failed to remove directory '" + dirPath + "'" + (recursive ? " recursively" : ""));
+  MstUtils::assertCond(ret == 0, "failed to remove directory '" + dirPath + "'" + (recursive ? " recursively" : ""));
 }
 
 void MstSys::crm(const string& filePath) {
   int ret = MstSys::csystem("rm " + filePath, false);
-  MstUtils::assert(ret == 0, "failed to remove file '" + filePath + "'");
+  MstUtils::assertCond(ret == 0, "failed to remove file '" + filePath + "'");
 }
 
 string MstSys::getMachineName() {
