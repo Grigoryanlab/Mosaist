@@ -337,7 +337,6 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("areNumMatchConstraintsConsistent", &fasstSearchOptions::areNumMatchConstraintsConsistent)
     .def("setChainsDiff", &fasstSearchOptions::setChainsDiff)
     .def("resetDiffChainConstraints", &fasstSearchOptions::resetDiffChainConstraints)
-    //***
     .def("setSequenceConstraints", +[](fasstSearchOptions &opts, const fasstSeqConstSimple &seqCons) { return opts.setSequenceConstraints(seqCons); })
     ;
 
