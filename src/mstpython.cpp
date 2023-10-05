@@ -338,7 +338,7 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("setChainsDiff", &fasstSearchOptions::setChainsDiff)
     .def("resetDiffChainConstraints", &fasstSearchOptions::resetDiffChainConstraints)
     //***
-    //.def("setSequenceConstraints", &fasstSearchOptions::setSequenceConstraints)
+    .def("setSequenceConstraints", +[](fasstSearchOptions &opts, const fasstSeqConstSimple &seqCons) { return opts.setSequenceConstraints(seqCons); })
     ;
 
     class_<contactList>("ContactList", init<>())
