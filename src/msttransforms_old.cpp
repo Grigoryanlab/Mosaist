@@ -297,18 +297,8 @@ CartesianPoint Transform::applyToCopy(CartesianPoint& p) {
   return (*this) * p;
 }
 
-/*void Transform::apply(mstreal& x, mstreal& y, mstreal& z) {
-  CartesianPoint point(x, y, z);
-  point = (*this) * point;
-  x = point[0]; y = point[1]; z = point[2];
-}*/
-
 void Transform::apply(mstreal& x, mstreal& y, mstreal& z) {
   mstreal p[3];
-  p[0] = 0;
-  p[1] = 0;
-  p[2] = 0;
-  p[3] = 0;
   for (int i = 0; i < 3; i++) {
     p[i] += (*this)(i, 0) * x;
     p[i] += (*this)(i, 1) * y;
@@ -318,14 +308,6 @@ void Transform::apply(mstreal& x, mstreal& y, mstreal& z) {
   x = p[0];
   y = p[1];
   z = p[2];
-}
-
-void Transform::apply(CartesianPoint& p) {
-  this->apply(p[0], p[1], p[2]);
-}
-
-void Transform::apply(Atom* a) {
-  this->apply((*a)[0], (*a)[1], (*a)[2]);
 }
 
 void Transform::apply(Frame& f) {
@@ -341,6 +323,14 @@ void Transform::apply(Frame& f) {
   f.setX(X-O);
   f.setY(Y-O);
   f.setZ(Z-O);
+}
+
+void Transform::apply(CartesianPoint& p) {
+  this->apply(p[0], p[1], p[2]);
+}
+
+void Transform::apply(Atom* a) {
+  this->apply((*a)[0], (*a)[1], (*a)[2]);
 }
 
 void Transform::apply(Residue* res) {
