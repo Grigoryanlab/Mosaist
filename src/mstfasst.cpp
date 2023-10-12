@@ -140,24 +140,41 @@ bool fasstSearchOptions::areNumMatchConstraintsConsistent() const {
 
 void fasstSearchOptions::setMinGap(int i, int j, int gapLim) {
   if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
+  if (diffChainSet[i][j] == true) MstUtils::error("gap constraints for segments " + to_string(i) + " and " + to_string(j) + " already set, requiring them to be on different chains", "FASST::setMaxGap");
   minGap[i][j] = gapLim;
   minGapSet[i][j] = true;
   gapConstSet = true;
 }
 
 void fasstSearchOptions::setMaxGap(int i, int j, int gapLim) {
-  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMinGap");
+  if (gapLim < 0) MstUtils::error("gap constraints must be defined in the non-negative direction", "FASST::setMaxGap");
+  if (diffChainSet[i][j] == true) MstUtils::error("gap constraints for segments " + to_string(i) + " and " + to_string(j) + " already set, requiring them to be on different chains", "FASST::setMaxGap");
   maxGap[i][j] = gapLim;
   maxGapSet[i][j] = true;
   gapConstSet = true;
 }
 
+void fasstSearchOptions::setChainsDiff(int i, int j) {
+  if (minGapSet[i][j] || minGapSet[j][i] || maxGapSet[i][j] || maxGapSet[j][i]) MstUtils::error("gap constraints for segments " + to_string(i) + " and " + to_string(j) + " already set, requiring them to be on the same chain", "FASST::setChainsDiff");
+  diffChainSet[i][j] = true;
+  diffChainSet[j][i] = true;
+  diffChainRestSet = true;
+}
+
 void fasstSearchOptions::resetGapConstraints(int numQuerySegs) {
+  minGap.clear();
+  minGapSet.clear();
   minGap.resize(numQuerySegs, vector<int>(numQuerySegs, 0));
   maxGap = minGap;
   minGapSet.resize(numQuerySegs, vector<bool>(numQuerySegs, false));
   maxGapSet = minGapSet;
   gapConstSet = false;
+}
+
+void fasstSearchOptions::resetDiffChainConstraints(int numQuerySegs) {
+  diffChainSet.clear();
+  diffChainSet.resize(numQuerySegs, vector<bool>(numQuerySegs, false));
+  diffChainRestSet = false;
 }
 
 bool fasstSearchOptions::validateGapConstraints(int numQuerySegs) const {
@@ -247,7 +264,7 @@ void FASST::processQuery() {
     if (!parseChain(queryStruct[i], &(query[i]))) {
       MstUtils::error("could not set query, because some atoms for the specified search type were missing", "FASST::processQuery");
     }
-    MstUtils::assert(query[i].size() > 0, "query contains empty segment(s)", "FASST::processQuery");
+    MstUtils::assertCond(query[i].size() > 0, "query contains empty segment(s)", "FASST::processQuery");
     querySize += query[i].size();
   }
   currAlignment.resize(query.size(), -1);
@@ -288,6 +305,7 @@ void FASST::processQuery() {
 
   // set gap constraints structure
   opts.resetGapConstraints(query.size());
+  opts.resetDiffChainConstraints(query.size());
 }
 
 AtomPointerVector FASST::getQuerySearchedAtoms() const {
@@ -326,7 +344,7 @@ void FASST::addTargetStructure(Structure* targetStruct, short memSave) {
     bool foundAll = parseChain(targetStruct->getChain(i), &target, &seq);
     if ((memSave == 2) && !foundAll) MstUtils::error("for targets added under strict memory savings, all residues must be searchable", "FASST::addTargetStructure(Structure*, short)");
   }
-  MstUtils::assert(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
+  MstUtils::assertCond(target.size() > 0, "empty target named '" + targetStruct->getName() + "'", "FASST::addTargetStructure");
   seq.setName(targetStruct->getName());
 
   // orient the target structure in common frame (remember the transform)
@@ -471,7 +489,7 @@ void FASST::writeDatabase(const string& dbFile) {
         vector<mstreal>& vals = (p->second)[ti];
         MstUtils::writeBin(ofs, 'P'); // marks the start of a residue property section
         MstUtils::writeBin(ofs, (string) p->first);
-        MstUtils::assert(targetStructs[ti]->residueSize() == vals.size(), "the number of residue properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
+        MstUtils::assertCond(targetStructs[ti]->residueSize() == vals.size(), "the number of residue properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
         for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
       }
     }
@@ -480,7 +498,7 @@ void FASST::writeDatabase(const string& dbFile) {
         vector<string>& vals = (p->second)[ti];
         MstUtils::writeBin(ofs, 'N'); // marks the start of a residue string property section
         MstUtils::writeBin(ofs, (string) p->first);
-        MstUtils::assert(targetStructs[ti]->residueSize() == vals.size(), "the number of residue string properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
+        MstUtils::assertCond(targetStructs[ti]->residueSize() == vals.size(), "the number of residue string properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
         for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
       }
     }
@@ -750,8 +768,8 @@ void FASST::prepForSearch(int ti) {
   currCents.clear();
   currCents.resize(query.size(), CartesianPoint(0, 0, 0));
 
-  // mark chain beginning and end indices (if gap constraints are present)
-  if (opts.gapConstraintsExist() || (opts.getRedundancyCut() != 1)) {
+  // mark chain beginning and end indices (if gap constraints or different chain constraints are present, or the redundancy cutoff != 1)
+  if (opts.gapConstraintsExist() || opts.diffChainsConstsExist() || (opts.getRedundancyCut() != 1)) {
     fillTargetChainInfo(ti);
   } else {
     targChainBeg.resize(0); targChainEnd.resize(0);
@@ -865,23 +883,33 @@ fasstSolutionSet FASST::search() {
           remOptions[nextLevel][i].removeOptions(currAlignment[recLevel] - segLen[i] + 1,
                                                  currAlignment[recLevel] + segLen[recLevel] - 1);
         }
-        // if any gap constraints exist, limit options at this recursion level accordingly
-        if (opts.gapConstraintsExist()) {
+        if (opts.gapConstraintsExist() || opts.diffChainsConstsExist()) {
           for (int j = 0; j < nextLevel; j++) {
             for (int i = nextLevel; i < numSegs; i++) {
-              remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], targChainEnd[currAlignment[j]]);
-              if (opts.minGapConstrained(qSegOrd[i], qSegOrd[j]))
-                remOptions[nextLevel][i].constrainLE(currAlignment[j] - opts.getMinGap(qSegOrd[i], qSegOrd[j]) - segLen[i]);
-              if (opts.maxGapConstrained(qSegOrd[i], qSegOrd[j]))
-                remOptions[nextLevel][i].constrainGE(currAlignment[j] - opts.getMaxGap(qSegOrd[i], qSegOrd[j]) - segLen[i]);
-              if (opts.minGapConstrained(qSegOrd[j], qSegOrd[i]))
-                remOptions[nextLevel][i].constrainGE(currAlignment[j] + opts.getMinGap(qSegOrd[j], qSegOrd[i]) + segLen[j]);
-              if (opts.maxGapConstrained(qSegOrd[j], qSegOrd[i]))
-                remOptions[nextLevel][i].constrainLE(currAlignment[j] + opts.getMaxGap(qSegOrd[j], qSegOrd[i]) + segLen[j]);
-              // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
-              // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
-              // if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              if (opts.diffChainsConstrained(qSegOrd[i], qSegOrd[j])) {
+                int testingCurrAlignment = currAlignment[j];
+                string tcaString = to_string(testingCurrAlignment);
+                int targChainBegSize = targChainBeg.size();
+                string tcbString = to_string(targChainBegSize);
+                int startRemove = targChainBeg[currAlignment[j]];
+                int endRemove = targChainEnd[currAlignment[j]];
+                remOptions[nextLevel][i].removeOptions(startRemove,endRemove);
+              }
+              else if (gapConstrained(qSegOrd[i], qSegOrd[j]) || gapConstrained(qSegOrd[j], qSegOrd[i])) {
+                remOptions[nextLevel][i].constrainRange(targChainBeg[currAlignment[j]], targChainEnd[currAlignment[j]]);
+                if (opts.minGapConstrained(qSegOrd[i], qSegOrd[j]))
+                  remOptions[nextLevel][i].constrainLE(currAlignment[j] - opts.getMinGap(qSegOrd[i], qSegOrd[j]) - segLen[i]);
+                if (opts.maxGapConstrained(qSegOrd[i], qSegOrd[j]))
+                  remOptions[nextLevel][i].constrainGE(currAlignment[j] - opts.getMaxGap(qSegOrd[i], qSegOrd[j]) - segLen[i]);
+                if (opts.minGapConstrained(qSegOrd[j], qSegOrd[i]))
+                  remOptions[nextLevel][i].constrainGE(currAlignment[j] + opts.getMinGap(qSegOrd[j], qSegOrd[i]) + segLen[j]);
+                if (opts.maxGapConstrained(qSegOrd[j], qSegOrd[i]))
+                  remOptions[nextLevel][i].constrainLE(currAlignment[j] + opts.getMaxGap(qSegOrd[j], qSegOrd[i]) + segLen[j]);
+                    // if (minGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] - minGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+                    // if (maxGapSet[qSegOrd[i]][qSegOrd[j]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] - maxGap[qSegOrd[i]][qSegOrd[j]] - segLen[i]);
+                    // if (minGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainGE(currAlignment[j] + minGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+                    // if (maxGapSet[qSegOrd[j]][qSegOrd[i]]) remOptions[nextLevel][i].constrainLE(currAlignment[j] + maxGap[qSegOrd[j]][qSegOrd[i]] + segLen[j]);
+              }
               if (remOptions[nextLevel][i].empty()) { levelExhausted = true; break; }
             }
             if (levelExhausted) break;
@@ -1112,7 +1140,7 @@ vector<Sequence> FASST::getMatchSequences(fasstSolutionSet& sols, matchType type
   for (int i = 0; i < sols.size(); i++) {
     const fasstSolution& sol = sols[i];
     int idx = sol.getTargetIndex();
-    MstUtils::assert((idx >= 0) && (idx < targSeqs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
+    MstUtils::assertCond((idx >= 0) && (idx < targSeqs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
     vector<int> alignment = sol.getAlignment();
     seqs[i].setName(targSeqs[idx].getName());
 
@@ -1140,7 +1168,7 @@ vector<vector<mstreal> > FASST::getResidueProperties(fasstSolutionSet& sols, con
   for (int i = 0; i < sols.size(); i++) {
     const fasstSolution& sol = sols[i];
     int idx = sol.getTargetIndex();
-    MstUtils::assert((idx >= 0) && (idx < targets.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
+    MstUtils::assertCond((idx >= 0) && (idx < targets.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchSequences");
     AtomPointerVector& target = targets[idx];
     if (!isResiduePropertyDefined(propType, idx)) {
       MstUtils::error("target with index " + MstUtils::toString(idx) + " does not have property type " + propType, "FASST::getResidueProperties(fasstSolutionSet&, const string&, matchType)");
@@ -1213,7 +1241,7 @@ vector<int> FASST::getMatchResidueIndices(const fasstSolution& sol, matchType ty
     }
     case matchType::FULL: {
       int idx = sol.getTargetIndex();
-      MstUtils::assert((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchResidueIndices");
+      MstUtils::assertCond((idx >= 0) && (idx < targetStructs.size()), "supplied FASST solution is pointing to an out-of-range target", "FASST::getMatchResidueIndices");
       for (int i = 0; i < getTargetResidueSize(idx); i++) residueIndices.push_back(i);
       break;
     }

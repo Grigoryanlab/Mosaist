@@ -27,7 +27,7 @@ void strideInterface::computeSTRIDEClassifications(string options) {
       }
     }
   }
-  MstUtils::assert(data.size() <= S->residueSize(),"There should be no more STRIDE classifications than residues in the structure","computeSTRIDEClassifications");
+  MstUtils::assertCond(data.size() <= S->residueSize(),"There should be no more STRIDE classifications than residues in the structure","computeSTRIDEClassifications");
   // Delete the files
   MstSys::crm(strideOutFile); MstSys::crm(structurePDBPath);
 }

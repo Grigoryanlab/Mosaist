@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
   op.addOption("sc", "dump sidechains (not only the backbone).");
   op.setOptions(argc, argv);
   int memInit = MstSys::memUsage();
-  if (op.isGiven("redProp")) MstUtils::assert(!op.getString("redProp").empty(), "--redProp must specify a property name");
+  if (op.isGiven("redProp")) MstUtils::assertCond(!op.getString("redProp").empty(), "--redProp must specify a property name");
   if (!op.isGiven("b") && !op.isGiven("d")) MstUtils::error("either --b or --d must be given!");
   FASST::matchType type = FASST::matchType::REGION;
   if (op.isGiven("outType")) {
@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
     vector<string> cons = MstUtils::split(op.getString("seqConst"), ";");
     for (int i = 0; i < cons.size(); i++) {
       vector<string> con = MstUtils::split(MstUtils::trim(cons[i]), " ");
-      MstUtils::assert(con.size() == 3, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("seqConst"));
+      MstUtils::assertCond(con.size() == 3, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("seqConst"));
       int segIdx = MstUtils::toInt(con[0]);
       int resIdx = MstUtils::toInt(con[1]);
       vector<string> aas = MstUtils::split(MstUtils::trim(con[2]), "|");
@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
     vector<string> cons = MstUtils::split(op.getString("gapConst"), ";");
     for (int i = 0; i < cons.size(); i++) {
       vector<string> con = MstUtils::split(MstUtils::trim(cons[i]), " ");
-      MstUtils::assert(con.size() == 4, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("gapConst"));
+      MstUtils::assertCond(con.size() == 4, "could not parse constraint '" + cons[i] + "' from constraints line " + op.getString("gapConst"));
       int segI = MstUtils::toInt(con[0]);
       int segJ = MstUtils::toInt(con[1]);
       int minGapLen = MstUtils::toInt(con[2]);

@@ -416,7 +416,7 @@ pair<mstreal, mstreal> RotamerLibrary::getBinPhiPsi(string aa, int bi) {
 }
 
 int RotamerLibrary::findClosestAngle(vector<mstreal>& array, mstreal value) {
-  MstUtils::assert(array.size() != 0, "empty vector passed", "RotamerLibrary::findClosestAngle");
+  MstUtils::assertCond(array.size() != 0, "empty vector passed", "RotamerLibrary::findClosestAngle");
   int minInd = 0;
   mstreal minDist = fabs(angleDiff(value, array[0]));
   mstreal dist;

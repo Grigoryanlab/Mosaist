@@ -23,12 +23,12 @@ res_t SeqTools::aaToIdx(const string& aa) {
 }
 
 string SeqTools::idxToTriple(res_t idx) {
-  MstUtils::assert((idx >= 0) && (idx < idxToAA3.size()), "unknown amino-acid index '" + MstUtils::toString(idx) + "'", "SeqTools::idxToTriple");
+  MstUtils::assertCond((idx >= 0) && (idx < idxToAA3.size()), "unknown amino-acid index '" + MstUtils::toString(idx) + "'", "SeqTools::idxToTriple");
   return idxToAA3[idx];
 }
 
 string SeqTools::idxToSingle(res_t idx) {
-  MstUtils::assert((idx >= 0) && (idx < idxToAA1.size()), "unknown amino-acid index '" + MstUtils::toString(idx) + "'", "SeqTools::idxToSingle");
+  MstUtils::assertCond((idx >= 0) && (idx < idxToAA1.size()), "unknown amino-acid index '" + MstUtils::toString(idx) + "'", "SeqTools::idxToSingle");
   return idxToAA1[idx];
 }
 
@@ -130,11 +130,11 @@ void SeqTools::readFasta(const string& fastaFile, vector<Sequence>& seqs) {
     if (line.empty()) continue;
 		if (line[0] == '>') { // identifier lines should start with '>'
 			if (id.length() > 0) { // add previous (id, sequence) if it is not the first identifier (i.e. id.length > 0)
-				MstUtils::assert((seq.length() > 0), "Sequence " + MstUtils::toString(seqs.size() + 1) + " appears to be missing", "SeqTools::readFast");
+				MstUtils::assertCond((seq.length() > 0), "Sequence " + MstUtils::toString(seqs.size() + 1) + " appears to be missing", "SeqTools::readFast");
 				seqs.push_back(Sequence(seq, id));
 			}
 			id = MstUtils::trim(line.substr(1, line.length() - 1)); // skip ">"
-			MstUtils::assert((id.length() > 0), "Identifier for sequence " + MstUtils::toString(seqs.size() + 1) + " appears to be missing", "SeqTools::readFast");
+			MstUtils::assertCond((id.length() > 0), "Identifier for sequence " + MstUtils::toString(seqs.size() + 1) + " appears to be missing", "SeqTools::readFast");
 			seq = ""; // clear for next sequence
 		} else {
 			seq += line; // seqeunces can be multi-line
@@ -172,7 +172,7 @@ vector<Sequence> SeqTools::readSequences(const string& seqsFile) {
 }
 
 vector<vector<int> > SeqTools::rSearch(const vector<Sequence>& seqs, mstreal idCut, mstreal a, bool verb) {
-  MstUtils::assert((idCut >= 0) && (idCut <= 1.0), "ID cutoff value must be [0; 1]", "SeqTools::rSearch()");
+  MstUtils::assertCond((idCut >= 0) && (idCut <= 1.0), "ID cutoff value must be [0; 1]", "SeqTools::rSearch()");
   int N = seqs.size();
   vector<vector<int> > result(N);
   if (N == 0) return result;

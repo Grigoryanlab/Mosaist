@@ -90,7 +90,7 @@ class Vector : public Matrix {
     Vector(int numel = 0, mstreal val = 0.0, bool col = false) : Matrix(vector<mstreal>(numel, val), col) {}
     Vector(const vector<mstreal>& p, bool col = false) : Matrix(p, col) {}
     Vector(const Vector& V) : Matrix(V) {}
-    Vector(const Matrix& _M) : Matrix(_M) { MstUtils::assert((_M.numRows() == 1) || (_M.numCols() == 1), "cannot construct a vector from a matrix with non-unitary dimensions", "Vector::Vector(const Matrix& _M)"); }
+    Vector(const Matrix& _M) : Matrix(_M) { MstUtils::assertCond((_M.numRows() == 1) || (_M.numCols() == 1), "cannot construct a vector from a matrix with non-unitary dimensions", "Vector::Vector(const Matrix& _M)"); }
     int size() const { return length(); }
     mstreal dot(const Vector& v) const;
     Vector getUnit() const { return (*this)/this->norm(); }

@@ -96,7 +96,7 @@ fusionTopology& fusionTopology::operator=(const fusionTopology& topo) {
 }
 
 void fusionTopology::addFragment(vector<Residue*>& R, const vector<int>& fragResIdx, mstreal weight) {
-  if (fragResIdx.size() != 0) MstUtils::assert(R.size() == fragResIdx.size(), "fragment residue index vector not the same length as the number of residues in the fragment", "fusionTopology::addFragment(vector<Residue*>&, mstreal, const vector<int>&)");
+  if (fragResIdx.size() != 0) MstUtils::assertCond(R.size() == fragResIdx.size(), "fragment residue index vector not the same length as the number of residues in the fragment", "fusionTopology::addFragment(vector<Residue*>&, mstreal, const vector<int>&)");
   AtomPointerVector fragAtoms; vector<int> fragRes = fragResIdx;
   for (int i = 0; i < R.size(); i++) {
     for (int j = 0; j < bba.size(); j++) {

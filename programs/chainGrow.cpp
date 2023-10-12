@@ -192,10 +192,10 @@ int main(int argc, char** argv) {
       Chain* cChain = &(nc ? S[0] : S.getChain(S.chainSize() - 1)); // default chain of residues to grow
       if (op.isGiven("cid")) {
         Chain* cChain = S.getChainByID(op.getString("cid"));
-        MstUtils::assert(cChain != NULL, "did not find chain with ID " + op.getString("cid"));
+        MstUtils::assertCond(cChain != NULL, "did not find chain with ID " + op.getString("cid"));
       } else if (op.isGiven("sid")) {
         Chain* cChain = S.getChainBySegID(op.getString("sid"));
-        MstUtils::assert(cChain != NULL, "did not find segment with ID " + op.getString("sid"));
+        MstUtils::assertCond(cChain != NULL, "did not find segment with ID " + op.getString("sid"));
       }
       Residue* cres = &(nc ? cChain->getResidue(0) : cChain->getResidue(cChain->residueSize() - 1));
       Structure term = TERMUtils::selectTERM({cres}, C, pm, cdCut, &termResIndices);

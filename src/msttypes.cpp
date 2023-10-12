@@ -436,7 +436,7 @@ bool Structure::appendChain(Chain* C, bool allowRename) {
         }
         if (found) break;
       }
-      MstUtils::assert(found, "ran out of even multi-character chain names -- your PDB structure really has more than 36,000 chains???", "Structure::appendChain");
+      MstUtils::assertCond(found, "ran out of even multi-character chain names -- your PDB structure really has more than 36,000 chains???", "Structure::appendChain");
       C->setID((string) longName);
       C->setSegID(C->getID());
     } else {
@@ -2208,7 +2208,7 @@ expressionTree* selector::buildExpressionTree(string selStr) {
     root->setLogicalOperator(expressionTree::logicalOp::AROUND);
     root->setVal(MstUtils::toReal(getNextSelectionToken(selStr)));
     string extra = getNextSelectionToken(selStr);
-    MstUtils::assert(extra.empty(), "poorly formed selection expression: extra stuff after an 'around' operator; use parentheses as necessary.");
+    MstUtils::assertCond(extra.empty(), "poorly formed selection expression: extra stuff after an 'around' operator; use parentheses as necessary.");
     return root;
   } else {
     MstUtils::error("bad selection, unrecognized connector keyword '" + connector + "' after token '" + token + "'", "selector::buildExpressionTree(string)");
@@ -2350,6 +2350,16 @@ mstreal RMSDCalculator::bestRMSD(const vector<Atom*> &_align, const vector<Atom*
     if (Kabsch(_align, _ref, setTransRot)) { if (_suc != NULL) *_suc = true; }
     else { if (_suc != NULL) *_suc = false; }
     return sqrt(_res/_n);
+}
+
+vector<mstreal> RMSDCalculator::bestRMSD(const vector<vector<Atom*>> &_alignSet, const vector<Atom*> &_ref, int start, int fromEnd) {
+  vector<mstreal> rmsdVector(_alignSet.size());
+  fill(rmsdVector.begin(), rmsdVector.end(), -1.0);
+  RMSDCalculator rc;
+  for (int i = start; i < _alignSet.size() - fromEnd; i++) {
+    rmsdVector[i] = rc.bestRMSD(_alignSet[i], _ref);
+  }
+  return rmsdVector;
 }
 
 mstreal RMSDCalculator::bestResidual(const vector<Atom*> &_align, const vector<Atom*> &_ref, bool setTransRot, bool* _suc) {
@@ -3760,7 +3770,7 @@ void MstUtils::setSignalHandlers() {
   signal(SIGTERM, MstUtils::errorHandler);
 }
 
-void MstUtils::assert(bool condition, string message, string from, int exitCode) {
+void MstUtils::assertCond(bool condition, string message, string from, int exitCode) {
   if(!condition) {
     MstUtils::error(message, from, exitCode);
   }

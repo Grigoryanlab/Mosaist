@@ -142,8 +142,8 @@ int main(int argc, char** argv) {
 
   mstreal dE = op.getReal("s", 1.0);
   int N = op.getInt("n", 40);
-  MstUtils::assert(dE > 0, "energy step must be positive!");
-  MstUtils::assert(N > 0, "number of energy intervals must be positive integer!");
+  MstUtils::assertCond(dE > 0, "energy step must be positive!");
+  MstUtils::assertCond(N > 0, "number of energy intervals must be positive integer!");
   srand(time(NULL) + (int) getpid());
 
   EnergyTable Etab(op.getString("e"));

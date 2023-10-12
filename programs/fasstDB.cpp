@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
   op.setOptions(argc, argv);
   RotamerLibrary RL;
   if (!op.isGiven("pL") && !op.isGiven("dL") && !op.isGiven("db")) MstUtils::error("either --pL, --dL, or --db must be given!");
-  if (op.isGiven("rLib")) MstUtils::assert(MstSys::fileExists(op.getString("rLib")), "--rLib is not a valid file path");
+  if (op.isGiven("rLib")) MstUtils::assertCond(MstSys::fileExists(op.getString("rLib")), "--rLib is not a valid file path");
   if (op.isGiven("cont") && (!op.isReal("cont") || (op.getReal("cont") < 0) || (op.getReal("cont") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
   if (op.isGiven("contSeq") && (!op.isReal("contSeq") || (op.getReal("contSeq") < 0) || (op.getReal("contSeq") > 1))) MstUtils::error("--cont must be a real in range [0; 1]");
   if (op.isGiven("int") && (!op.isReal("int") || (op.getReal("int") < 0) || (op.getReal("int") > 1))) MstUtils::error("--int must be a real in range [0; 1]");

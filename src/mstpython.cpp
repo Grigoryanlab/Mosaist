@@ -9,17 +9,22 @@
 #include <iostream>
 #include <list>
 #include <boost/python/stl_iterator.hpp>
-
+#include "mstrotlib.h"
 #include "msttypes.h"
 #include "mstfasst.h"
 #include "mstcondeg.h"
 #include "mstsequence.h"
 #include "mstfuser.h"
+#include "mstrotlib.h"
 
 // Source: https://stackoverflow.com/questions/15842126/feeding-a-python-list-into-a-function-taking-in-a-vector-with-boost-python/15940413#15940413
 
 /// @brief Type that allows for registration of conversions from
 ///                python iterable types.
+
+//can implement function here - mstreal of
+//win body, return the more complex one
+
 struct iterable_converter
 {
     /// @note Registers converter from a python interable type to the
@@ -109,6 +114,8 @@ BOOST_PYTHON_MODULE(mstpython) {
     .from_python<vector<int>>()
     .from_python<vector<vector<int>>>()
     .from_python<vector<Atom*>>()
+    .from_python<vector<vector<Atom*>>>()
+
     .from_python<vector<Residue*>>()
     .from_python<vector<vector<Residue*>>>()
     .from_python<vector<std::string>>()
@@ -117,6 +124,9 @@ BOOST_PYTHON_MODULE(mstpython) {
     // Various translations of vectors to lists needed by the classes below
     class_<vector<Atom*>>("AtomList")
     .def(vector_indexing_suite<vector<Atom*>>());
+
+    class_<vector<vector<Atom*>>>("AtomListList")
+    .def(vector_indexing_suite<vector<vector<Atom*>>>());
 
     class_<vector<Residue*>>("ResidueList")
     .def(vector_indexing_suite<vector<Residue*>>());
@@ -146,14 +156,19 @@ BOOST_PYTHON_MODULE(mstpython) {
     .add_property("z", &MST::Atom::getZ)
     .def("getCoor", &MST::Atom::getCoor)
     .add_property("name", &MST::Atom::getName)
+    .def("getAtomParent", &MST::Atom::getParent, return_value_policy<reference_existing_object>())
     ;
 
     class_<MST::Residue>("Residue",
                          init<>())
     .def("atomSize", &MST::Residue::atomSize)
     .add_property("name", &MST::Residue::getName)
-    .add_property("num", &MST::Residue::getNum)
+    .def("getChainID", &MST::Residue::getChainID)
+    .add_property("num", &MST::Residue::getNum, &MST::Residue::setNum)
+    .add_property("iCode", &MST::Residue::getIcode, &MST::Residue::setIcode)
     .def("getAtom", &MST::Residue::getAtom, return_value_policy<reference_existing_object>())
+    .def("getAtoms", &MST::Residue::getAtoms)
+    .def("findAtom", &MST::Residue::findAtom, return_value_policy<reference_existing_object>())
     .def("previousResidue", &MST::Residue::previousResidue, return_value_policy<reference_existing_object>())
     .def("nextResidue", &MST::Residue::nextResidue, return_value_policy<reference_existing_object>())
     .add_property("phi", &MST::Residue::getPhi)
@@ -169,6 +184,8 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("getParent", &MST::Residue::getParent, return_value_policy<reference_existing_object>())
     ;
 
+    def("emptyChain", +[]() { return new MST::Chain(); }, return_value_policy<reference_existing_object>());
+
     class_<MST::Chain>("Chain",
                        init<>())
     .def("residueSize", &MST::Chain::residueSize)
@@ -178,11 +195,16 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("getResidue", &MST::Chain::getResidue, return_value_policy<reference_existing_object>())
     .def("getResidues", &MST::Chain::getResidues)
     .def("getStructure", &MST::Chain::getStructure, return_value_policy<reference_existing_object>())
+    .def("getStructure", &MST::Chain::getStructure, return_value_policy<reference_existing_object>())
+    .def("appendResidue", &MST::Chain::appendResidue)
+    .def("appendResidueCopies", &MST::Chain::appendResidueCopies)
     ;
 
     class_<MST::Sequence>("Sequence", init<>())
+    .def(init<const Chain>())
     .add_property("name", &MST::Sequence::getName, &MST::Sequence::setName)
     .def("toString", &MST::Sequence::toString)
+    .def("getResidue", &MST::Sequence::getResidue)
     .def("__len__", &MST::Sequence::length)
     .def("appendResidue", static_cast<void (MST::Sequence::*) (const string&)>(&MST::Sequence::appendResidue))
     ;
@@ -206,11 +228,18 @@ BOOST_PYTHON_MODULE(mstpython) {
     .staticmethod("readFasta")
     ;
 
+
+    class_<RotamerLibrary>("RotamerLibrary", init<string>())
+    .def("getBackbone", static_cast<vector<Atom *> (*) (const MST::Residue&, bool)>(&RotamerLibrary::getBackbone))
+    .def("getBackbone", static_cast<vector<Atom *> (*) (const MST::Structure&, bool)>(&RotamerLibrary::getBackbone))
+    ;
+
     def("emptyStructure", +[]() { return new MST::Structure(); }, return_value_policy<reference_existing_object>());
 
     class_<Structure>("Structure",
                       init<string,string>())
-    .def(init<vector<Residue*>>())
+    .def(init<const vector<Atom *> &>())
+    .def(init<const vector<Residue *> &>())
     .def("chainSize", &MST::Structure::chainSize)
     .def("residueSize", &MST::Structure::residueSize)
     .def("atomSize", &MST::Structure::atomSize)
@@ -223,8 +252,9 @@ BOOST_PYTHON_MODULE(mstpython) {
         structure.appendChain(new MST::Chain(*chain));
     })/*static_cast<bool (MST::Structure::*) (Chain*, bool)>(&MST::Structure::appendChain))*/
     .def("deleteChain", &MST::Structure::deleteChain)
+    .def("getChainByID", &MST::Structure::getChainByID, return_value_policy<reference_existing_object>())
     .def("addAtom", static_cast<void (MST::Structure::*) (MST::Atom*)>(&MST::Structure::addAtom))
-    .def("addAtoms", static_cast<void (MST::Structure::*) (std::vector<MST::Atom*>*)>(&MST::Structure::addAtoms))
+    .def("addAtoms", static_cast<void (MST::Structure::*) (std::vector<MST::Atom*>)>(&MST::Structure::addAtoms))
     .def("addResidue", &MST::Structure::addResidue, return_value_policy<manage_new_object>())
     .def("getResidueIndex", &MST::Structure::getResidueIndex)
     .def("__eq__", &MST::Structure::operator==)
@@ -244,6 +274,7 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("apvRMSD", +[](const AtomPointerVector &a1, const AtomPointerVector &a2) { return RMSDCalculator::rmsd(a1, a2); })
     .staticmethod("apvRMSD")
     .def("apvBestRMSD", +[](RMSDCalculator &calc, const AtomPointerVector &a1, const AtomPointerVector &a2) { return calc.bestRMSD(a1, a2); })
+    .def("allToOneBestRMSD", static_cast<std::vector<mstreal> (RMSDCalculator::*) (const vector<vector<Atom*>>&, const vector<Atom*>&, int, int)>(&RMSDCalculator::bestRMSD))
     ;
 
 //    class_<fasstSolution, boost::noncopyable>("fasstSolution",init<>())
@@ -268,6 +299,10 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("clear", &fasstSolutionSet::clear)
     .def("worstRMSD", &fasstSolutionSet::worstRMSD)
     .def("bestRMSD", &fasstSolutionSet::bestRMSD)
+    ;
+
+    class_<fasstSeqConstSimple>("fasstSeqConstSimple", init<int>())
+    .def("addConstraint", &fasstSeqConstSimple::addConstraint)
     ;
 
     class_<fasstSearchOptions>("fasstSearchOptions", init<>())
@@ -300,6 +335,9 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("validateGapConstraints", &fasstSearchOptions::validateGapConstraints)
     .def("validateSearchRequest", &fasstSearchOptions::validateSearchRequest)
     .def("areNumMatchConstraintsConsistent", &fasstSearchOptions::areNumMatchConstraintsConsistent)
+    .def("setChainsDiff", &fasstSearchOptions::setChainsDiff)
+    .def("resetDiffChainConstraints", &fasstSearchOptions::resetDiffChainConstraints)
+    .def("setSequenceConstraints", +[](fasstSearchOptions &opts, const fasstSeqConstSimple &seqCons) { return opts.setSequenceConstraints(seqCons); })
     ;
 
     class_<contactList>("ContactList", init<>())
@@ -322,6 +360,8 @@ BOOST_PYTHON_MODULE(mstpython) {
 
     class_<FASST>("FASST", init<>())
     .add_property("query", &FASST::getQuery)
+    .def("setRMSDCutoff", &fasstSearchOptions::setRMSDCutoff)
+    .def("setRedundancyCut", &fasstSearchOptions::setRedundancyCut)
     .def("setQuery", static_cast<void (FASST::*) (const Structure&, bool)>(&FASST::setQuery))
     .add_property("numQuerySegments", &FASST::getNumQuerySegments)
     .def("addTargetStructure", static_cast<void (FASST::*) (const Structure&, short)>(&FASST::addTarget))
@@ -334,6 +374,9 @@ BOOST_PYTHON_MODULE(mstpython) {
     .def("getMatches", &FASST::getMatches)
     .def("getTargetCopy",&FASST::getTargetCopy)
     .def("getMatchStructure", static_cast<Structure (FASST::*) (const fasstSolution&, bool, FASST::matchType, bool)>(&FASST::getMatchStructure))
+    .def("getMatchResidueIndices", &FASST::getMatchResidueIndices)
+    .def("getMatchSequence", &FASST::getMatchSequence)
+    .def("getMatchSequences", &FASST::getMatchSequences)
     .def("readDatabase", &FASST::readDatabase)
     ;
 

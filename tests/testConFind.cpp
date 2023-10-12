@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
   
   MstTimer timer; timer.start();
 
-  MstUtils::assert(op.isGiven("p") || op.isGiven("pL"), "either --p or --pL must be specified!");
+  MstUtils::assertCond(op.isGiven("p") || op.isGiven("pL"), "either --p or --pL must be specified!");
   if (op.isGiven("p")) iopts.pdbfs.push_back(op.getString("p"));
   if (op.isGiven("pL")) MstUtils::fileToArray(op.getString("pL"), iopts.pdbfs);
   if (op.isGiven("o")) iopts.omapfs.push_back(op.getString("o"));
@@ -108,8 +108,8 @@ int main(int argc, char *argv[]) {
 
   // error checking
   // make sure lists are of the proper size
-  if (iopts.omapfs.size() > 1) MstUtils::assert(iopts.omapfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output map files does not agree");
-  if (iopts.opdbfs.size() > 1) MstUtils::assert(iopts.opdbfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output PDB files does not agree");
+  if (iopts.omapfs.size() > 1) MstUtils::assertCond(iopts.omapfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output map files does not agree");
+  if (iopts.opdbfs.size() > 1) MstUtils::assertCond(iopts.opdbfs.size() == iopts.pdbfs.size(), "the number of input PDB files and output PDB files does not agree");
   if (iopts.pdbfs.size() > 1) {
     if (iopts.omapfs.size() == 1) {
       iopts.omapfs.resize(iopts.pdbfs.size());
