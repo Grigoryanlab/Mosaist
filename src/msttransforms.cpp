@@ -308,7 +308,6 @@ void Transform::apply(mstreal& x, mstreal& y, mstreal& z) {
   p[0] = 0;
   p[1] = 0;
   p[2] = 0;
-  p[3] = 0;
   for (int i = 0; i < 3; i++) {
     p[i] += (*this)(i, 0) * x;
     p[i] += (*this)(i, 1) * y;
