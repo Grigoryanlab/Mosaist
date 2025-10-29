@@ -103,6 +103,7 @@ void fusionTopology::addFragment(vector<Residue*>& R, const vector<int>& fragRes
       fragAtoms.push_back(R[i]->findAtom(bba[j]));
     }
     if (fragResIdx.size() == 0) fragRes.push_back(R[i]->getNum());
+    if ((fragRes.back() < 0)||(fragRes.back() >= overlappingResidues.size())) MstUtils::error("Fragment residue index: "+MstUtils::toString(fragRes.back())+" falls outside of topology","fusionTopology::addFragment");
     overlappingResidues[fragRes[i]].push_back(R[i]);
   }
   fragments.push_back(pair<AtomPointerVector, vector<int> > (fragAtoms, fragRes));

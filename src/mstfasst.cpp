@@ -459,6 +459,21 @@ string FASST::getResidueStringProperty(int ti, const string& propType, int ri) {
   return hasResidueStringProperty(ti, propType, ri) ? resStringProperties[propType][ti][ri] : "";
 }
 
+bool FASST::isResiduePairBoolPropertyDefined(int ti, const string& propType) {
+  return ((resPairBoolProperties.find(propType) != resPairBoolProperties.end()) &&
+        (resPairBoolProperties[propType].find(ti) != resPairBoolProperties[propType].end()));
+}
+
+bool FASST::isResiduePairBoolPropertyDefined(int ti, const string& propType, int ri) {
+  return ((resPairBoolProperties.find(propType) != resPairBoolProperties.end()) &&
+        (resPairBoolProperties[propType].find(ti) != resPairBoolProperties[propType].end()) &&
+        (resPairBoolProperties[propType][ti].size() > ri) && (ri >= 0));
+}
+
+set<int> FASST::getResiduePairBoolProperty(int ti, const string& propType, int ri) {
+  return isResiduePairBoolPropertyDefined(ti, propType, ri) ? resPairBoolProperties[propType][ti][ri] : set<int>();
+}
+
 bool FASST::hasResiduePairProperties(int ti, const string& propType, int ri) {
   return ((resPairProperties.find(propType) != resPairProperties.end()) &&
           (resPairProperties[propType].find(ti) != resPairProperties[propType].end()) &&
@@ -500,6 +515,22 @@ void FASST::writeDatabase(const string& dbFile) {
         MstUtils::writeBin(ofs, (string) p->first);
         MstUtils::assertCond(targetStructs[ti]->residueSize() == vals.size(), "the number of residue string properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
         for (int ri = 0; ri < vals.size(); ri++) MstUtils::writeBin(ofs, vals[ri]);
+      }
+    }
+    for (auto p = resPairBoolProperties.begin(); p != resPairBoolProperties.end(); ++p) {
+      if ((p->second).find(ti) != (p->second).end()) {
+        map<int, set<int>> &vals = (p->second)[ti];
+        MstUtils::writeBin(ofs, 'B'); // marks the start of a residue pair bool property section
+        MstUtils::writeBin(ofs, (string)p->first);
+        MstUtils::assert(targetStructs[ti]->residueSize() == vals.size(), "the number of residue pair bool properties and residues does not agree for database entry", "FASST::writeDatabase(const string&)");
+        MstUtils::writeBin(ofs, (int)vals.size());
+        for (auto i = vals.begin(); i != vals.end(); ++i) {
+          MstUtils::writeBin(ofs, (int)i->first);
+          MstUtils::writeBin(ofs, (int)(i->second).size());
+          for (int j : i->second) {
+              MstUtils::writeBin(ofs, (int)j);
+          }
+        }
       }
     }
     for (auto p = resPairProperties.begin(); p != resPairProperties.end(); ++p) {
@@ -575,6 +606,20 @@ void FASST::readDatabase(const string& dbFile, short memSave) {
         for (int i = 0; i < L; i++) {
           MstUtils::readBin(ifs, sval);
           vals[i] = sval;
+        }
+      } else if (sect == 'B') {
+        MstUtils::readBin(ifs, name);
+        map<int, set<int>> &vals = resPairBoolProperties[name][ti];
+        int ri, rj, N, n;
+        mstreal cd;
+        MstUtils::readBin(ifs, N);
+        for (int i = 0; i < N; i++) {
+          MstUtils::readBin(ifs, ri);
+          MstUtils::readBin(ifs, n);
+          for (int j = 0; j < n; j++) {
+            MstUtils::readBin(ifs, rj);
+            vals[ri].insert(rj);
+          }
         }
       } else if (sect == 'I') {
         MstUtils::readBin(ifs, name);

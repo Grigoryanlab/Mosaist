@@ -193,7 +193,7 @@ void Structure::readPDB(istream& is, string options) {
     }
     // many PDB files in the Protein Data Bank call the delta carbon of isoleucine CD1, but
     // the convention in basically all MM packages is to call it CD, since there is only one
-    if (fixIleCD1 && atomname.compare("CD1") == 0) atomname = "CD";
+    if (fixIleCD1 && (resname.compare("ILE") == 0) && (atomname.compare("CD1") == 0)) atomname = "CD";
 
     // if necessary, make a new residue
     bool reallyNewAtom = true; // is this a truely new atom, as opposed to an alternative position?
@@ -258,7 +258,6 @@ void Structure::writePDB(ostream& ofs, string options) const {
   if (options.find("CHARMM") != string::npos) charmmFormat = true;
   if (options.find("CHARMM19") != string::npos) charmm19Format = true;
   if (options.find("CHARMM22") != string::npos) charmm22Format = true;
-  if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
   if (options.find("ALLOW ILE CD1") != string::npos) fixIleCD1 = false;
   if (options.find("RENUMBER") != string::npos) renumber = true;
   if (options.find("NOEND") != string::npos) noend = true;
@@ -1661,6 +1660,20 @@ mstreal CartesianPoint::dot(const CartesianPoint& other) const {
   return d;
 }
 
+void CartesianPoint::convertToSphericalCoordinates(mstreal& radius, mstreal& polarAngle, mstreal& azimuthalAngle) {
+  if (this->size() != 3) MstUtils::error("Can only convert 3D vector to spherical coordinates","CartesianPoint::convertToSphericalCoordinates");
+  radius = this->norm();
+  polarAngle = acos((*this)[2]/radius);
+  azimuthalAngle = fmod(atan2((*this)[1],(*this)[0]) + 2*M_PI, 2*M_PI);
+}
+
+void CartesianPoint::setPositionBySphericalCoordinates(mstreal radius, mstreal polarAngle, mstreal azimuthalAngle) {
+  this->resize(3, 0);
+  (*this)[0] = radius*cos(azimuthalAngle)*sin(polarAngle);
+  (*this)[1] = radius*sin(azimuthalAngle)*sin(polarAngle);
+  (*this)[2] = radius*cos(polarAngle);
+}
+
 mstreal CartesianPoint::distance(const CartesianPoint& another) const {
   if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::distance(CartesianPoint&)");
   mstreal d = 0;
@@ -1698,6 +1711,11 @@ mstreal CartesianPoint::distance2nc(const CartesianPoint& another) const {
     d += dd*dd;
   }
   return d;
+}
+
+mstreal CartesianPoint::cosineAngle(const CartesianPoint& another) const {
+  if (this->size() != another.size()) MstUtils::error("point dimensions disagree", "CartesianPoint::cosineAngle");
+  return (*this).dot(another) / ((*this).norm()* another.norm());
 }
 
 /* --------- CartesianGeometry --------- */
@@ -3115,6 +3133,23 @@ ProximitySearch::ProximitySearch(const AtomPointerVector& _atoms, mstreal _chara
   }
 }
 
+ProximitySearch::ProximitySearch(const vector<CartesianPoint>& _points, mstreal _characteristicDistance, bool _addPoints, vector<int>* tags, mstreal pad) {
+  calculateExtent(_points);
+  if (xlo == xhi) { xlo -= _characteristicDistance/2; xhi += _characteristicDistance/2; }
+  if (ylo == yhi) { ylo -= _characteristicDistance/2; yhi += _characteristicDistance/2; }
+  if (zlo == zhi) { zlo -= _characteristicDistance/2; zhi += _characteristicDistance/2; }
+  xlo -= pad; ylo -= pad; zlo -= pad;
+  xhi += pad; yhi += pad; zhi += pad;
+  int _N = int(ceil(max(max((xhi - xlo), (yhi - ylo)), (zhi - zlo))/_characteristicDistance));
+  reinitBuckets(_N);
+  setBinWidths();
+  if (_addPoints) {
+    for (int i = 0; i < _points.size(); i++) {
+      addPoint(_points[i], (tags == NULL) ? i : (*tags)[i]);
+    }
+  }
+}
+
 ProximitySearch::ProximitySearch(const ProximitySearch& ps) {
   *this = ps;
 }
@@ -3161,6 +3196,21 @@ void ProximitySearch::calculateExtent(const AtomPointerVector& _atoms, mstreal& 
     if (_xhi < _atoms[i]->getX()) _xhi = _atoms[i]->getX();
     if (_yhi < _atoms[i]->getY()) _yhi = _atoms[i]->getY();
     if (_zhi < _atoms[i]->getZ()) _zhi = _atoms[i]->getZ();
+  }
+}
+
+void ProximitySearch::calculateExtent(const vector<CartesianPoint>& _points, mstreal& _xlo, mstreal& _ylo, mstreal& _zlo, mstreal& _xhi, mstreal& _yhi, mstreal& _zhi) {
+  if (_points.size() == 0) { cout << "Error in ProximitySearch::calculateExtent() -- empty cartesian point vector passed!\n"; exit(-1); }
+  _xlo = _xhi = _points[0].getX();
+  _ylo = _yhi = _points[0].getY();
+  _zlo = _zhi = _points[0].getZ();
+  for (int i = 0; i < _points.size(); i++) {
+    if (_xlo > _points[i].getX()) _xlo = _points[i].getX();
+    if (_ylo > _points[i].getY()) _ylo = _points[i].getY();
+    if (_zlo > _points[i].getZ()) _zlo = _points[i].getZ();
+    if (_xhi < _points[i].getX()) _xhi = _points[i].getX();
+    if (_yhi < _points[i].getY()) _yhi = _points[i].getY();
+    if (_zhi < _points[i].getZ()) _zhi = _points[i].getZ();
   }
 }
 
@@ -3329,7 +3379,7 @@ vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units,
   for (int i = 0; i < units.size(); i++) remIndices.insert(i);
   if (remIndices.size() <= Nmax) return Clusterer::greedyClusterBruteForce(units, remIndices, rmsdCut);
   
-  cout << "There are " << units.size() << " total points to cluster, will continue until " << floor(units.size()*coverage) << " (" << coverage << ") or " << maxClusters << "are covered" << endl;
+  cout << "There are " << units.size() << " total points to cluster, will continue until " << floor(units.size()*coverage) << " (" << coverage << ") or " << maxClusters << " are covered" << endl;
 
   // create some dummy storage vectors
   int L = units[0].size();
@@ -3341,7 +3391,7 @@ vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units,
   int numToLeave = total * (1 - coverage);
 
   // iterate to find a new cluster each time
-  while ((remIndices.size() > Nmax) && (remIndices.size() > numToLeave) && (maxClusters > 0) && (clusters.size() < maxClusters)) {
+  while ((remIndices.size() > Nmax) && (remIndices.size() > numToLeave) && ((maxClusters <= 0) || ((maxClusters > 0) && (clusters.size() < maxClusters)))) {
     // sub-sample Nmax elements
     set<int> subSample = Clusterer::randomSubsample(remIndices, Nmax);
 
@@ -3384,7 +3434,7 @@ vector<vector<int>> Clusterer::greedyCluster(const vector<vector<Atom*>>& units,
     int remainingClusters = maxClusters - clusters.size();
     vector<vector<int>> remClusters = greedyClusterBruteForce(units, remIndices, rmsdCut, remainingClusters);
     clusters.insert(clusters.end(), remClusters.begin(), remClusters.end());
-  } else if ((maxClusters <= 0) && ((remIndices.size() - numToLeave) >= 1)) {
+  } else if ((maxClusters <= 0) && (remIndices.size() > numToLeave)) {
     set<int> indsToCluster;
     auto curInd = remIndices.begin();
     for (int i = 0; i < (remIndices.size() - numToLeave); i++) {

@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
     if (!op.isInt("batch") || (op.getInt("batch") <= 0)) MstUtils::error("--batch must be a positive integer!");
     int nJ = op.getInt("batch");
     vector<string> pdbFiles = MstUtils::fileToArray(op.getString("pL"));
-    srand(time(NULL) + (int) getpid());
+    MstUtils::seedRandEngine();
     MstUtils::shuffle(pdbFiles);
     vector<pair<int, int> > tasks = MstUtils::splitTasks(pdbFiles.size(), nJ);
     fstream outf;

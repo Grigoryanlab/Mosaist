@@ -83,6 +83,7 @@ class fusionParams {
     void setCompFC(mstreal _k) { kcomp = _k; }
     void setCompRad(mstreal _r) { Rcomp = _r; }
     void setStartingStructure(const Structure& _S);
+    void clearStartingStructure() {startStruct = Structure();}
     void setNormalizeRMSD(bool flag) { normRMSD = flag; }
     void setFragRedundancyWeighting(bool flag) { fragRedWeighting = flag; }
     void setAdaptiveWeighting(bool flag) { adapRedWeighting = flag; }

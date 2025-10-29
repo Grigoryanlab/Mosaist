@@ -487,6 +487,9 @@ class FASST {
     bool hasResidueStringProperty(int ti, const string& propType, int ri);
     mstreal getResidueProperty(int ti, const string& propType, int ri);
     string getResidueStringProperty(int ti, const string& propType, int ri);
+    bool isResiduePairBoolPropertyDefined(int ti, const string& propType);
+    bool isResiduePairBoolPropertyDefined(int ti, const string& propType, int ri);
+    set<int> getResiduePairBoolProperty(int ti, const string& propType, int ri);
     bool hasResiduePairProperties(int ti, const string& propType, int ri);
     mstreal isResiduePairPropertyPopulated(const string& propType);
     map<int, mstreal> getResiduePairProperties(int ti, const string& propType, int ri);
@@ -630,6 +633,12 @@ class FASST {
      * resProperties["stride"][ti][ri] is the string value of the "stride" property for
      * residue ri in target with index ti. */
     map<string, map<int, vector<string> > > resStringProperties;
+
+    /* Object for holding binary residue-pair properties. Specifically,
+     * resPairProperties["int"][ti][ri] is the set of all rj that interact
+     * with ri in a target with index ti.
+     * NOTE: this property can be directional (i.e., pairs are not mirrored). */
+    map<string, map<int, map<int, set<int> > > > resPairBoolProperties;
 
     /* Object for holding real-valued residue-pair properties. Specifically,
      * resPairProperties["cont"][ti][ri][rj] is the value of the "cont" property
